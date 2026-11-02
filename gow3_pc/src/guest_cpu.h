@@ -66,6 +66,22 @@ int guest_cpu_handle_fault(int sig, siginfo_t *info, void *ucontext);
  * (bbport_guest_hooks.cpp uses int3 there): returns 0. */
 typedef void (*GuestHook)(GuestRegs *regs);
 int guest_cpu_hook(uintptr_t address, size_t size, GuestHook hook);
+/* Bionic FEX fiber continuations preserve the complete guest CPU state.
+ * Save is called while handling a host import, and resumes at the host stub's
+ * ret instruction. Switch is applied after the host callback completes.
+ * These calls are not exposed on native x86-64 builds.
+ */
+#ifndef GUEST_CPU_NATIVE
+typedef struct GuestFiberCpuState GuestFiberCpuState;
+GuestFiberCpuState* guest_cpu_fiber_create(void);
+void guest_cpu_fiber_save(GuestFiberCpuState* state);
+void guest_cpu_fiber_entry(GuestFiberCpuState* state, uintptr_t entry, uintptr_t stack_top,
+                           uint64_t arg0, uint64_t arg1, void* returned);
+void guest_cpu_fiber_switch(GuestFiberCpuState* state);
+void guest_cpu_fiber_dispose(GuestFiberCpuState* state);
+uint64_t guest_cpu_fiber_frame_pointer(void);
+#endif
+
 /* The guest's time stamp counter (RDTSC) and its frequency in Hz. */
 uint64_t guest_cpu_tsc(void);
 uint64_t guest_cpu_tsc_frequency(void);
