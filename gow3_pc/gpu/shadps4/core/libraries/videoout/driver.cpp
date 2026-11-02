@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025-2026 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "common/arch.h"
 #include "video_core/amdgpu/pm4_cmds.h"
 #include <cstring>
 #include <functional>
@@ -1015,7 +1016,7 @@ void VideoOutDriver::PresentThread(std::stop_token token) {
             if (left < std::chrono::microseconds(20)) {
                 // A few microseconds left: arming the timer would cost its whole wake-up delay.
                 while (std::chrono::steady_clock::now() < deadline) {
-                    __builtin_ia32_pause();
+                    COMMON_CPU_RELAX();
                 }
                 break;
             }
