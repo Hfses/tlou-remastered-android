@@ -47,7 +47,9 @@ static int32_t fail_posix(int e) { *runtime_errno()=runtime_guest_errno(e); retu
 /* ---- clocks and sleeping ---- */
 static struct timespec process_start;
 static uint64_t native_tsc_hz;
+#ifdef _WIN32
 static uint64_t native_process_start;
+#endif
 __attribute__((constructor)) static void remember_start(void) {
     clock_gettime(CLOCK_MONOTONIC,&process_start);
 #ifdef _WIN32
