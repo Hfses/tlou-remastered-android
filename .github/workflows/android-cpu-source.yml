@@ -58,6 +58,14 @@ jobs:
               -I gow3_pc/tools/android/present "$source"
             echo '::endgroup::'
           done
+      - name: Compile TLOU libSceFiber Bionic FEX continuation HLE
+        shell: bash
+        run: |
+          set -euo pipefail
+          CXX="$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang++"
+          "$CXX" -std=c++23 -Wall -Wextra -Werror -Wno-ignored-attributes -fsyntax-only \
+            -I gow3_pc/gpu/shim -I gow3_pc/gpu -I gow3_pc/src \
+            gow3_pc/gpu/shim/gow3_fiber_bionic.cpp
       - name: Check TLOU loader FEX dispatch points
         run: |
           grep -Fq 'guest_cpu_call((uintptr_t)(image+entry)' gow3_pc/src/probe.c
