@@ -28,7 +28,7 @@ jobs:
           "$CC" --version | head -n 1
           for source in gow3_pc/src/probe.c gow3_pc/src/runtime*.c gow3_pc/src/vulkan_smoke.c; do
             echo "::group::$source"
-            "$CC" -std=c11 -O2 -Wall -Wextra -Werror -pthread -fsyntax-only -I gow3_pc -I gow3_pc/src "$source"
+            "$CC" -std=c11 -O2 -Wall -Wextra -Werror -DGOW3_NO_SDL=1 -pthread -fsyntax-only -I gow3_pc -I gow3_pc/src "$source"
             echo '::endgroup::'
           done
       - name: Validate Android window, Vulkan loader and AHB presentation source
