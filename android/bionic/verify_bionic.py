@@ -16,7 +16,7 @@ def main():
     llvm = args.ndk/'toolchains/llvm/prebuilt/linux-x86_64'
     system = llvm/f'sysroot/usr/lib/aarch64-linux-android/{args.api}'
     allowed = {'libc.so', 'libm.so', 'libdl.so', 'liblog.so', 'libandroid.so', 'libnativewindow.so',
-               'libc++_shared.so', 'libgow3cpu.so', 'libgow3gpu.so', 'libpython3.13.so', 'libz.so'}
+               'libc++_shared.so', 'libgow3cpu.so', 'libgow3gpu.so', 'libpython3.13.so', 'libz.so', 'libvulkan.so'}
     files = [args.root/'bin/gow3-probe',
              args.root/'lib/libgow3cpu.so', args.root/'lib/libgow3gpu.so',
              args.root/'lib/libgow3present.so', args.root/'lib/libc++_shared.so']
