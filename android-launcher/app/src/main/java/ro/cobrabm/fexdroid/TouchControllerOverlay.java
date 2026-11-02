@@ -112,12 +112,11 @@ final class TouchControllerOverlay extends View {
             else if (control.equals("r2")) { r2=255; pressed.add(control); }
             else if (control.equals("touchpad")) pressed.add("touchpad_right"); /* 右侧点击:打开游戏暂停菜单,进而可进存档列表 */
             else if (control.equals("mouse")) {
-                if (!mouse) XInput.moveTo(Math.max(0,Math.min(1279,Math.round(p.x))),
-                                          Math.max(0,Math.min(719,Math.round(p.y))));
+                // Android Bionic has no X11/XInput mouse backend.
                 mouse=true;
             } else pressed.add(control);
         }
-        if (mouse!=mouseDown) { XInput.button(1,mouse); mouseDown=mouse; }
+        if (mouse!=mouseDown) { mouseDown=mouse; }
         pad.virtual(pressed,lx,ly,rx,ry,left,right,l2,r2);
         invalidate();
     }
