@@ -13,7 +13,8 @@
 #include <ucontext.h>
 #include <unistd.h>
 #endif
-#include <x86intrin.h>
+#include "common/arch.h"
+#include "common/rdtsc.h"
 
 namespace Gow3WriteLog {
 namespace {
@@ -62,7 +63,7 @@ void Note(std::uint64_t address, const void* data, std::uint64_t size, Source so
 
 void Record(std::uint64_t address, const void* data, std::uint64_t size, Source source) {
     static thread_local const std::uint32_t tid = static_cast<std::uint32_t>(gettid());
-    Entry e{address, size, 0, __rdtsc(), source, tid};
+    Entry e{address, size, 0, Common::FencedRDTSC(), source, tid};
     std::memcpy(&e.first, data, size < 8 ? size : 8);
     Push(ring, head, e);
     // Only small writes are scanned: scanning downloads of megabytes delays them enough to hide
@@ -108,7 +109,7 @@ extern "C" void gow3gpu_dump_guest_writes(void* ucontext) {
     const char* sources[] = {"backing",      "WriteData",           "fence",
                              "EOP (decoded)", "WriteData (decoded)", "EOS (decoded)",
                              "DumpConstRam"};
-    const std::uint64_t now = __rdtsc();
+    const std::uint64_t now = Common::FencedRDTSC();
     const auto print = [&](const Entry& e, const char* what) {
         std::fprintf(stderr,
                      "Write log: %s %s %#llx +%llu first %#llx tid %u, %.3f s before the fault\n",
