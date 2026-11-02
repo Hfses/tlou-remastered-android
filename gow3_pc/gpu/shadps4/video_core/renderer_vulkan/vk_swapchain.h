@@ -73,6 +73,15 @@ public:
         return frame_index;
     }
 
+    // Shared presentation barrier API for native and Android AHB swapchains.
+    vk::ImageLayout PresentLayout() const { return vk::ImageLayout::ePresentSrcKHR; }
+    std::pair<u32, u32> AcquireQueues() const {
+        return {VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED};
+    }
+    std::pair<u32, u32> ReleaseQueues() const {
+        return {VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED};
+    }
+
     vk::Extent2D GetExtent() const {
         return extent;
     }
