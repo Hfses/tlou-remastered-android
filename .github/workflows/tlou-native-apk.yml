@@ -40,6 +40,23 @@ jobs:
           environment-file: ci/environment.yml
           cache-environment: true
           init-shell: bash
+      - name: Restore Bionic dependency/FEX source and native compiler cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .local-deps/android/bionic-prefix
+            .local-deps/android/bionic-src
+            .local-deps/android/bionic-build
+            .local-deps/FEX
+            ~/.cache/ccache
+          key: tlou-bionic-arm64-v2-${{ runner.os }}-${{ hashFiles('android/bionic/build_deps.sh', 'android/bionic/build_fex.sh') }}
+          save-always: true
+      - name: Report compiler cache
+        shell: bash -el {0}
+        run: |
+          command -v ccache
+          ccache --set-config=max_size=3G
+          ccache -s
       - name: Cross-compile host utilities
         shell: bash -el {0}
         run: |
