@@ -35,7 +35,7 @@ done
 "$cc" "${objects[@]}" "$out/libatrac9.a" \
   "$prefix/lib/libavformat.a" "$prefix/lib/libavcodec.a" "$prefix/lib/libswscale.a" \
   "$prefix/lib/libswresample.a" "$prefix/lib/libavutil.a" \
-  -L "$out/lib" -lgow3gpu -lgow3cpu -lc++_shared -lm -ldl -llog -pthread \
+  -L "$out/lib" -lgow3gpu -lgow3cpu -lc++_shared -lvulkan -lm -ldl -llog -pthread \
   -Wl,--exclude-libs,libavcodec.a:libavformat.a:libavutil.a:libswscale.a:libswresample.a \
   -rdynamic -pie -Wl,-rpath,'$ORIGIN/../lib' -o "$out/bin/gow3-probe"
 "$cc" -std=c11 -O2 -g -Wall -Wextra -Werror -fPIC -shared \
