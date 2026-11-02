@@ -1,3 +1,5 @@
+#include "common/rdtsc.h"
+#include "common/arch.h"
 #include <algorithm>
 #include <set>
 #include <tuple>
@@ -1590,7 +1592,7 @@ void Rasterizer::WaitPendingWrites(const std::vector<PendingWrite>& writes, VAdd
     }
     for (u32 spins = 0; !draw_pipe->Reached(until); ++spins) {
         if (spins < 4096) {
-            __builtin_ia32_pause();
+            COMMON_CPU_RELAX();
         } else {
             std::this_thread::yield();
         }
@@ -2057,13 +2059,13 @@ void Rasterizer::PrintPipeStats() {
     }
     static auto window = std::chrono::steady_clock::now();
     static u64 last_packets = 0, last_drains = 0, last_drain_cycles = 0, last_busy = 0;
-    static u64 last_tsc = __rdtsc();
+    static u64 last_tsc = Common::FencedRDTSC();
     const auto now = std::chrono::steady_clock::now();
     const double seconds = std::chrono::duration<double>(now - window).count();
     if (seconds < 5.0) {
         return;
     }
-    const u64 tsc = __rdtsc();
+    const u64 tsc = Common::FencedRDTSC();
     const double cycles = double(tsc - last_tsc);
     const u64 busy = draw_pipe->busy_cycles.load(std::memory_order_relaxed);
     std::printf("Draw pipe: %.0f draws/s pipelined, %.0f drains/s that waited, stage A waited "
