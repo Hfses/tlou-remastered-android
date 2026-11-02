@@ -36,7 +36,7 @@ cmake -S gow3_pc/gpu -B "$build" -G Ninja \
     -UVMA_INCLUDE_DIR
 python3 android/bionic/audit_link.py --build "$build" --prefix "$prefix" --ndk "$ndk"
 if [[ ${1:-} == --configure-only ]]; then exit 0; fi
-cmake --build "$build" --target gow3gpu --parallel "${TLOU_JOBS:-2}"
+cmake --build "$build" --target gow3gpu --parallel "${TLOU_JOBS:-2}" -- -k 0
 mkdir -p "$out/lib"
 cp "$build/libgow3gpu.so" "$out/lib/"
 echo "TLOU-specific GPU shared library built: $out/lib/libgow3gpu.so"
