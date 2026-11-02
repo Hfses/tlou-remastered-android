@@ -628,6 +628,10 @@ u32 ConsumeWithOverlaysScreenshotRequests() { return 0; }
 ScreenshotRequests ConsumeScreenshotRequests() { return {}; }
 } // namespace VideoCore
 
+extern "C" void gow3gpu_pad_publish(uint32_t buttons) {
+    Gow3Overlay::PublishPad(buttons);
+}
+
 extern "C" int gow3gpu_overlay_captures_input(void) {
     return Gow3Overlay::CapturesInput() ? 1 : 0;
 }
