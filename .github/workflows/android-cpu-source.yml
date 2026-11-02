@@ -2,7 +2,7 @@ name: TLOU ARM64 Bionic loader syntax
 
 on:
   push:
-    paths: ['gow3_pc/src/**', '.github/workflows/android-cpu-source.yml']
+    paths: ['gow3_pc/src/**', 'gow3_pc/gpu/shim/**', 'gow3_pc/gpu/shadps4/video_core/renderer_vulkan/**', '.github/workflows/android-cpu-source.yml']
   pull_request:
     paths: ['gow3_pc/src/**', '.github/workflows/android-cpu-source.yml']
 
@@ -27,6 +27,18 @@ jobs:
           for source in gow3_pc/src/probe.c gow3_pc/src/runtime_cpu.c gow3_pc/src/runtime.c gow3_pc/src/runtime_thread.c gow3_pc/src/runtime_memory.c gow3_pc/src/runtime_file.c gow3_pc/src/runtime_mutex.c gow3_pc/src/runtime_sema.c gow3_pc/src/runtime_rwlock.c; do
             echo "::group::$source"
             "$CC" -std=c11 -O2 -Wall -Wextra -Werror -pthread -fsyntax-only -I gow3_pc -I gow3_pc/src "$source"
+            echo '::endgroup::'
+          done
+      - name: Validate Android window, Vulkan loader and AHB presentation source
+        shell: bash
+        run: |
+          set -euo pipefail
+          CXX="$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang++"
+          for source in gow3_pc/gpu/shim/window_android.cpp gow3_pc/gpu/shim/vk_driver_loader.cpp gow3_pc/gpu/shim/gow3_present_client.cpp; do
+            echo "::group::$source"
+            "$CXX" -std=c++23 -Wall -Wextra -Werror -fsyntax-only \
+              -I gow3_pc/gpu/shim -I gow3_pc/gpu/shadps4 \
+              -I gow3_pc/tools/android/present "$source"
             echo '::endgroup::'
           done
       - name: Check TLOU loader FEX dispatch points
