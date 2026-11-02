@@ -24,7 +24,7 @@ jobs:
           set -euo pipefail
           CC="$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang"
           "$CC" --version | head -n 1
-          for source in gow3_pc/src/probe.c gow3_pc/src/runtime_cpu.c gow3_pc/src/runtime.c gow3_pc/src/runtime_thread.c gow3_pc/src/runtime_memory.c gow3_pc/src/runtime_file.c gow3_pc/src/runtime_mutex.c gow3_pc/src/runtime_sema.c gow3_pc/src/runtime_rwlock.c; do
+          for source in gow3_pc/src/probe.c gow3_pc/src/runtime*.c gow3_pc/src/vulkan_smoke.c; do
             echo "::group::$source"
             "$CC" -std=c11 -O2 -Wall -Wextra -Werror -pthread -fsyntax-only -I gow3_pc -I gow3_pc/src "$source"
             echo '::endgroup::'
