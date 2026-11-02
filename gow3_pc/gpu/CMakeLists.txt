@@ -217,7 +217,12 @@ target_include_directories(gow3gpu PRIVATE third_party/xbyak)
 if(ANDROID)
     target_compile_definitions(gow3gpu PRIVATE VK_USE_PLATFORM_ANDROID_KHR GOW3_NO_SDL=1)
     target_include_directories(gow3gpu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../tools/android/present)
-    target_link_libraries(gow3gpu PRIVATE nativewindow android log dl)
+    # FSR4's optional Vulkan backend still contains C API imports.
+    # Bind those to Android's system Vulkan loader; the main TLOU renderer
+    # retains its selected Vulkan ICD through vk_driver_loader.cpp.
+    # FSR4 is intentionally not enabled for Android until its dispatch path
+    # is converted to the selected driver.
+    target_link_libraries(gow3gpu PRIVATE nativewindow android log dl vulkan)
     target_link_options(gow3gpu PRIVATE -Wl,--exclude-libs,libavcodec.a:libavformat.a:libavutil.a:libswscale.a:libswresample.a)
 endif()
 if (WIN32)
