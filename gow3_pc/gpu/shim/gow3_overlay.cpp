@@ -1,3 +1,63 @@
+#ifdef __ANDROID__
+// Bionic-specific presentation uses Java SurfaceView and virtual pad;
+// TLOU's full SDL/ImGui desktop menu is preserved under #else below.
+#include "gow3_overlay.h"
+#include <atomic>
+#include <mutex>
+#include <algorithm>
+#include <string>
+#include <vector>
+namespace Gow3Overlay {
+namespace {
+std::mutex choice_mutex;
+std::atomic<u32> current_buttons{0};
+u32 last_buttons=0;
+std::vector<std::string> choices;
+int selected=0;
+int result=-1;
+bool choice_open=false;
+}
+void Init(const Vulkan::Instance&, vk::Format, u32) {}
+void Render(vk::CommandBuffer, vk::ImageView, vk::Extent2D) {}
+bool Visible() { return false; }
+void SetLoading(bool, u32, u32) {}
+void SetBackgroundLoading(u32, u32) {}
+bool CapturesInput() { std::scoped_lock lk{choice_mutex}; return choice_open; }
+bool HandleEvent(const SDL_Event&) { return false; }
+void UpdateTextInput(SDL_Window*) {}
+void SetTextEntry(bool, const std::string&, const std::string&) {}
+void BeginChoice(const std::string&, const std::vector<std::string>& items,
+                 std::vector<Gow3Png::Image>, int focus) {
+    std::scoped_lock lk{choice_mutex};
+    choices=items;
+    selected=focus>=0 && focus<int(items.size()) ? focus : 0;
+    result=-1;
+    choice_open=true;
+    last_buttons=current_buttons.load();
+}
+void PublishPad(u32 buttons) {
+    current_buttons.store(buttons,std::memory_order_release);
+}
+int PollChoice() {
+    constexpr u32 Up=0x10,Down=0x40,Cross=0x4000,Circle=0x2000;
+    std::scoped_lock lk{choice_mutex};
+    if(!choice_open) return result;
+    const u32 now=current_buttons.load(std::memory_order_acquire);
+    const u32 pressed=now & ~last_buttons;
+    last_buttons=now;
+    if(!choices.empty() && (pressed & (Up|Down))) {
+        const int move=(pressed & Up) ? -1 : 1;
+        selected=(selected+move+int(choices.size()))%int(choices.size());
+    }
+    if(pressed & (Cross|Circle)) {
+        result=(pressed & Circle)||choices.empty() ? -2 : selected;
+        choice_open=false;
+    }
+    return result;
+}
+void ShowTrophy(Gow3Png::Image, const std::string&, const std::string&) {}
+} // namespace Gow3Overlay
+#else // !__ANDROID__
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "gow3_overlay.h"
 
@@ -2094,3 +2154,5 @@ void Render(vk::CommandBuffer cmdbuf, vk::ImageView view, vk::Extent2D extent) {
 }
 
 } // namespace Gow3Overlay
+
+#endif // __ANDROID__
