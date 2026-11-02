@@ -16,6 +16,14 @@ android {
     buildTypes {
         release { minifyEnabled false }
     }
+    // This is an experimental sideload-only native research build, not a
+    // Google Play submission. Keep targetSdk 28 until native executable
+    // extraction/launch is migrated to a modern Android-safe mechanism.
+    // Disable only the store-policy lint finding; retain all other release
+    // lint checks and Android build validation.
+    lint {
+        disable 'ExpiredTargetSdkVersion'
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
