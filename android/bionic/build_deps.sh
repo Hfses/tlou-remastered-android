@@ -20,7 +20,12 @@ fetch() { # name url archive-extension
     local dir=$src/$1
     [[ -d $dir ]] && return
     rm -rf -- "$dir.tmp"
-    curl -fsSL "$2" -o "$src/$1.tar" && mkdir -p "$dir.tmp" && tar --no-same-owner -xf "$src/$1.tar" -C "$dir.tmp" --strip-components=1 \
+    local url="$2"
+    if [[ "$1" == "ffmpeg-7.1.5" ]]; then
+        # ffmpeg.org timed out in GitHub Actions; the same upstream n7.1.5 source tag.
+        url="https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n7.1.5.tar.gz"
+    fi
+    curl --retry 5 --retry-delay 3 --connect-timeout 12 --max-time 180 -fsSL "$url" -o "$src/$1.tar" && mkdir -p "$dir.tmp" && tar --no-same-owner -xf "$src/$1.tar" -C "$dir.tmp" --strip-components=1 \
         && mv "$dir.tmp" "$dir" && rm "$src/$1.tar"
 }
 cm() { # name source-dir extra cmake args...
