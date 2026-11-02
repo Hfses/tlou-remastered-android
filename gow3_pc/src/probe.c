@@ -1061,6 +1061,10 @@ int main(int argc, char **argv) {
         }
         else { fprintf(stderr, "Unknown option: %s\n", argv[i]); return 1; }
     }
+#ifndef _WIN32
+    /* The red-zone relay code is Windows-only; reject instead of silently ignoring it. */
+    if (red_zone_file) { fputs("TLOU: --red-zone is currently Windows-only\n",stderr); return 2; }
+#endif
     if (argc < 2) {
         fprintf(stderr, "Usage: %s boot.bin [--cpu-only] [--strict-imports] [--check-imports] [--no-game-hooks] [--content-profile file] [--app0 dir] [--app0-overlay dir]... [--user dir] [--patches file] [--timeout seconds] [--guest-path /app0/file] [--guest-arg value]... | --vulkan-only\n", argv[0]);
         return 1;
