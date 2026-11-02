@@ -68,6 +68,11 @@ namespace Gow3Overlay {
 namespace {
 
 std::mutex imgui_mutex; // the ImGui context: window thread (input) and present thread
+#ifdef __ANDROID__
+// PadBridge is the only controller source in Bionic; store snapshots atomically.
+std::atomic<u32> bionic_pad_now{0};
+std::atomic<u32> bionic_pad_before{0};
+#endif
 bool initialized = false;
 std::atomic<bool> menu_open{false};
 // gow3 18 Oct (GitHub #15, #19): the controller buttons held now (bit = SDL gamepad button; the
@@ -1925,6 +1930,26 @@ void BeginChoice(const std::string& title, const std::vector<std::string>& items
 }
 
 int PollChoice() {
+#ifdef __ANDROID__
+    // The game may poll faster than the UI presents; only rising edges navigate.
+    constexpr u32 Up=0x10, Down=0x40, Cross=0x4000, Circle=0x2000;
+    const u32 buttons=bionic_pad_now.load(std::memory_order_acquire);
+    const u32 prior=bionic_pad_before.exchange(buttons,std::memory_order_acq_rel);
+    const u32 pressed=buttons & ~prior;
+    if (choice_active && pressed) {
+        std::scoped_lock lock{imgui_mutex};
+        const int count=int(choice_items.size());
+        if (count && (pressed & (Up | Down))) {
+            const int move=(pressed & Up) ? -1 : 1;
+            choice_index=(choice_index+move+count)%count;
+        }
+        if (pressed & (Cross | Circle)) {
+            choice_result=(pressed & Circle) || !count ? -2 : choice_index;
+            choice_active=false;
+            RetireChoiceTextures();
+        }
+    }
+#endif
     // GOW3_TEST_CHOICE=<index> (scripted tests, whose pad input does not reach this list): the
     // entry is chosen about 1.5 s after the list opens.
     static const int test_choice = [] {
@@ -1945,6 +1970,14 @@ int PollChoice() {
         }
     }
     return choice_result;
+}
+
+void PublishPad(u32 buttons) {
+#ifdef __ANDROID__
+    bionic_pad_now.store(buttons,std::memory_order_release);
+#else
+    (void)buttons; // Desktop controls are delivered as SDL events.
+#endif
 }
 
 void ShowTrophy(Gow3Png::Image picture, const std::string& title, const std::string& text) {
