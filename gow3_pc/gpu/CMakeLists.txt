@@ -223,6 +223,11 @@ if(ANDROID)
     # FSR4 is intentionally not enabled for Android until its dispatch path
     # is converted to the selected driver.
     target_link_libraries(gow3gpu PRIVATE nativewindow android log dl vulkan)
+    # The GPU shared object invokes HLE memory/thread/guest CPU APIs implemented
+    # by gow3-probe and libgow3cpu.so. Android's NDK applies --no-undefined
+    # by default; defer these symbols until the final executable's -rdynamic
+    # and audit checks, instead of shipping empty stubs that would break boot.
+    target_link_options(gow3gpu PRIVATE -Wl,--unresolved-symbols=ignore-all)
     target_link_options(gow3gpu PRIVATE -Wl,--exclude-libs,libavcodec.a:libavformat.a:libavutil.a:libswscale.a:libswresample.a)
 endif()
 if (WIN32)
