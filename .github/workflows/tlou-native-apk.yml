@@ -1,0 +1,87 @@
+name: TLOU Bionic Full Native and APK
+
+on:
+  push:
+    branches: [android-bionic-stage1]
+    paths:
+      - 'android/bionic/**'
+      - 'gow3_pc/**'
+      - 'ci/**'
+      - 'android-launcher/**'
+      - '.github/workflows/tlou-native-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tlou-bionic-full-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      TLOU_JOBS: '3'
+      TLOU_ANDROID_API: '30'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;29.0.14206865'
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: ci/environment.yml
+          cache-environment: true
+          init-shell: bash
+      - name: Cross-compile host utilities
+        shell: bash -el {0}
+        run: |
+          bash ci/setup-deps.sh "$CONDA_PREFIX"
+          echo "TLOU_BIONIC_HEADERS=$CONDA_PREFIX" >> "$GITHUB_ENV"
+          echo "TLOU_NDK=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+      - name: Build real Bionic target dependencies
+        shell: bash -el {0}
+        run: bash android/bionic/build_deps.sh
+      - name: Build actual TLOU FEX ARM64 native translator
+        shell: bash -el {0}
+        run: bash android/bionic/build_fex.sh
+      - name: Configure TLOU-specific native Vulkan GPU
+        shell: bash -el {0}
+        run: bash android/bionic/build_gpu.sh --configure-only
+      - name: Compile TLOU Vulkan GPU and HLE
+        shell: bash -el {0}
+        run: bash android/bionic/build_gpu.sh
+      - name: Link real TLOU Bionic runtime and AHB present
+        shell: bash -el {0}
+        run: bash android/bionic/build_runtime.sh --link-only
+      - name: Verify ARM64 executable and native symbols
+        shell: bash -el {0}
+        run: |
+          python3 android/bionic/verify_bionic.py --ndk "$TLOU_NDK" --root out/android-bionic
+      - name: Publish built native binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: TLOU-Bionic-native-arm64
+          path: |
+            out/android-bionic/bin/gow3-probe
+            out/android-bionic/lib/*.so
+          if-no-files-found: error
+      - name: Save native failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TLOU-Bionic-native-diagnostics
+          path: |
+            .local-deps/android/bionic-build/**/*.log
+            .local-deps/android/bionic-build/ffmpeg-configure.log
+            out/android-bionic/gpu/CMakeFiles/CMakeConfigureLog.yaml
+            out/android-bionic/gpu/CMakeCache.txt
+            out/android-bionic/fex/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: ignore
