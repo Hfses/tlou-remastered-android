@@ -51,6 +51,14 @@ jobs:
             ~/.cache/ccache
           key: tlou-bionic-arm64-v2-${{ runner.os }}-${{ hashFiles('android/bionic/build_deps.sh', 'android/bionic/build_fex.sh') }}
           save-always: true
+      # Ccache is incremental across source-fix commits, unlike the pinned dependency archive.
+      - name: Restore incremental ARM64 native object cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ccache
+          key: tlou-arm64-ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            tlou-arm64-ccache-${{ runner.os }}-
       - name: Report compiler cache
         shell: bash -el {0}
         run: |
@@ -108,6 +116,12 @@ jobs:
             out/android-bionic/bin/gow3-probe
             out/android-bionic/lib/*.so
           if-no-files-found: error
+      - name: Save incremental native compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ccache
+          key: tlou-arm64-ccache-${{ runner.os }}-${{ github.sha }}
       - name: Save native failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
