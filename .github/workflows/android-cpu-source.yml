@@ -2,7 +2,7 @@ name: TLOU ARM64 Bionic loader syntax
 
 on:
   push:
-    paths: ['gow3_pc/src/**', 'gow3_pc/gpu/shim/**', 'gow3_pc/gpu/shadps4/video_core/renderer_vulkan/**', '.github/workflows/android-cpu-source.yml']
+    paths: ['gow3_pc/src/**', 'gow3_pc/gpu/shim/**', 'gow3_pc/gpu/shadps4/video_core/renderer_vulkan/**', 'android-launcher/**', '.github/workflows/android-cpu-source.yml']
   pull_request:
     paths: ['gow3_pc/src/**', '.github/workflows/android-cpu-source.yml']
 
@@ -20,6 +20,15 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools ndk;29.0.14206865'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Compile real TLOU Android launcher (Java)
+        run: gradle -p android-launcher :app:compileReleaseJavaWithJavac --no-daemon --max-workers=2
       - name: Compile native TLOU code against ARM64 Bionic NDK
         shell: bash
         run: |
