@@ -1,6 +1,6 @@
 # The Last of Us Remastered — Android/Bionic
 
-**Status: stage 1 (game preparation). No Android APK or gameplay has been validated.**
+**Status: etapa 2 (CPU FEX ARM64 + ponte de renderização AHB em integração). Sem APK ou gameplay Android validados.**
 
 This port must preserve the TLOU-specific runtime and Vulkan changes already in the repository. We use the other Android projects for portable infrastructure, not as a substitute for TLOU graphics.
 
@@ -25,6 +25,28 @@ Example using a legally dumped game:
       --out /path/to/private-preparation
 
 The --out directory must support symlinks (app-private Android storage). Input game folders are not modified. If an update has dvdroot_ps4 content, this tool refuses it until native app0 content overlay support is ready, rather than running a mixed game/update.
+
+## Etapa 2 — código integrado na branch experimental
+
+- CPU: `gow3_pc/src/guest_cpu.h`, `runtime_cpu.c`, `cpu/guest_cpu_fex.cpp` e `host_call_arm64.S` portados do GoW3 Bionic; o loader do TLOU agora encaminha inicializadores, callbacks, importações e entrada de jogo via `guest_cpu_call` / `guest_cpu_host_function`.
+- Bionic: gerenciamento de thread, GS/TLS e endereços guest baixos; tratamento de SIGSEGV e frame de exceção ARM64; áudio Android sem SDL pelo mixer `runtime_audio_bionic.c` com saída PCM/FIFO.
+- GPU do TLOU preservada: selecionador Vulkan nativo (`vk_driver_loader`), janela Android sem SDL, protocolo de apresentação AHardwareBuffer, swapchain AHB, ownership de filas Vulkan e controle de fences no presenter; Vulkan do TLOU não foi substituído pelo renderer de GoW3.
+- Compilação nativa: `android/bionic/build_deps.sh` prepara bibliotecas ARM64, `build_fex.sh` compila o FEX embutido, `build_gpu.sh` compila o renderer específico e `build_runtime.sh` liga a camada nativa Bionic. Esses scripts ainda não constituem um APK.
+- CI: `android-cpu-source.yml` usa Clang/NDK ARM64 real para validar os módulos sem dependências externas de FFmpeg e a ponte AHB. `runtime_mp3.c` e `runtime_videodec.c` precisam do FFmpeg Android compilado antes da validação nativa final.
+
+A preparação do jogo (`tlou_bionic.py`) está separada dos componentes binários. O loader do GoW3 não pode simplesmente substituir o do TLOU: as opções específicas (`--low-image`, `--guest-path`, `--app0-overlay`) e os patches continuam sendo preservados.
+
+## Comandos de build nativa ARM64 (infraestrutura, não APK)
+
+```sh
+export TLOU_NDK=/path/to/android-ndk-r29
+bash android/bionic/build_deps.sh
+bash android/bionic/build_fex.sh
+bash android/bionic/build_gpu.sh
+bash android/bionic/build_runtime.sh --link-only
+```
+
+A etapa seguinte é validar a compilação/link reais do renderizador completo, solucionar as diferenças de HLE e integrar uma Activity Android dedicada para inicializar o jogo e apresentar o frame. Não declarar boot, renderização nem desempenho antes do teste real.
 
 ## Native boot blockers (do not conceal)
 
