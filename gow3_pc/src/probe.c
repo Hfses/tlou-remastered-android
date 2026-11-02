@@ -706,6 +706,7 @@ extern void gow3_stat_multipliers_status(int damage, int orb_pickup);
 
 /* The hooks below find their sites by signature (src/signature.h), so they work in any region
  * and version of the game whose code matches; a site that is not found leaves its feature off. */
+#if defined(GUEST_CPU_NATIVE)
 static void install_cheats(Segment *segments, uint64_t count, uint64_t size) {
     const char *names[] = {"health", "magic", "item meter", "Rage of Sparta", "red orbs",
                            "Very Hard unlock", "infinite double jumps"};
@@ -938,6 +939,7 @@ static void install_stat_multipliers(Segment *segments, uint64_t count, uint64_t
     printf("Multipliers: damage %s, green/blue/gold orbs %s\n", damage ? "ready" : "unavailable",
            pickup ? "ready" : "unavailable");
 }
+ #endif /* PS4 instruction hooks are native x86-64-only. */
 /* G3PATCH2 (patches.py): the patches' image base, then byte writes at image offsets, applied
  * after relocation. A write may replace a whole base-relative pointer slot (60/90 FPS++ swap
  * function pointers): the patch holds the address at the patches' base, rebased here. */
