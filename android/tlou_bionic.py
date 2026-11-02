@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
-import os
 from pathlib import Path
 import shutil
 import struct
@@ -120,6 +119,9 @@ def load_patch_module(source: Path):
 
 def prepare(source: Path, game: Path, update: Path | None, out: Path,
             *, flashlight: bool = False) -> dict:
+    # Never create or delete files inside the player's game dump.
+    if out == game or out.is_relative_to(game) or (update and (out == update or out.is_relative_to(update))):
+        raise PortError("--out must be outside the game and update folders")
     base = require_game(game)
     new = require_game(update, is_update=True) if update else None
     # Do not claim that this layout supports update-provided game resources.
