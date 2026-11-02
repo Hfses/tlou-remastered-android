@@ -71,6 +71,35 @@ class TestTLOUBionic(unittest.TestCase):
             with self.assertRaises(m.PortError):
                 m.read_sfo(base/"sce_sys/param.sfo")
 
+    def test_output_must_not_be_inside_game(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = make_game(Path(tmp)/"game")
+            with self.assertRaisesRegex(m.PortError, "outside the game"):
+                m.prepare(Path(tmp), base, None, base / "out")
+
+    def test_existing_signature_gates_patches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(__file__).resolve().parents[2]
+            if not (source / "tools/probe_tlou.py").is_file():
+                self.skipTest("full repository not mounted in isolated module test")
+            patcher = m.load_patch_module(source)
+            elf = bytearray(0x300)
+            struct.pack_into("<Q", elf, 0x20, 0x40)
+            struct.pack_into("<HH", elf, 0x36, 56, 1)
+            struct.pack_into("<IIQQQQQQ", elf, 0x40, 1, 5, 0x200, 0x1000, 0, 0x20, 0x20, 0x1000)
+            elf[0x200:0x202] = bytes.fromhex("ABCD")
+            input_path = Path(tmp) / "eboot.elf"
+            output_path = Path(tmp) / "patches.bin"
+            input_path.write_bytes(elf)
+            patches = {"good": [(0x1000, "ABCD", "EF12")], "bad": [(0x1002, "DEAD", "BEAD")]}
+            result = patcher.image_patches(input_path, output_path, patches)
+            self.assertEqual(result, output_path)
+            raw = output_path.read_bytes()
+            self.assertEqual(raw[:8], b"G3PATCH2")
+            self.assertEqual(struct.unpack_from("<Q", raw, 16)[0], 1)
+            self.assertEqual(struct.unpack_from("<QQ", raw, 24), (0x1000, 2))
+            self.assertEqual(raw[40:], bytes.fromhex("EF12"))
+
     def test_update_resources_are_never_silently_ignored(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = make_game(Path(tmp)/"game")
