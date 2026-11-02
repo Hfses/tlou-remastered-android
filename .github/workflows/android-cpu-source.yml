@@ -26,7 +26,13 @@ jobs:
           set -euo pipefail
           CC="$ANDROID_HOME/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang"
           "$CC" --version | head -n 1
+          # FFmpeg-backed modules need target FFmpeg headers built separately by
+          # android/bionic/build_deps.sh; do not silently use host headers.
           for source in gow3_pc/src/probe.c gow3_pc/src/runtime*.c gow3_pc/src/vulkan_smoke.c; do
+            case "$source" in *runtime_mp3.c|*runtime_videodec.c)
+              echo "Requires Bionic FFmpeg cross-build: $source (not syntax-checked here)"
+              continue ;;
+            esac
             echo "::group::$source"
             "$CC" -std=c11 -O2 -Wall -Wextra -Werror -DGOW3_NO_SDL=1 -pthread -fsyntax-only -I gow3_pc -I gow3_pc/src "$source"
             echo '::endgroup::'
