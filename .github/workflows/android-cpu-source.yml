@@ -28,7 +28,7 @@ jobs:
         with:
           gradle-version: '8.14.3'
       - name: Compile real TLOU Android launcher (Java)
-        run: gradle -p android-launcher :app:compileReleaseJavaWithJavac --no-daemon --max-workers=2
+        run: gradle -p android-launcher :app:compileReleaseJavaWithJavac :app:lintVitalRelease --no-daemon --max-workers=2
       - name: Compile native TLOU code against ARM64 Bionic NDK
         shell: bash
         run: |
