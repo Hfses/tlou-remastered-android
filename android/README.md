@@ -48,11 +48,11 @@ bash android/bionic/build_runtime.sh --link-only
 
 A etapa seguinte é validar a compilação/link reais do renderizador completo, solucionar as diferenças de HLE e integrar uma Activity Android dedicada para inicializar o jogo e apresentar o frame. Não declarar boot, renderização nem desempenho antes do teste real.
 
-## Native boot blockers (do not conceal)
+## Bloqueios restantes para o primeiro APK funcional
 
-1. The TLOU loader in gow3_pc/src/probe.c is currently x86-64-only, with direct guest calls and low-image/red-zone handling. The Bionic GOW3 loader uses guest_cpu.h and FEX, but it lacks the TLOU-specific options --low-image, --no-game-hooks, --guest-path, --app0-overlay and --red-zone. Those must be reconciled before a legitimate ARM64 boot.
-2. The renderer under gow3_pc/gpu/ is TLOU-specific and needs Android Vulkan surface/presentation, driver loading, readback, shader and video-decoding integration. Replacing it wholesale with the GOW3 renderer would regress TLOU fixes.
-3. Android activity, runtime packaging, native ELF link checks and signed APK creation are still pending.
+1. O loader TLOU agora contém a interface FEX, mas a compilação e ligação completas com o backend C++ do FEX ainda precisam ser verificadas; a transferência das rotinas específicas de red-zone e a compatibilidade de inicialização do jogo em ARM64 não foram validadas em dispositivo.
+2. O renderizador Vulkan é o do TLOU, agora com suporte inicial ao protocolo de apresentação AHardwareBuffer. A compilação completa de `libgow3gpu.so`, sincronização de readbacks, shaders, Videodec2 e tratamento de formatos precisam ser confirmados sem regressões.
+3. Faltam o launcher Android específico do TLOU, carregamento automático de payload, seleção de diretório e atualização, interação com o áudio PCM e controles, auditoria dos ELF gerados e assinatura do APK.
 
 **Never publish an Android APK that is merely a rebranded GOW3 binary.** The first useful APK milestone needs the actual TLOU ARM64 loader/renderer to compile and pass native-link validation.
 
