@@ -57,7 +57,11 @@ static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {
     return push_data;
 }
 
+#ifdef _WIN32
+// Win32 hardware debug-register watchpoints exist only in the desktop runtime.
+// Android uses FEX guest execution and cannot arm x86 DR0-DR3 on an ARM64 host.
 extern "C" void runtime_exec_watch_retarget(uint64_t address);
+#endif
 namespace {
 // gow3 16 Oct: a depth image sampled by a draw that also has it as its depth attachment
 // (a half-resolution depth, 960x540 D32S8, with depth writes on) used to be bound as
@@ -767,7 +771,12 @@ void CheckSrtWalks() {
             static bool watching = false;
             if (watch && !watching && source) {
                 watching = true;
+#ifdef _WIN32
                 runtime_exec_watch_retarget(source);
+#else
+                std::fprintf(stderr,
+                    "GOW3_SRT_WATCH requests Win32 x86 hardware breakpoints, unavailable on Android/FEX\n");
+#endif
             }
             ++(check.worker ? changed_worker : changed_gpu);
             // gow3 21 Oct 2026: GOW3_SRT_CHECK_LINES=<n> (default 16) such lines per run; GPU-thread
@@ -4064,7 +4073,12 @@ void Rasterizer::SyncSrtTables(const Shader::Info& info) {
             static VAddr watched = 0;
             if (int(i) == watch_node.first && table + watch_node.second != watched) {
                 watched = table + watch_node.second;
+#ifdef _WIN32
                 runtime_exec_watch_retarget(watched);
+#else
+                std::fprintf(stderr,
+                    "GOW3_TRACE_WATCH_NODE requests Win32 x86 hardware breakpoints, unavailable on Android/FEX\n");
+#endif
             }
         };
         if (!table || !node.extent || !buffer_cache.IsRangeGpuWrittenShared(table, node.extent) ||
