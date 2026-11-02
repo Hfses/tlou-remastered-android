@@ -213,7 +213,9 @@ void Scheduler::SignalAfterHostCopies(std::function<void()> signal) {
 // gow3 25 Oct 2026 diagnostics (GOW3_PROFILE): time spent in the guest-write ordering waits by
 // the task that waited (g_wait_owner: offset from the image base, symbolized against the build),
 // every 5 s.
+#ifdef _WIN32
 extern "C" char __ImageBase;
+#endif
 static bool OrderWaitStatsEnabled() {
     static const bool on = std::getenv("GOW3_PROFILE") != nullptr;
     return on;
@@ -241,9 +243,20 @@ static void NoteOrderWait(int kind, std::chrono::steady_clock::time_point start)
     std::string text;
     for (size_t i = 0; i < std::min<size_t>(sorted.size(), 8); ++i) {
         const auto& [ns, key] = sorted[i];
+        // Windows has a PE image-base symbol; Android shared objects are ELF
+        // and may be relocated independently. Resolve the actual owner of each
+        // frame with dladdr rather than requiring the non-existent __ImageBase.
+        uintptr_t module_base = 0;
+#ifdef _WIN32
+        module_base = reinterpret_cast<uintptr_t>(&__ImageBase);
+#else
+        Dl_info module{};
+        if (key.first && dladdr(key.first, &module) != 0 && module.dli_fbase) {
+            module_base = reinterpret_cast<uintptr_t>(module.dli_fbase);
+        }
+#endif
         const auto offset = key.first ? static_cast<unsigned long long>(
-                                            reinterpret_cast<uintptr_t>(key.first) -
-                                            reinterpret_cast<uintptr_t>(&__ImageBase))
+                                            reinterpret_cast<uintptr_t>(key.first) - module_base)
                                       : 0ull;
         text += fmt::format(" {} by {}: {}x {:.1f} ms;", kinds[key.second],
                             key.first ? fmt::format("task +{:#x}", offset) : std::string{"draws"},
