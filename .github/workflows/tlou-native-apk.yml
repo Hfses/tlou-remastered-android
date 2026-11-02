@@ -65,6 +65,24 @@ jobs:
         shell: bash -el {0}
         run: |
           python3 android/bionic/verify_bionic.py --ndk "$TLOU_NDK" --root out/android-bionic
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Assemble and sign actual TLOU Bionic APK
+        shell: bash -el {0}
+        run: bash android/bionic/package_apk.sh
+      - name: Publish installable TLOU APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TheLastOfUsRemastered-Android-Bionic-arm64
+          path: |
+            out/release/TheLastOfUsRemastered-Android-Bionic-v0.1-arm64.apk
+            out/release/TheLastOfUsRemastered-Android-Bionic-v0.1-arm64.apk.sha256
+          if-no-files-found: error
       - name: Publish built native binaries
         uses: actions/upload-artifact@v4
         with:
