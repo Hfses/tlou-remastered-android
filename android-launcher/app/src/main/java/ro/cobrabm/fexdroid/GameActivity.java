@@ -295,7 +295,7 @@ public final class GameActivity extends Activity {
 
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     private void applyLiveSettings() {
-        if(status==null || touch==null)return;
+        if(closing.get() || status==null || touch==null)return;
         SharedPreferences p=PortSettings.prefs(this);
         status.setVisibility(p.getBoolean("hud_visible",true)?View.VISIBLE:View.GONE);
         status.setTextSize(p.getInt("hud_size",14));
@@ -317,7 +317,9 @@ public final class GameActivity extends Activity {
         });
     }
     private void showMenu() {
-        if(closing.get())return;touch.release();
+        if(closing.get())return;
+        if(!started || touch==null || pad==null){stopAndExit();return;}
+        touch.release();pad.reset(); // release held inputs; keep the controller/provider connected
         new PortMenu(this,true,new PortMenu.Actions(){
             public void logs(){showLog();}public void exportLogs(){}public void chooseGame(){}public void installPkg(){}
             public void importDriver(){}public void selectDriver(){}
