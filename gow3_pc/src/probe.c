@@ -31,31 +31,15 @@
 #include <fcntl.h>
 #include <dlfcn.h>
 #ifdef __ANDROID__
-#include <unwind.h>
 #include <sys/prctl.h>
 #else
 #include <execinfo.h>
 #endif
 #include <sys/syscall.h>
 #include <sys/uio.h>
+#include "crash_guest_dump.h"
 #endif
 
-#if defined(__ANDROID__) && !defined(_WIN32)
-/* Android Bionic has no execinfo/backtrace. */
-typedef struct { void **frames; int count, max; } TlUnwindState;
-static _Unwind_Reason_Code tl_unwind_step(struct _Unwind_Context *ctx, void *cookie) {
-    TlUnwindState *s = cookie;
-    uintptr_t pc = _Unwind_GetIP(ctx);
-    if (!pc || s->count >= s->max) return _URC_END_OF_STACK;
-    s->frames[s->count++] = (void *)pc;
-    return _URC_NO_REASON;
-}
-static int backtrace(void **frames, int max) {
-    TlUnwindState s={frames,0,max};
-    _Unwind_Backtrace(tl_unwind_step,&s);
-    return s.count;
-}
-#endif
 typedef struct { uint64_t address, size, flags; } Segment;
 typedef struct { uint64_t target, kind, value, addend; } Reloc;
 static char (*names)[128];
@@ -600,6 +584,12 @@ static void fault(int sig, siginfo_t *info, void *context) {
     else
         snprintf(line, sizeof(line), "Fault (signal %d) at RIP %p, address %p\n", sig, (void *)rip, info->si_addr);
     { ssize_t written_=write(2, line, strlen(line)); (void)written_; }
+#ifdef __ANDROID__
+    /* Never unwind through a FEX JIT frame from a fatal signal. The Android
+     * unwinder/allocator can block or fault again before _exit. Registers and
+     * bounded guest frame reads do not acquire renderer/allocator locks. */
+    if (guest) dump_guest_fault_regs(2,&regs,(uintptr_t)image);
+#else
     if (gpu_enabled) gow3gpu_dump_guest_writes(context);
     /* Host call chain (frames with unwind info; guest frames end it). */
     void *frames[32];
@@ -612,6 +602,7 @@ static void fault(int sig, siginfo_t *info, void *context) {
             snprintf(line, sizeof(line), "  #%d %p\n", i, frames[i]);
         ssize_t written_=write(2, line, strlen(line)); (void)written_;
     }
+#endif
     _exit(128 + sig);
 }
 #endif

@@ -15,6 +15,17 @@ def rip_instruction(prefix, address, target):
 
 
 BASE_PATCHES = {
+    # Missing third component-transform source: the observed crash dereferences
+    # NULL+0x20 at 0xf6beb0. Return before the prologue only for absent source;
+    # valid input executes the original displaced prologue and original body.
+    "null-component-transforms": [
+        (0xF6BE63, "90"*13, "4885c974fa554889e54157eb06"),
+        (0xF6BE70, "554889e54157", "e9eeffffff90"),
+        (0xF6BE54, "4883c4185b415c415d415e415f5dc3", None),
+        (0xF6BE76, "415641554154534883ec184889cb4989d6", None),
+        (0xF6BEB0, "8b3383feff4c89f8", None),
+        (0x92C942, "488b5330488b8a800000004883c260", None),
+    ],
     # WaitOnContextDone's compare and diagnostic both read 20 seconds rather than
     # 2. Reuse existing immutable constants; do not alter a shared constant pool.
     "frame-timeout": [

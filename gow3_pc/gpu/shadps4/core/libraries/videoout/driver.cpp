@@ -395,6 +395,30 @@ void VideoOutDriver::Flip(const Request& req) {
 
     // gow3: GOW3_FRAME_STATS=1 prints flip rate and frame time spread every 5 seconds.
     static const bool frame_stats = EmulatorSettingsImpl::Flag("GOW3_FRAME_STATS", false);
+    static const bool light_summary = EmulatorSettingsImpl::Flag("TLOU_FRAME_SUMMARY", false);
+    if (light_summary && !frame_stats) {
+        // Flip-only timing reuses compile counters already maintained by the
+        // renderer. No per-draw profiling, readbacks or GPU timestamp queries.
+        using Clock = std::chrono::steady_clock;
+        static auto start = Clock::now(), last = start;
+        static u32 frames = 0;
+        static double worst = 0;
+        const auto now = Clock::now();
+        worst = std::max(worst, std::chrono::duration<double,std::milli>(now-last).count());
+        last = now;
+        ++frames;
+        const double window = std::chrono::duration<double>(now-start).count();
+        if (window >= 5.0) {
+            std::printf("TLOU frame summary: %.1f flips/s worst=%.1fms compiles=%u "
+                        "main-compile=%.1fms worker-compile=%.1fms wait=%.1fms pending-draws=%u\n",
+                        frames/window,worst,Vulkan::g_gow3_compiles.exchange(0),
+                        Vulkan::g_gow3_compile_ns.exchange(0)/1e6,
+                        Vulkan::g_gow3_async_ns.exchange(0)/1e6,
+                        Vulkan::g_gow3_compile_wait_ns.exchange(0)/1e6,
+                        Vulkan::g_gow3_pending_draws.exchange(0));
+            frames=0;worst=0;start=now;
+        }
+    }
     if (frame_stats) {
         using Clock = std::chrono::steady_clock;
         static Clock::time_point window_start = Clock::now(), last = window_start;

@@ -253,6 +253,7 @@ public final class GameActivity extends Activity {
             env.put("GOW3_SCREEN_H",String.valueOf(getResources().getDisplayMetrics().heightPixels));
             env.put("GOW3_DISPLAY_HZ",String.valueOf(Math.round(getWindowManager().getDefaultDisplay().getRefreshRate())));
             env.put("GOW3_GPU_USER_DIR",state.getAbsolutePath());
+            env.put("TLOU_FRAME_SUMMARY","1");
             env.put("GOW3_VSYNC","1");
             // Desktop temporal injections target updated game shaders. Keep the
             // original render path until those hashes are validated on Android.

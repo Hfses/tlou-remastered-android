@@ -72,7 +72,7 @@ public final class MainActivity extends Activity {
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setIndeterminate(true);progress.setVisibility(View.GONE);root.addView(progress);
         status=text("Pronto para continuar. Abra o menu lateral para drivers, HUD e controles.",13,MUTED);root.addView(status);
         permission=text("Permitir acesso aos arquivos",13,ACCENT);permission.setPadding(0,dp(12),0,dp(12));permission.setOnClickListener(v->withAccess(this::refresh));root.addView(permission);
-        root.addView(text("CUSA00552  ·  Daedalus v0.10",11,MUTED));setContentView(scroll);refresh();
+        root.addView(text("CUSA00552  ·  Daedalus v0.11",11,MUTED));setContentView(scroll);refresh();
     }
     private void exportLogs() {
         Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/zip");save.addCategory(Intent.CATEGORY_OPENABLE);
