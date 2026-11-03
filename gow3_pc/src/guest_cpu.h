@@ -9,7 +9,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <signal.h>
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(GUEST_CPU_TEST_FEX)
 #define GUEST_CPU_NATIVE 1
 #endif
 #ifdef __cplusplus
@@ -76,10 +76,11 @@ typedef struct GuestFiberCpuState GuestFiberCpuState;
 GuestFiberCpuState* guest_cpu_fiber_create(void);
 void guest_cpu_fiber_save(GuestFiberCpuState* state);
 void guest_cpu_fiber_entry(GuestFiberCpuState* state, uintptr_t entry, uintptr_t stack_top,
-                           uint64_t arg0, uint64_t arg1, void* returned);
-void guest_cpu_fiber_switch(GuestFiberCpuState* state);
+                           uint64_t arg0, uint64_t arg1, void* returned, int reset_fpu);
+/* release(previous) runs only after the dispatcher has left its saved state. */
+void guest_cpu_fiber_switch(GuestFiberCpuState* state, void (*release)(void*), void* previous);
 void guest_cpu_fiber_dispose(GuestFiberCpuState* state);
-uint64_t guest_cpu_fiber_frame_pointer(void);
+uint64_t guest_cpu_fiber_frame_pointer(const GuestFiberCpuState* state);
 #endif
 
 /* The guest's time stamp counter (RDTSC) and its frequency in Hz. */

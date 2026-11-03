@@ -73,7 +73,7 @@ public final class MainActivity extends Activity {
         permission=text("Permitir acesso aos arquivos",13,ACCENT); permission.setPadding(0,dp(12),0,dp(12)); permission.setOnClickListener(v->withAccess(()->refresh())); root.addView(permission);
         add(root,"Ver logs de execução e instalação",false,this::showLog);
         add(root,"Exportar logs ZIP",false,()->{Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/zip");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,"TLOU-Android-Logs.zip");startActivityForResult(save,SAVE_LOGS);});
-        root.addView(text("TLOU • CUSA00552 • Daedalus v0.4",11,MUTED));
+        root.addView(text("TLOU • CUSA00552 • Daedalus v0.5",11,MUTED));
         setContentView(scroll); refresh();
     }
     private int dp(int value) { return Math.round(value*getResources().getDisplayMetrics().density); }

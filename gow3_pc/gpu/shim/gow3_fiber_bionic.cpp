@@ -14,6 +14,8 @@
 #include <cstdlib>
 #include <sys/mman.h>
 #include <unordered_map>
+#include <memory>
+#include <mutex>
 
 extern "C" void* runtime_low_map(size_t size, int protection);
 namespace Libraries::Fiber {
@@ -31,23 +33,31 @@ struct Record {
     size_t allocated_size{};
     u64* incoming_argument{};
     bool has_continuation{};
+    ~Record() {
+        if (cpu) guest_cpu_fiber_dispose(cpu);
+        if (allocated_stack) munmap(allocated_stack,allocated_size);
+    }
 };
 
 struct Session {
     OrbisFiber* active{};
     GuestFiberCpuState* root{};
     u64* root_return{};
-    std::unordered_map<OrbisFiber*,Record> records;
     ~Session() {
-        for (auto& [f,r] : records) {
-            if (r.cpu) guest_cpu_fiber_dispose(r.cpu);
-            // Android runtime terminates guest threads/process: the original
-            // guest mappings are released by the low-VA memory manager.
-        }
         if (root) guest_cpu_fiber_dispose(root);
     }
 };
 thread_local Session session;
+// Fibers belong to the process and may resume on a different job worker.
+std::mutex records_mutex;
+std::unordered_map<OrbisFiber*,std::unique_ptr<Record>> records;
+void EraseRecord(OrbisFiber* f) {
+    std::lock_guard lock(records_mutex);
+    records.erase(f);
+}
+void ReleasePrevious(void* previous) {
+    static_cast<OrbisFiber*>(previous)->state.store(FiberState::Idle,std::memory_order_release);
+}
 
 bool Valid(const OrbisFiber* f) {
     return f && f->magic_start==Signature0 && f->magic_end==Signature1;
@@ -60,15 +70,22 @@ bool Attach(OrbisFiber* f,void* memory,u64 bytes) {
     f->addr_context=memory;
     f->size_context=bytes;
     f->context_start=memory;
-    f->context_end=static_cast<u8*>(memory)+bytes;
+    f->context_end=memory ? static_cast<u8*>(memory)+bytes : nullptr;
     if(memory) {
         Gow3KeepWritable(memory,bytes,true);
+        if(f->flags&FiberFlags::ContextSizeCheck)
+            std::fill_n(static_cast<u64*>(memory),bytes/sizeof(u64),StackSizeCheck);
         *static_cast<u64*>(memory)=StackSignature;
     }
     return true;
 }
 
-Record& RecordFor(OrbisFiber* f) { return session.records[f]; }
+Record& RecordFor(OrbisFiber* f) {
+    std::lock_guard lock(records_mutex);
+    auto& record=records[f];
+    if(!record) record=std::make_unique<Record>();
+    return *record;
+}
 
 void EntryReturned() {
     // The guest reached the return stub rather than sceFiberReturnToThread.
@@ -79,7 +96,7 @@ void EntryReturned() {
     }
     session.active=nullptr;
     if (session.root_return) *session.root_return=ORBIS_FIBER_ERROR_STATE;
-    if (session.root) guest_cpu_fiber_switch(session.root);
+    if (session.root) guest_cpu_fiber_switch(session.root,nullptr,nullptr);
 }
 
 bool Prepare(OrbisFiber* f,u64 argument) {
@@ -105,7 +122,8 @@ bool Prepare(OrbisFiber* f,u64 argument) {
     if (!top || !f->entry) return false;
     guest_cpu_fiber_entry(r.cpu,reinterpret_cast<uintptr_t>(f->entry),top,
                           f->arg_on_initialize,argument,
-                          reinterpret_cast<void*>(&EntryReturned));
+                          reinterpret_cast<void*>(&EntryReturned),
+                          (f->flags&FiberFlags::SetFpuRegs)!=0);
     r.has_continuation=true;
     return true;
 }
@@ -121,7 +139,7 @@ s32 sceFiberInitializeImpl(OrbisFiber* f,const char* name,OrbisFiberEntry entry,
     if ((!memory && bytes)||(memory && !bytes)||(bytes&15)||
         (bytes && bytes<ORBIS_FIBER_CONTEXT_MINIMUM_SIZE))
         return ORBIS_FIBER_ERROR_INVALID;
-    std::memset(f,0,sizeof(*f));
+    new (f) OrbisFiber{};
     f->magic_start=Signature0;
     f->magic_end=Signature1;
     f->entry=entry;
@@ -132,7 +150,7 @@ s32 sceFiberInitializeImpl(OrbisFiber* f,const char* name,OrbisFiberEntry entry,
     f->name[ORBIS_FIBER_MAX_NAME_LENGTH]=0;
     f->state=FiberState::Idle;
     if (memory && !Attach(f,memory,bytes)) return ORBIS_FIBER_ERROR_INVALID;
-    session.records.erase(f);
+    EraseRecord(f);
     return ORBIS_OK;
 }
 
@@ -153,11 +171,7 @@ s32 sceFiberFinalize(OrbisFiber* f) {
     if(!f->state.compare_exchange_strong(expected,FiberState::Terminated))
         return ORBIS_FIBER_ERROR_STATE;
     if(f->addr_context) Gow3KeepWritable(f->addr_context,f->size_context,false);
-    auto it=session.records.find(f);
-    if(it!=session.records.end()) {
-        if(it->second.cpu) guest_cpu_fiber_dispose(it->second.cpu);
-        session.records.erase(it);
-    }
+    EraseRecord(f);
     return ORBIS_OK;
 }
 
@@ -176,7 +190,7 @@ s32 sceFiberRunImpl(OrbisFiber* f,void* memory,u64 bytes,u64 incoming,u64* outgo
     guest_cpu_fiber_save(session.root);
     session.root_return=outgoing;
     session.active=f;
-    guest_cpu_fiber_switch(RecordFor(f).cpu);
+    guest_cpu_fiber_switch(RecordFor(f).cpu,nullptr,nullptr);
     return ORBIS_OK;
 }
 s32 sceFiberRun(OrbisFiber* f,u64 incoming,u64* outgoing) {
@@ -199,14 +213,12 @@ s32 sceFiberSwitchImpl(OrbisFiber* target,void* memory,u64 bytes,u64 incoming,u6
     guest_cpu_fiber_save(old.cpu);
     old.has_continuation=true;
     old.incoming_argument=next;
-    previous->state=FiberState::Idle;
     if(!Prepare(target,incoming)) {
-        previous->state=FiberState::Run;
         target->state=FiberState::Idle;
         return ORBIS_FIBER_ERROR_RANGE;
     }
     session.active=target;
-    guest_cpu_fiber_switch(RecordFor(target).cpu);
+    guest_cpu_fiber_switch(RecordFor(target).cpu,ReleasePrevious,previous);
     return ORBIS_OK;
 }
 s32 sceFiberSwitch(OrbisFiber* f,u64 argument,u64* previous) {
@@ -220,10 +232,9 @@ s32 sceFiberReturnToThread(u64 argument,u64* next) {
     guest_cpu_fiber_save(r.cpu);
     r.has_continuation=true;
     r.incoming_argument=next;
-    current->state=FiberState::Idle;
     if(session.root_return) *session.root_return=argument;
     session.active=nullptr;
-    guest_cpu_fiber_switch(session.root);
+    guest_cpu_fiber_switch(session.root,ReleasePrevious,current);
     return ORBIS_OK;
 }
 s32 sceFiberGetSelf(OrbisFiber** out) {
@@ -270,7 +281,7 @@ s32 sceFiberRename(OrbisFiber* f,const char* name) {
 s32 sceFiberGetThreadFramePointerAddress(u64* out) {
     if(!out) return ORBIS_FIBER_ERROR_NULL;
     if(!session.active) return ORBIS_FIBER_ERROR_PERMISSION;
-    *out=guest_cpu_fiber_frame_pointer();
+    *out=guest_cpu_fiber_frame_pointer(session.root);
     return ORBIS_OK;
 }
 } // namespace Libraries::Fiber

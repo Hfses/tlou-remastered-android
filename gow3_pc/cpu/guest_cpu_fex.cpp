@@ -3,6 +3,7 @@
 // guest CPU state. Host functions are reached from the guest through stubs that end in `syscall`
 // (dispatched by HandleSyscall below); guest functions are called with Context::HandleCallback.
 #include "guest_cpu.h"
+#include "fiber_registers.h"
 
 #include <Common/Config.h>
 #include <Common/HostFeatures.h>
@@ -114,6 +115,8 @@ struct GuestThread {
 };
 thread_local GuestThread* self;
 thread_local GuestFiberCpuState* pending_fiber_switch = nullptr;
+thread_local void (*pending_fiber_release)(void*) = nullptr;
+thread_local void* pending_fiber_previous = nullptr;
 std::mutex threads_lock;
 std::vector<GuestThread*> threads;
 
@@ -207,12 +210,19 @@ public:
             }
             CallHost(s, fn);
             // A libSceFiber callback may resume another suspended x86-64
-            // continuation. Apply the full state only after the AAPCS callback
+            // continuation. Apply guest registers only after the AAPCS callback
             // has returned, so CallHost cannot clobber the selected registers.
             if (pending_fiber_switch) {
                 auto* destination = pending_fiber_switch;
                 pending_fiber_switch = nullptr;
-                std::memcpy(&s, &destination->state, sizeof(s));
+                auto release = pending_fiber_release;
+                auto previous = pending_fiber_previous;
+                pending_fiber_release = nullptr;
+                pending_fiber_previous = nullptr;
+                RestoreFiberRegisters(s, destination->state);
+                // Publish Idle only once neither the callback nor dispatcher
+                // can touch the old continuation. Another worker may take it.
+                if (release) release(previous);
             } else {
                 s.rip = rip + 2;
             }
@@ -381,7 +391,7 @@ void guest_cpu_fiber_save(GuestFiberCpuState* target) {
 }
 
 void guest_cpu_fiber_entry(GuestFiberCpuState* target, uintptr_t entry, uintptr_t stack_top,
-                           uint64_t arg0, uint64_t arg1, void* returned) {
+                           uint64_t arg0, uint64_t arg1, void* returned, int reset_fpu) {
     if (!target || !entry || !stack_top || !returned) Fatal("invalid guest fiber entry");
     guest_cpu_fiber_save(target);
     auto& state = target->state;
@@ -393,11 +403,17 @@ void guest_cpu_fiber_entry(GuestFiberCpuState* target, uintptr_t entry, uintptr_
     state.gregs[FEXCore::X86State::REG_RSI] = arg1;
     state.gregs[FEXCore::X86State::REG_RAX] = 0;
     state.rip = entry;
+    if (reset_fpu) {
+        state.FCW = 0x037f;
+        state.mxcsr = 0x9fc0;
+    }
 }
 
-void guest_cpu_fiber_switch(GuestFiberCpuState* target) {
+void guest_cpu_fiber_switch(GuestFiberCpuState* target, void (*release)(void*), void* previous) {
     if (!target || !self || !self->depth) Fatal("invalid fiber context switch");
     if (pending_fiber_switch) Fatal("nested fiber switch");
+    pending_fiber_release = release;
+    pending_fiber_previous = previous;
     pending_fiber_switch = target;
 }
 
@@ -405,9 +421,8 @@ void guest_cpu_fiber_dispose(GuestFiberCpuState* target) {
     delete target;
 }
 
-uint64_t guest_cpu_fiber_frame_pointer(void) {
-    if (!self || !self->depth) return 0;
-    return self->thread->CurrentFrame->State.gregs[FEXCore::X86State::REG_RBP];
+uint64_t guest_cpu_fiber_frame_pointer(const GuestFiberCpuState* state) {
+    return state ? state->state.gregs[FEXCore::X86State::REG_RBP] : 0;
 }
 
 

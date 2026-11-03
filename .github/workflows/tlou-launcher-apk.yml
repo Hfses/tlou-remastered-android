@@ -1,21 +1,7 @@
 name: TLOU v0.4 installer and launcher APK
 
 on:
-  push:
-    branches: [android-bionic-stage1]
-    paths:
-      - 'android-launcher/**'
-      - 'android/device_prepare.py'
-      - 'android/tlou_bionic.py'
-      - 'android/tlou_patches.py'
-      - 'android/bionic/build_python.sh'
-      - 'android/bionic/build_pkg.sh'
-      - 'android/bionic/stage_tools.py'
-      - 'android/bionic/package_apk.sh'
-      - 'gow3_pc/src/runtime_services.c'
-      - 'gow3_pc/src/import_names.inc'
-      - 'gow3_pc/tests/test_services.c'
-      - '.github/workflows/tlou-launcher-apk.yml'
+  # Manual legacy path only: full native workflow owns CPU/GPU ABI changes.
   workflow_dispatch:
 
 permissions:

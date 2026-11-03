@@ -235,6 +235,13 @@ public final class GameActivity extends Activity {
             env.put("GOW3_DISPLAY_HZ",String.valueOf(Math.round(getWindowManager().getDefaultDisplay().getRefreshRate())));
             env.put("GOW3_GPU_USER_DIR",state.getAbsolutePath());
             env.put("GOW3_VSYNC","1");
+            // Desktop temporal injections target updated game shaders. Keep the
+            // original render path until those hashes are validated on Android.
+            env.put("GOW3_UPSCALER","off");
+            env.put("GOW3_JITTER","0");
+            env.put("GOW3_OBJECT_MOTION","0");
+            env.put("GOW3_FSR1","0");
+            env.put("GOW3_RCAS","0");
             String driver=getSharedPreferences("tlou",MODE_PRIVATE).getString("driver_path", "");
             if(!driver.isEmpty()) {
                 File custom=new File(driver);

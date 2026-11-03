@@ -4,7 +4,8 @@ on:
   push:
     branches: [android-bionic-stage1]
     paths:
-      - 'android/bionic/**'
+      - 'android/**'
+      - 'android-launcher/**'
       - 'gow3_pc/**'
       - 'ci/**'
       - '.github/workflows/tlou-native-apk.yml'
@@ -31,6 +32,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Test clocks, job fiber migration, services and automatic preparation
+        run: |
+          bash android/bionic/test_runtime_contracts.sh
+          python3 -m unittest discover -s android/tests -v
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;29.0.14206865'
@@ -85,6 +90,18 @@ jobs:
       - name: Link real TLOU Bionic runtime and AHB present
         shell: bash -el {0}
         run: bash android/bionic/build_runtime.sh --link-only
+      - name: Restore Python and Rust compiler caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            .local-deps/android/bionic-src/python-3.13.7
+            .local-deps/android/bionic-build/python-host-isolated-v1
+            .local-deps/android/bionic-build/python-android-isolated-v1
+            out/android-bionic/python
+            out/android-bionic/orbis-cargo
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: tlou-install-tools-v1-${{ hashFiles('android/bionic/build_python.sh', 'android/bionic/build_pkg.sh') }}
       - name: Build on-device Bionic Python and PKG installer
         shell: bash -el {0}
         run: |
@@ -101,16 +118,23 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14.3'
+      - name: Restore signing identity used by existing installations
+        uses: actions/cache@v4
+        with:
+          path: out/android-bionic/experimental-development.jks
+          key: tlou-development-signing-v2
       - name: Assemble and sign actual TLOU Bionic APK
         shell: bash -el {0}
         run: bash android/bionic/package_apk.sh
+      - name: Verify APK payload and native dependency closure
+        run: python3 android/bionic/check_tools_apk.py out/release/TheLastOfUsRemastered-Android-Bionic-v0.5-arm64.apk
       - name: Publish installable TLOU APK
         uses: actions/upload-artifact@v4
         with:
           name: TheLastOfUsRemastered-Android-Bionic-arm64
           path: |
-            out/release/TheLastOfUsRemastered-Android-Bionic-v0.4-arm64.apk
-            out/release/TheLastOfUsRemastered-Android-Bionic-v0.4-arm64.apk.sha256
+            out/release/TheLastOfUsRemastered-Android-Bionic-v0.5-arm64.apk
+            out/release/TheLastOfUsRemastered-Android-Bionic-v0.5-arm64.apk.sha256
           if-no-files-found: error
       - name: Publish built native binaries
         uses: actions/upload-artifact@v4
