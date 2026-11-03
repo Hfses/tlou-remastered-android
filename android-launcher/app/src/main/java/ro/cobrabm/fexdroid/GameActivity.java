@@ -63,7 +63,6 @@ public final class GameActivity extends Activity {
         try(FileOutputStream out=new FileOutputStream(logFile)){out.write("TLOU runtime: aguardando inicialização do processo\n".getBytes(StandardCharsets.UTF_8));}
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        immersive();
         prepared=getIntent().getStringExtra("prepared_path");
         if (prepared==null) throw new IllegalStateException("Caminho preparado não informado");
         RunLog.write(this,"Pasta preparada: "+prepared);
@@ -106,6 +105,8 @@ public final class GameActivity extends Activity {
         bar.addView(exit,new LinearLayout.LayoutParams(-2,-2));
         layout.addView(bar,pos(-1,-2,Gravity.TOP));
         setContentView(layout);
+        // InsetsController is available only after a decor exists and is attached.
+        layout.post(this::immersive);
 
         try {
             RunLog.write(this,"Carregando JNI e iniciando apresentação AHardwareBuffer");
@@ -125,14 +126,16 @@ public final class GameActivity extends Activity {
     }
 
     private void immersive() {
+        if(isFinishing() || isDestroyed()) return;
+        final View decor=getWindow().getDecorView();
         if (android.os.Build.VERSION.SDK_INT>=30) {
-            final WindowInsetsController controller=getWindow().getInsetsController();
+            final WindowInsetsController controller=decor.getWindowInsetsController();
             if(controller!=null) {
                 controller.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
                 controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             }
         } else {
-            getWindow().getDecorView().setSystemUiVisibility(
+            decor.setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         }
@@ -302,8 +305,13 @@ public final class GameActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        immersive();
+        getWindow().getDecorView().post(this::immersive);
         if(audio!=null) audio.resume();
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if(hasFocus) immersive();
     }
 
     @Override protected void onDestroy() {
