@@ -6,6 +6,8 @@ import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
+import java.util.Locale;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -41,6 +43,8 @@ public final class GameActivity extends Activity {
     private TextView status;
     private String prepared;
     private volatile boolean started;
+    private boolean resumed;
+    private final FpsMeter fpsMeter=new FpsMeter();
 
     private static FrameLayout.LayoutParams pos(int w,int h,int gravity) {
         return new FrameLayout.LayoutParams(w,h,gravity);
@@ -122,7 +126,7 @@ public final class GameActivity extends Activity {
         }
         Thread starter=new Thread(this::launch,"tlou-fex-launcher");
         starter.start();
-        handler.postDelayed(this::refreshFrames,1200);
+        handler.postDelayed(this::refreshFps,500);
     }
 
     private void immersive() {
@@ -154,13 +158,15 @@ public final class GameActivity extends Activity {
             .setPositiveButton("Voltar ao menu",(d,w)->stopAndExit()).show();});
     }
 
-    private void refreshFrames() {
+    private void refreshFps() {
         if (!started || closing.get()) return;
         try {
-            long frames=Gow3Present.framesIfLoaded();
-            if(game!=null && game.isAlive()) status.setText("TLOU • frames apresentados: "+frames);
+            if(resumed && game!=null && game.isAlive()) {
+                double fps=fpsMeter.sample(Gow3Present.framesIfLoaded(),SystemClock.elapsedRealtimeNanos());
+                status.setText(String.format(Locale.ROOT,"TLOU • %.1f FPS",fps));
+            } else fpsMeter.reset();
         } catch (Throwable ignored) {}
-        handler.postDelayed(this::refreshFrames,1500);
+        handler.postDelayed(this::refreshFps,500);
     }
 
     private File installBinary() throws Exception {
@@ -307,11 +313,15 @@ public final class GameActivity extends Activity {
 
     @Override protected void onPause() {
         super.onPause();
+        resumed=false;
+        fpsMeter.reset();
         if(audio!=null) audio.pause();
     }
 
     @Override protected void onResume() {
         super.onResume();
+        resumed=true;
+        fpsMeter.reset();
         getWindow().getDecorView().post(this::immersive);
         if(audio!=null) audio.resume();
     }

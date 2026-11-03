@@ -11,3 +11,6 @@ done
 g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I gow3_pc -I gow3_pc/src \
   gow3_pc/tests/test_fiber_bionic.cpp -o "$test_dir/fibers"
 "$test_dir/fibers"
+
+g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_image_copy_plan.cpp -o "$test_dir/image-copies"
+"$test_dir/image-copies"

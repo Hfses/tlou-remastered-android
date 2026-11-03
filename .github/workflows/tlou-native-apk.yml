@@ -117,6 +117,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Verify FPS sampling and resume behavior
+        run: bash android/bionic/test_fps.sh
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14.3'
@@ -129,14 +131,14 @@ jobs:
         shell: bash -el {0}
         run: bash android/bionic/package_apk.sh
       - name: Verify APK payload and native dependency closure
-        run: python3 android/bionic/check_tools_apk.py out/release/TheLastOfUsRemastered-Android-Bionic-v0.6-arm64.apk
+        run: python3 android/bionic/check_tools_apk.py out/release/TheLastOfUsRemastered-Android-Bionic-v0.7-arm64.apk
       - name: Publish installable TLOU APK
         uses: actions/upload-artifact@v4
         with:
           name: TheLastOfUsRemastered-Android-Bionic-arm64
           path: |
-            out/release/TheLastOfUsRemastered-Android-Bionic-v0.6-arm64.apk
-            out/release/TheLastOfUsRemastered-Android-Bionic-v0.6-arm64.apk.sha256
+            out/release/TheLastOfUsRemastered-Android-Bionic-v0.7-arm64.apk
+            out/release/TheLastOfUsRemastered-Android-Bionic-v0.7-arm64.apk.sha256
           if-no-files-found: error
       - name: Publish built native binaries
         uses: actions/upload-artifact@v4
