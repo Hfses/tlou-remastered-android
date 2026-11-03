@@ -22,7 +22,9 @@ Com `TLOU_BATCH_DMA_UPLOADS=1`, os mesmos trechos alterados são agrupados por
 arena em lotes de até 256 regiões e 4 MiB. Uma transferência individual já
 maior que 4 MiB continua inteira. O agrupamento mantém a ordem, termina antes
 de trocar de arena, preserva alinhamento de quatro bytes na origem e não
-copia lacunas entre regiões. A seleção de bytes modificados, o tratamento
+copia lacunas entre regiões. O rastreamento de barreiras usa as regiões
+exatas da cópia agrupada: o intervalo entre alocações distantes não é marcado
+como escrito. A seleção de bytes modificados, o tratamento
 de páginas lazy, a resolução de readbacks, a gravação das barreiras e as
 esperas das cópias continuam nos caminhos existentes. Não se limita a
 sincronização a ponteiros presumidos nem se ignora conteúdo residente.

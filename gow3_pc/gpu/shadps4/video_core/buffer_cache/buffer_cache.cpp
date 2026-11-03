@@ -5866,7 +5866,7 @@ void BufferCache::ReclaimArenaMemory() {
 void BufferCache::FlushDmaUpload(const Buffer* arena, std::span<vk::BufferCopy> copies, u64 bytes) {
     if (const auto* source = UploadCopies(arena, copies, bytes)) {
         const ProfileCopy mark{scheduler, 0xB0F7'0001ull, "buffer upload (CPU-written guest memory)"};
-        runtime.CopyBuffer(source, arena, copies);
+        runtime.CopyBuffer(source, arena, copies, true);
     }
 }
 

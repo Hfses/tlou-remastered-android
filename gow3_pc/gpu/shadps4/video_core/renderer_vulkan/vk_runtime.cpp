@@ -154,12 +154,15 @@ void Runtime::TickFrame() {
 }
 
 void Runtime::CopyBuffer(const VideoCore::Buffer* src, const VideoCore::Buffer* dst,
-                         std::span<const vk::BufferCopy> copies) {
+                         std::span<const vk::BufferCopy> copies, bool precise_ranges) {
     scheduler.EndRendering();
 
     // gow3: many regions (HLE copy shaders) are tracked as one bounding range per buffer:
     // conservative for barriers, and two tree lookups instead of two per region.
-    const bool bounded = copies.size() > 4;
+    // DMA batches can join distant resident allocations. Tracking the whole
+    // bounding interval would invent writes in untouched gaps and cause extra
+    // barriers against unrelated resources. Keep exact coverage for that path.
+    const bool bounded = copies.size() > 4 && !precise_ranges;
     u64 src_min = ~0ULL, src_max = 0, dst_min = ~0ULL, dst_max = 0;
     if (bounded) {
         for (const auto& copy : copies) {
