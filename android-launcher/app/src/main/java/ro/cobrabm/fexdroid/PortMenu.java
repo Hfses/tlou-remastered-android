@@ -94,14 +94,33 @@ final class PortMenu {
             note("TLOU Remastered  ·  Daedalus v0.8");
         } else if(section.equals("video")) {
             heading("VÍDEO E DESEMPENHO");note("Aplicados ao iniciar o jogo. Compare as opções no mesmo cenário.");
-            choice("resolution","Resolução interna",new String[]{"Original (sem patch)","1280 × 720","960 × 540","640 × 360"},new String[]{"original","720","540","360"},"original");
-            note("Resoluções reduzidas usam readback preciso para preservar a imagem. Mantém os buffers de vídeo e apresentação do jogo.");
-            choice("readback","Readback em resolução original",new String[]{"1 · Relaxado (atual)","2 · Preciso (compatibilidade)"},new String[]{"1","2"},"1");
+            choice("resolution","Resolução interna (patch de eboot)",new String[]{"Original (referência)","1280 × 720 · experimental","960 × 540 · experimental","640 × 360 · experimental"},new String[]{"original","720","540","360"},"original");
+            note("540p/360p podem causar bugs e reduzir FPS: o patch altera dimensões internas, mas não garante que todos os buffers e passes sejam reduzidos. Volte para Original se houver regressão.");
+            choice("readback","Readback (independente da resolução)",new String[]{"1 · Relaxado (padrão)","2 · Preciso (mais sincronização)"},new String[]{"1","2"},"1");
+            note("Readback 2 NÃO é ativado automaticamente em 720/540/360p. Teste o mesmo cenário antes e depois.");
+            row("Experimentos de CPU / pipelines",()->go("experiments"));
             choice("fps_limit","Limite de FPS",new String[]{"30 FPS","60 FPS","Sem limite de apresentação"},new String[]{"30","60","0"},"60");
             toggle("vsync","VSync",true);toggle("async_shaders","Compilação assíncrona de shaders",true);
             choice("frames_ahead","Fila de renderização",new String[]{"0 · Menor latência","1 · Padrão","2 · Maior fila / latência"},new String[]{"0","1","2"},"1");
             toggle("fullscreen","Preencher tela (esticar)",false);
             note("Preencher tela é aplicado na hora. O limite de apresentação não desbloqueia a lógica de FPS do jogo.");
+        } else if(section.equals("experiments")) {
+            heading("OTIMIZAÇÕES EXPERIMENTAIS");
+            note("Desligadas por padrão. Ative UMA por vez e compare FPS e falhas na mesma área. Requer reiniciar o jogo.");
+            toggle("prep_pool","Reutilizar buffers de preparação de draws",false);
+            toggle("cpu_trims","Reduzir trabalho de CPU por draw",false);
+            toggle("prefetch_pipelines","Pré-compilar pipelines antecipadamente",false);
+            toggle("parallel_pipelines","Compilar pipelines paralelamente (risco de glitches)",false);
+            choice("prep_workers","Workers de preparação de draws",
+                new String[]{"Automático (original)","0 · Sem workers","2 workers","4 workers","6 workers"},
+                new String[]{"auto","0","2","4","6"},"auto");
+            note("Prefetch e compilação paralela podem mudar travamentos e correção visual. O modo automático de workers é o original.");
+            row("Desativar todos os experimentos",()->{
+                prefs.edit().putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
+                    .putBoolean("prefetch_pipelines",false).putBoolean("parallel_pipelines",false)
+                    .putString("prep_workers","auto").apply();
+                actions.changed();render();
+            });
         } else if(section.equals("patches")) {
             heading("PATCHES · CUSA00552 1.00");note("Adaptados do Bachata S4+. O eboot e as instruções são validados ao iniciar. Alterações exigem reabrir o jogo.");
             toggle("ssao","Desativar SSAO",false);toggle("motion_blur","Desativar motion blur",false);

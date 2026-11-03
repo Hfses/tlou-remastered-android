@@ -52,3 +52,32 @@ resolução original, efeitos originais e o caminho de renderização já funcio
 HUD, opacidade/posição dos controles e proporção da apresentação mudam na hora;
 patches e opções do runtime são aplicados na próxima abertura. FSR temporal,
 leituras atrasadas e ajustes de temporização da lógica do jogo não foram ativados.
+
+
+## A/B de novembro de 2026: não misturar resolução com readback
+
+O launcher antigo mudava automaticamente `GOW3_READBACKS` para 2 sempre que a resolução
+era diferente de Original. O log de 03/11 mostra 540p selecionado, porém saída
+`1920x1080`, sincronizações de SRT e páginas protegidas; portanto não havia
+isolamento de variáveis na comparação de FPS. A saída 1080p pode ser o buffer
+de apresentação e não prova a resolução efetiva da cena.
+
+Agora a escolha de readback é **independente** da resolução. Isso remove o
+sobrecusto obrigatório de Precise ao testar 720p/540p/360p, mas **não**
+comprova que os patches de 540p/360p estejam corretos graficamente.
+Alterar os campos do eboot não garante que os alvos de post-processing,
+vídeo e composição sejam escalados. Todos os três presets reduzidos
+continuam experimentais; Original é a referência confiável.
+
+Experimentos adicionais, **desligados por padrão**, já têm implementações
+nativas no renderizador desta branch e agora aparecem separadamente no menu:
+`GOW3_PREP_POOL` (reuso de alocações), `GOW3_CPU_TRIMS` (menos CPU por draw),
+`GOW3_PREFETCH_PIPELINES` (pré-compilação), `GOW3_PARALLEL_PIPELINES`
+(compilação paralela, risco visual), e `GOW3_PREP_WORKERS` (Auto/0/2/4/6).
+Nenhum altera o código do jogo, e nenhum tem ganho Android confirmado.
+
+Procedimento: começar com Original, readback 1 e experimentos desligados;
+medir o mesmo trecho de jogo; ativar somente uma opção, reiniciar e
+comparar; se degradar ou causar glitch, desativá-la. Os valores efetivos
+são registrados no `launch.log` como `TLOU A/B`. A ação
+“Desativar todos os experimentos” restaura os knobs novos.

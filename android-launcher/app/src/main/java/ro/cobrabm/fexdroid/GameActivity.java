@@ -262,6 +262,7 @@ public final class GameActivity extends Activity {
             env.put("GOW3_FSR1","0");
             env.put("GOW3_RCAS","0");
             PortSettings.environment(this,env);
+            RunLog.write(this,PortSettings.experimentReport(this,env));
             String driver=getSharedPreferences("tlou",MODE_PRIVATE).getString("driver_path", "");
             if(!driver.isEmpty()) {
                 File custom=new File(driver);
