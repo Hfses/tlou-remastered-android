@@ -36,7 +36,7 @@ public final class GameActivity extends Activity {
     private TouchControllerOverlay touch;
     private PadBridge pad;
     private AudioBridge audio;
-    private Process game;
+    private volatile Process game;
     private File logFile;
     private TextView status;
     private String prepared;
@@ -48,17 +48,32 @@ public final class GameActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        RunLog.write(this,"GameActivity.onCreate • início");
+        try { initialize(); } catch(Throwable error) {
+            RunLog.failure(this,"Falha antes do runtime",error);
+            error("Falha na inicialização: "+error+"\nOs detalhes estão em Ver logs, no menu principal.");
+        }
+    }
+
+    private void initialize() throws Exception {
+        File logDir=new File(getFilesDir(),"tlou");
+        if(!logDir.isDirectory()&&!logDir.mkdirs())throw new java.io.IOException("Falha ao criar pasta dos logs");
+        logFile=RunLog.runtime(this);
+        if(logFile.exists()){ File previous=new File(logDir,"runtime-previous.log"); previous.delete(); logFile.renameTo(previous); }
+        try(FileOutputStream out=new FileOutputStream(logFile)){out.write("TLOU runtime: aguardando inicialização do processo\n".getBytes(StandardCharsets.UTF_8));}
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         immersive();
         prepared=getIntent().getStringExtra("prepared_path");
-        if (prepared==null) { finish(); return; }
+        if (prepared==null) throw new IllegalStateException("Caminho preparado não informado");
+        RunLog.write(this,"Pasta preparada: "+prepared);
         File gamePath=new File(prepared);
         if (!new File(gamePath,"boot-linked.bin").isFile() ||
-            !new File(gamePath,"content.bin").isFile()) { finish(); return; }
+            !new File(gamePath,"content.bin").isFile()) throw new IllegalStateException("Imagem preparada ausente: "+gamePath);
         File stateDir=new File(getFilesDir(),"tlou");
         if (!stateDir.exists()) stateDir.mkdirs();
         File input=new File(stateDir,"controller.state");
+        RunLog.write(this,"Inicializando controle e áudio");
         pad=new PadBridge(input);
         audio=new AudioBridge(new File(stateDir,"audio.fifo"));
         logFile=new File(stateDir,"runtime.log");
@@ -93,9 +108,11 @@ public final class GameActivity extends Activity {
         setContentView(layout);
 
         try {
+            RunLog.write(this,"Carregando JNI e iniciando apresentação AHardwareBuffer");
             String bridge=Gow3Present.start(surface.getHolder(),
                     new File(stateDir,"present.sock").getAbsolutePath(),false);
             if (!bridge.startsWith("bridge running")) throw new IllegalStateException(bridge);
+            RunLog.write(this,"Apresentação: "+bridge);
             audio.start();
             started=true;
         } catch (Throwable err) {
@@ -128,8 +145,10 @@ public final class GameActivity extends Activity {
     }
 
     private void error(String message) {
-        handler.post(()->new AlertDialog.Builder(this).setTitle("TLOU — erro de inicialização")
-            .setMessage(message).setPositiveButton("Fechar",(d,w)->stopAndExit()).show());
+        RunLog.write(this,"ERRO: "+message);
+        handler.post(()->{if(!isFinishing()&&!isDestroyed())new AlertDialog.Builder(this).setTitle("TLOU — erro de inicialização")
+            .setMessage(message).setNeutralButton("Ver logs",(d,w)->showLog())
+            .setPositiveButton("Voltar ao menu",(d,w)->stopAndExit()).show();});
     }
 
     private void refreshFrames() {
@@ -161,7 +180,9 @@ public final class GameActivity extends Activity {
 
     private void launch() {
         try {
+            RunLog.write(this,"Instalando executável Bionic do APK");
             File bin=installBinary();
+            RunLog.write(this,"Loader: "+bin+" • "+bin.length()+" bytes • executável="+bin.canExecute());
             File base=new File(prepared);
             File app0=new File(base,"tlou-view");
             File state=new File(getFilesDir(),"tlou");
@@ -173,6 +194,9 @@ public final class GameActivity extends Activity {
             args.add(new File(base,"boot-linked.bin").getAbsolutePath());
             args.add("--low-image");
             args.add("--no-game-hooks");
+            // probe.c defaults to a 10-second research watchdog, unsuitable for gameplay.
+            args.add("--timeout");
+            args.add("0");
             args.add("--content-profile");
             args.add(new File(base,"content.bin").getAbsolutePath());
             args.add("--app0");
@@ -186,6 +210,17 @@ public final class GameActivity extends Activity {
             }
             ProcessBuilder builder=new ProcessBuilder(args);
             Map<String,String> env=builder.environment();
+            File home=new File(state,"home"), temp=new File(state,"tmp"), config=new File(home,".fex-emu"), cache=new File(home,".cache/fex-emu");
+            for(File directory:new File[]{home,temp,config,cache})
+                if(!directory.isDirectory()&&!directory.mkdirs())throw new java.io.IOException("Falha ao criar "+directory);
+            env.put("HOME",home.getAbsolutePath()); env.put("TMPDIR",temp.getAbsolutePath()); env.put("XDG_RUNTIME_DIR",temp.getAbsolutePath());
+            env.put("FEX_APP_CONFIG_LOCATION",config.getAbsolutePath()+"/");
+            env.put("FEX_APP_DATA_LOCATION",config.getAbsolutePath()+"/");
+            env.put("FEX_APP_CACHE_LOCATION",cache.getAbsolutePath()+"/");
+            if(!audio.awaitReady(5000)) {
+                env.put("GOW3_AUDIO","none");
+                RunLog.write(this,"Áudio indisponível após 5 s: usando timer sem som nesta sessão");
+            } else RunLog.write(this,"Áudio PCM pronto antes da execução");
             env.put("LD_LIBRARY_PATH",getApplicationInfo().nativeLibraryDir);
             env.put("GOW3_ANDROID_PORT","1");
             env.put("GOW3_ANDROID_INPUT","1");
@@ -207,37 +242,43 @@ public final class GameActivity extends Activity {
             }
             builder.directory(app0);
             builder.redirectErrorStream(true);
-            builder.redirectOutput(ProcessBuilder.Redirect.to(logFile));
+            builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile));
+            RunLog.write(this,"Comando: "+args+"\nLD_LIBRARY_PATH="+env.get("LD_LIBRARY_PATH")+"\nDriver="+env.get("GOW3_VULKAN_DRIVER"));
             update("Iniciando TLOU x86-64 pelo FEX...");
+            if(closing.get())return;
+            RunLog.write(this,"ProcessBuilder.start • iniciando FEX • watchdog de teste desativado");
             game=builder.start();
+            if(closing.get()){game.destroyForcibly();return;}
+            RunLog.write(this,"Processo FEX criado");
             final int result=game.waitFor();
+            RunLog.write(this,"Processo FEX finalizado: código "+result);
             if (!closing.get()) {
                 String message="Runtime finalizado (código "+result+"). Veja o log.";
                 update(message);
                 error(message+"\n"+tailLog());
             }
-        } catch (Exception err) {
+        } catch (Throwable err) {
+            RunLog.failure(this,"Falha ao executar FEX",err);
             if(!closing.get()) error("Falha ao iniciar runtime TLOU: "+err+"\n"+tailLog());
         }
     }
 
-    private String tailLog() {
-        try {
-            if(logFile==null || !logFile.exists()) return "Log ainda não criado";
-            List<String> lines=Files.readAllLines(logFile.toPath(),StandardCharsets.UTF_8);
-            int start=Math.max(0,lines.size()-40);
-            return String.join("\n",lines.subList(start,lines.size()));
-        } catch(Exception err) { return "Falha ao ler log: "+err; }
-    }
+    private String tailLog() { return RunLog.tail(RunLog.runtime(this),12000); }
 
     private void showLog() {
-        new AlertDialog.Builder(this).setTitle("TLOU — log nativo")
-                .setMessage(tailLog()).setPositiveButton("Fechar",null).show();
+        android.widget.ScrollView scroll=new android.widget.ScrollView(this);
+        TextView text=new TextView(this);text.setText(RunLog.summary(this));text.setTextIsSelectable(true);text.setTextSize(12);text.setPadding(24,16,24,16);scroll.addView(text);
+        new AlertDialog.Builder(this).setTitle("TLOU — logs").setView(scroll).setPositiveButton("Fechar",null).show();
     }
 
     private void stopAndExit() {
         if (!closing.compareAndSet(false,true)) return;
-        if (game!=null) game.destroy();
+        handler.removeCallbacksAndMessages(null);
+        Process child=game;
+        if (child!=null) {
+            child.destroy();
+            new Thread(()->{try{if(!child.waitFor(1,java.util.concurrent.TimeUnit.SECONDS))child.destroyForcibly();}catch(InterruptedException e){Thread.currentThread().interrupt();child.destroyForcibly();}},"tlou-process-stop").start();
+        }
         try { if(touch!=null) touch.release(); } catch(Exception ignored) {}
         try { if(audio!=null) audio.stop(); } catch(Exception ignored) {}
         try { if(started) Gow3Present.stop(); } catch(Exception ignored) {}

@@ -8,7 +8,7 @@ import shutil
 import tempfile
 from tlou_bionic import prepare, require_game
 
-REVISION = 1
+REVISION = 2
 
 
 def fingerprint(game):
@@ -47,7 +47,9 @@ def ensure(source, game, out):
     try:
         print("Preparando executável, módulos e conteúdo do TLOU…", flush=True)
         prepare(source, game, None, stage)
-        (stage / "device-ready.json").write_text(json.dumps({"fingerprint": key, "game": str(game)}))
+        metadata = require_game(game)
+        (stage / "device-ready.json").write_text(json.dumps({"fingerprint": key, "game": str(game),
+            "title_id": metadata.get("TITLE_ID"), "version": metadata.get("APP_VER")}))
         if backup.exists():
             shutil.rmtree(backup)
         if out.exists():

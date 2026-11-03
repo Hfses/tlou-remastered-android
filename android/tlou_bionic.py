@@ -140,6 +140,14 @@ def prepare(source: Path, game: Path, update: Path | None, out: Path,
     from_module = load_patch_module(source)
     patches = dict(from_module.FIXES)
     patches["job-sleep"] = from_module.JOB_SLEEP
+    # The base executable has different function locations from desktop 01.11.
+    # Load only this Android module; never substitute offsets from another game.
+    profile_path = source / "android/tlou_patches.py"
+    if profile_path.is_file():
+        profile_spec = importlib.util.spec_from_file_location("tlou_android_profiles", profile_path)
+        profile_module = importlib.util.module_from_spec(profile_spec)
+        profile_spec.loader.exec_module(profile_module)
+        patches = profile_module.select(game_view / "eboot.bin", patches)
     if flashlight:
         patches["flashlight"] = from_module.CHEATS["flashlight"]
     patch_file = out / "patches.bin"

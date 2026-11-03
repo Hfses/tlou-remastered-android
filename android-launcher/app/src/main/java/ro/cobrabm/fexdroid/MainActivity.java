@@ -26,7 +26,7 @@ import java.util.concurrent.Executors;
 
 /** TLOU launcher: PKG or extracted game -> automatic on-device preparation. */
 public final class MainActivity extends Activity {
-    private static final int PICK_GAME=501, PICK_DRIVER=502, PICK_PKG=503, PICK_DEST=504;
+    private static final int PICK_GAME=501, PICK_DRIVER=502, PICK_PKG=503, PICK_DEST=504, SAVE_LOGS=505;
     private static final int BACKGROUND=0xff101613, PANEL=0xff1b2520, TEXT=0xffe7e9df, MUTED=0xffa6b0a4, ACCENT=0xffc2cf96;
     private SharedPreferences prefs;
     private TextView gameInfo, driverInfo, status, permission;
@@ -71,8 +71,9 @@ public final class MainActivity extends Activity {
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal); progress.setIndeterminate(true); progress.setVisibility(View.GONE); root.addView(progress);
         status=text("Escolha seu PKG ou a pasta do jogo para começar.",13,MUTED); root.addView(status);
         permission=text("Permitir acesso aos arquivos",13,ACCENT); permission.setPadding(0,dp(12),0,dp(12)); permission.setOnClickListener(v->withAccess(()->refresh())); root.addView(permission);
-        TextView logs=text("Ver log de instalação e preparação",12,MUTED); logs.setPadding(0,dp(12),0,dp(12)); logs.setOnClickListener(v->showLog()); root.addView(logs);
-        root.addView(text("TLOU • CUSA00552 • Daedalus v0.2",11,MUTED));
+        add(root,"Ver logs de execução e instalação",false,this::showLog);
+        add(root,"Exportar logs ZIP",false,()->{Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/zip");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,"TLOU-Android-Logs.zip");startActivityForResult(save,SAVE_LOGS);});
+        root.addView(text("TLOU • CUSA00552 • Daedalus v0.3",11,MUTED));
         setContentView(scroll); refresh();
     }
     private int dp(int value) { return Math.round(value*getResources().getDisplayMetrics().density); }
@@ -112,7 +113,7 @@ public final class MainActivity extends Activity {
     private void task(String message, Work work) {
         if(busy)return; busy=true; for(Button b:buttons)b.setEnabled(false); progress.setVisibility(View.VISIBLE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); update(message);
-        worker.execute(()->{try{work.run();}catch(Exception e){update("A operação não foi concluída."); runOnUiThread(()->alert("Não foi possível concluir",e.getMessage()==null?e.toString():e.getMessage()));}
+        worker.execute(()->{try{work.run();}catch(Exception e){RunLog.failure(this,"Operação do launcher",e);update("A operação não foi concluída."); runOnUiThread(()->alert("Não foi possível concluir",e.getMessage()==null?e.toString():e.getMessage()));}
             finally{runOnUiThread(()->{busy=false;if(isDestroyed())return;for(Button b:buttons)b.setEnabled(true);progress.setVisibility(View.GONE);getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);refresh();});}});
     }
     private interface Work { void run() throws Exception; }
@@ -122,12 +123,14 @@ public final class MainActivity extends Activity {
         prefs.edit().putString("game_path",folder.getAbsolutePath()).apply(); refresh(); prepareSelected(false);
     }
     private void prepareSelected(boolean launch) {
+        if(busy)return;
+        if(launch){RunLog.begin(this);RunLog.write(this,"Jogo selecionado: "+prefs.getString("game_path","")+" • driver="+prefs.getString("driver_name","Sistema"));}
         if(prefs.getString("game_path","").isEmpty()){alert("Selecione o jogo","Instale um PKG ou escolha a pasta do jogo.");return;}
         task("Verificando e preparando jogo…",()->{
             File folder=selected(); File prepared=InstallTools.prepared(folder)?folder:tools.prepare(folder,this::update);
             prefs.edit().putString("prepared_path",prepared.getAbsolutePath()).apply();
             update("Pronto para jogar.");
-            if(launch)runOnUiThread(()->{if(!isDestroyed()){Intent i=new Intent(this,GameActivity.class);i.putExtra("prepared_path",prepared.getAbsolutePath());startActivity(i);}});
+            if(launch)runOnUiThread(()->{if(!isDestroyed()){try { RunLog.write(this,"Preparação verificada. Abrindo GameActivity: "+prepared); Intent i=new Intent(this,GameActivity.class);i.putExtra("prepared_path",prepared.getAbsolutePath());startActivity(i); } catch(Throwable error) { RunLog.failure(this,"Falha ao abrir GameActivity",error);alert("Inicialização",error.toString()); }}});
         });
     }
     private void manualPath() {
@@ -202,8 +205,8 @@ public final class MainActivity extends Activity {
         throw new IOException("Escolha um arquivo ou pasta local pelo armazenamento interno/USB. Para pastas, você também pode informar o caminho.");
     }
     private void showLog() {
-        try{File log=new File(getFilesDir(),"installation.log");if(!log.isFile()){alert("Instalação","Nenhuma operação registrada.");return;}try(RandomAccessFile f=new RandomAccessFile(log,"r")){f.seek(Math.max(0,f.length()-12000));byte[] data=new byte[(int)(f.length()-f.getFilePointer())];f.readFully(data);alert("Instalação e preparação",new String(data,java.nio.charset.StandardCharsets.UTF_8));}}
-        catch(Exception e){alert("Log",e.toString());}
+        ScrollView scroll=new ScrollView(this);TextView text=new TextView(this);text.setText(RunLog.summary(this));text.setTextSize(12);text.setTextIsSelectable(true);text.setPadding(dp(16),dp(12),dp(16),dp(12));scroll.addView(text);
+        new AlertDialog.Builder(this).setTitle("TLOU — logs").setView(scroll).setPositiveButton("Fechar",null).show();
     }
     @Override protected void onResume(){super.onResume();refresh();if(afterPermission!=null){Runnable action=afterPermission;afterPermission=null;if(access())action.run();}}
     @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);if(pendingPkg!=null)state.putString("pending_pkg",pendingPkg.toString());}
@@ -211,7 +214,8 @@ public final class MainActivity extends Activity {
         super.onActivityResult(code,result,data);if(result!=RESULT_OK||data==null||data.getData()==null){if(code==PICK_DEST)pendingPkg=null;return;}Uri uri=data.getData();
         try{getContentResolver().takePersistableUriPermission(uri,data.getFlags()&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION));}catch(Exception ignored){}
         try{
-            if(code==PICK_GAME)chooseGame(local(uri,true));
+            if(code==SAVE_LOGS){task("Exportando logs…",()->{java.io.OutputStream out=getContentResolver().openOutputStream(uri,"w");if(out==null)throw new IOException("Não foi possível abrir o destino");RunLog.export(this,out);update("Logs ZIP salvos.");});}
+            else if(code==PICK_GAME)chooseGame(local(uri,true));
             else if(code==PICK_DRIVER)importDriver(uri);
             else if(code==PICK_PKG){pendingPkg=uri;new AlertDialog.Builder(this).setTitle("Destino do jogo").setMessage("Escolha onde criar a pasta CUSA00552. O PKG será extraído diretamente para ela; depois o app prepara o jogo automaticamente.").setPositiveButton("Escolher destino",(d,w)->pickFolder(PICK_DEST)).setNegativeButton("Cancelar",(d,w)->pendingPkg=null).show();}
             else if(code==PICK_DEST&&pendingPkg!=null){Uri pkg=pendingPkg;pendingPkg=null;installPkg(local(pkg,false),local(uri,true));}
