@@ -16,7 +16,7 @@ final class InstallTools {
     synchronized void install() throws Exception {
         String version=String.valueOf(context.getPackageManager().getPackageInfo(context.getPackageName(),0).lastUpdateTime);
         File ready=new File(root,".ready");
-        if (ready.isFile() && Files.readString(ready.toPath()).equals(version)) return;
+        if (ready.isFile() && new String(Files.readAllBytes(ready.toPath()),java.nio.charset.StandardCharsets.UTF_8).equals(version)) return;
         delete(root);
         if (!root.mkdirs()) throw new IOException("Não foi possível instalar as ferramentas");
         try (ZipInputStream zip=new ZipInputStream(context.getAssets().open("tools.zip"))) {
@@ -27,12 +27,12 @@ final class InstallTools {
                 if (entry.isDirectory()) { file.mkdirs(); continue; }
                 File parent=file.getParentFile();
                 if (parent==null || (!parent.isDirectory()&&!parent.mkdirs())) throw new IOException("Falha ao criar pasta");
-                try (OutputStream out=new FileOutputStream(file)) { zip.transferTo(out); }
+                try (OutputStream out=new FileOutputStream(file)) { byte[] buffer=new byte[65536]; int count; while((count=zip.read(buffer))!=-1) out.write(buffer,0,count); }
             }
         }
         for (String name:new String[]{"python/bin/python3.13","bin/orbis-pkg-util"})
             if (!new File(root,name).setExecutable(true,true)) throw new IOException("Falha ao ativar "+name);
-        Files.writeString(ready.toPath(),version);
+        Files.write(ready.toPath(),version.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private String run(List<String> args, Consumer<String> progress) throws Exception {

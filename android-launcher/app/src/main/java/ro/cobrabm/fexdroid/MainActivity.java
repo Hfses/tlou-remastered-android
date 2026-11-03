@@ -155,7 +155,7 @@ public final class MainActivity extends Activity {
                 in.mark(4); int a=in.read(),b=in.read();in.reset();
                 if(a=='P'&&b=='K') {
                     DriverArchive.Installed driver=DriverArchive.install(drivers,in,Build.VERSION.SDK_INT,file->{
-                        JSONObject j=new JSONObject(Files.readString(file.toPath()));
+                        JSONObject j=new JSONObject(new String(Files.readAllBytes(file.toPath()),java.nio.charset.StandardCharsets.UTF_8));
                         return new DriverArchive.Metadata(j.getString("name"),j.getString("libraryName"),j.getInt("minApi"));
                     });
                     prefs.edit().putString("driver_path",driver.library.getAbsolutePath()).putString("driver_name",driver.name).apply();
@@ -165,7 +165,7 @@ public final class MainActivity extends Activity {
                     try {
                         try(OutputStream out=new FileOutputStream(staged)){byte[] bytes=new byte[65536];long total=0;int n;while((n=in.read(bytes))!=-1){total+=n;if(total>256L*1024*1024)throw new IOException("Driver grande demais");out.write(bytes,0,n);}}
                         DriverArchive.validateLibrary(staged);
-                        Files.writeString(new File(staged.getPath()+".name").toPath(),name);
+                        Files.write(new File(staged.getPath()+".name").toPath(),name.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                         prefs.edit().putString("driver_path",staged.getAbsolutePath()).putString("driver_name",name).apply();
                     }catch(Exception e){Files.deleteIfExists(staged.toPath());throw e;}
                 }
@@ -178,7 +178,7 @@ public final class MainActivity extends Activity {
         File root=new File(getFilesDir(),"drivers");File[] dirs=root.listFiles();
         if(dirs!=null)for(File d:dirs)try{
             if(d.getName().equals("raw")){
-                File[] raw=d.listFiles((dir,name)->name.endsWith(".so"));if(raw!=null)for(File f:raw){File n=new File(f.getPath()+".name");names.add(n.isFile()?Files.readString(n.toPath()):f.getName());paths.add(f.getAbsolutePath());}
+                File[] raw=d.listFiles((dir,name)->name.endsWith(".so"));if(raw!=null)for(File f:raw){File n=new File(f.getPath()+".name");names.add(n.isFile()?new String(Files.readAllBytes(n.toPath()),java.nio.charset.StandardCharsets.UTF_8):f.getName());paths.add(f.getAbsolutePath());}
             }else if(!d.getName().startsWith(".")){DriverArchive.Installed imported=DriverArchive.read(root,d.getName(),Build.VERSION.SDK_INT);names.add(imported.name);paths.add(imported.library.getAbsolutePath());}
         }catch(Exception ignored){}
         String current=prefs.getString("driver_path","");int checked=Math.max(0,paths.indexOf(current));
