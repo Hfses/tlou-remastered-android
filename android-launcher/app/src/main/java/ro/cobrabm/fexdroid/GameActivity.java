@@ -197,8 +197,14 @@ public final class GameActivity extends Activity {
             env.put("GOW3_DISPLAY_HZ",String.valueOf(Math.round(getWindowManager().getDefaultDisplay().getRefreshRate())));
             env.put("GOW3_GPU_USER_DIR",state.getAbsolutePath());
             env.put("GOW3_VSYNC","1");
-            File custom=new File(getFilesDir(),"driver/custom-driver.so");
-            if(custom.isFile()) env.put("GOW3_VULKAN_DRIVER",custom.getAbsolutePath());
+            String driver=getSharedPreferences("tlou",MODE_PRIVATE).getString("driver_path", "");
+            if(!driver.isEmpty()) {
+                File custom=new File(driver);
+                if(!custom.isFile()) throw new IllegalStateException("Driver selecionado ausente; selecione outro driver no menu");
+                DriverArchive.validateLibrary(custom);
+                env.put("GOW3_VULKAN_DRIVER",custom.getAbsolutePath());
+                env.put("LD_LIBRARY_PATH",custom.getParent()+":"+getApplicationInfo().nativeLibraryDir);
+            }
             builder.directory(app0);
             builder.redirectErrorStream(true);
             builder.redirectOutput(ProcessBuilder.Redirect.to(logFile));

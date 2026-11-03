@@ -7,7 +7,6 @@ on:
       - 'android/bionic/**'
       - 'gow3_pc/**'
       - 'ci/**'
-      - 'android-launcher/**'
       - '.github/workflows/tlou-native-apk.yml'
   workflow_dispatch:
 
@@ -86,6 +85,11 @@ jobs:
       - name: Link real TLOU Bionic runtime and AHB present
         shell: bash -el {0}
         run: bash android/bionic/build_runtime.sh --link-only
+      - name: Build on-device Bionic Python and PKG installer
+        shell: bash -el {0}
+        run: |
+          bash android/bionic/build_python.sh
+          bash android/bionic/build_pkg.sh
       - name: Verify ARM64 executable and native symbols
         shell: bash -el {0}
         run: |
@@ -105,8 +109,8 @@ jobs:
         with:
           name: TheLastOfUsRemastered-Android-Bionic-arm64
           path: |
-            out/release/TheLastOfUsRemastered-Android-Bionic-v0.1-arm64.apk
-            out/release/TheLastOfUsRemastered-Android-Bionic-v0.1-arm64.apk.sha256
+            out/release/TheLastOfUsRemastered-Android-Bionic-v0.2-arm64.apk
+            out/release/TheLastOfUsRemastered-Android-Bionic-v0.2-arm64.apk.sha256
           if-no-files-found: error
       - name: Publish built native binaries
         uses: actions/upload-artifact@v4

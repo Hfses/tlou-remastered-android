@@ -25,6 +25,7 @@ for library in libgow3cpu.so libgow3gpu.so libgow3present.so libc++_shared.so; d
 done
 stage="$out/apk-jni/arm64-v8a"
 assets="$out/apk-assets/runtime"
+python3 android/bionic/stage_tools.py
 mkdir -p "$stage" "$assets" "$root/out/release"
 cp "$out/bin/gow3-probe" "$assets/gow3-probe"
 for lib in libgow3cpu.so libgow3gpu.so libgow3present.so libc++_shared.so; do
@@ -34,7 +35,7 @@ gradle -p "$root/android-launcher" :app:assembleRelease --no-daemon --max-worker
 unsigned="$root/android-launcher/app/build/outputs/apk/release/app-release-unsigned.apk"
 [[ -s "$unsigned" ]] || { echo "Gradle did not produce an unsigned APK" >&2; exit 2; }
 aligned="$out/tlou-release-aligned.apk"
-apk="$root/out/release/TheLastOfUsRemastered-Android-Bionic-v0.1-arm64.apk"
+apk="$root/out/release/TheLastOfUsRemastered-Android-Bionic-v0.2-arm64.apk"
 "$android_tools/zipalign" -f -p 4 "$unsigned" "$aligned"
 key="$out/experimental-development.jks"
 if [[ ! -f $key ]]; then
@@ -51,5 +52,7 @@ unzip -Z -1 "$apk" | grep -q 'lib/arm64-v8a/libgow3gpu.so'
 unzip -Z -1 "$apk" | grep -q 'lib/arm64-v8a/libgow3cpu.so'
 unzip -Z -1 "$apk" | grep -q 'lib/arm64-v8a/libgow3present.so'
 unzip -Z -1 "$apk" | grep -q 'assets/runtime/gow3-probe'
+unzip -Z -1 "$apk" | grep -q 'assets/tools.zip'
+unzip -Z -1 "$apk" | grep -q 'lib/arm64-v8a/libpython3.13.so'
 sha256sum "$apk" > "$apk.sha256"
 echo "Experimental TLOU APK signed and validated: $apk"
