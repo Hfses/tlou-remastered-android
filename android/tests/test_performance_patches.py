@@ -57,7 +57,7 @@ class PerformancePatches(unittest.TestCase):
             selected=entries(root/'patches.bin')
             self.assertEqual(selected[0x91067a],struct.pack('<I',640))
             self.assertEqual(selected[0x910681],struct.pack('<I',360))
-            self.assertEqual(selected[0x9106ab],bytes.fromhex('c5fa2a4708909090'))
+            self.assertEqual(selected[0x9106ab],bytes.fromhex('0f57c0c5fa2a4708'))
             self.assertEqual(selected[0x946363],b'\0')
             self.assertEqual((root/'eboot.elf').read_bytes(),before)
             with self.trusted(): profiles.write_selected(ROOT,root,{})

@@ -21,7 +21,10 @@ da base usada pelo Bachata; os endereços abaixo são relativos ao ELF.
 | 540p e 360p | `0x910677`–`0x9106ed` | Inteiros, RAX combinado, floats e downsample coerentes |
 
 A seleção de resolução é exclusiva. Em 540p/360p, os floats são convertidos
-com VCVTSI2SS a partir dos próprios campos inteiros alterados. A variante antiga
+com VCVTSI2SS a partir dos próprios campos inteiros alterados. XORPS limpa as
+lanes superiores de XMM0/XMM1 antes da conversão, preservando o resultado
+completo das instruções VMOVSS originais, inclusive quando a entrada contém
+registradores com lanes não zeradas. A variante antiga
 que gravava dimensões inteiras sobre instruções VMOVSS de 360p não é usada.
 Não foram transportados o workaround de memória de macOS nem a remoção total
 do watchdog: as correções existentes de jobs e timeout continuam ativas.

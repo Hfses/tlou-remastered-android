@@ -12,7 +12,7 @@ import hashlib
 if hashlib.sha256(args.self.read_bytes()).hexdigest()!=BASE_SELF_SHA256:
     parser.error("SELF diferente do perfil validado")
 from unicorn import Uc,UC_ARCH_X86,UC_MODE_64
-from unicorn.x86_const import UC_X86_REG_RDI,UC_X86_REG_RSI,UC_X86_REG_RSP,UC_X86_REG_RAX
+from unicorn.x86_const import UC_X86_REG_RDI,UC_X86_REG_RSI,UC_X86_REG_RSP,UC_X86_REG_RAX,UC_X86_REG_XMM0,UC_X86_REG_XMM1
 elf,_,ph,*_=parse_self(args.self.read_bytes())
 base=0x400000
 for name,changes in {**PERFORMANCE_EFFECTS,**PERFORMANCE_RESOLUTIONS,**BASE_PATCHES}.items():
@@ -32,6 +32,7 @@ for res,changes in PERFORMANCE_RESOLUTIONS.items():
  uc.mem_map(0x8000000,0x2000)
  # Stop before the shared tail; preserve the selected profile's packed RAX and floats.
  uc.reg_write(UC_X86_REG_RDI,0x8000000);uc.reg_write(UC_X86_REG_RSI,1)
+ uc.reg_write(UC_X86_REG_XMM0,(1<<128)-1);uc.reg_write(UC_X86_REG_XMM1,(1<<128)-1)
  uc.emu_start(base+0x9105fa,base+0x9106ed,count=100)
  data=uc.mem_read(0x8000000,0x100)
  w,h=struct.unpack_from('<II',data,8)
@@ -41,4 +42,6 @@ for res,changes in PERFORMANCE_RESOLUTIONS.items():
  from unicorn.x86_const import UC_X86_REG_XMM0,UC_X86_REG_XMM1
  floats=[struct.unpack('<f',struct.pack('<I',uc.reg_read(r)&0xffffffff))[0] for r in [UC_X86_REG_XMM0,UC_X86_REG_XMM1]]
  assert floats==[float(w),float(h)],floats
+ assert uc.reg_read(UC_X86_REG_XMM0)>>32==0
+ assert uc.reg_read(UC_X86_REG_XMM1)>>32==0
  print(res,'executed:',w,h,'float=',floats)
