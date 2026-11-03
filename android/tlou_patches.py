@@ -95,6 +95,37 @@ PERFORMANCE_RESOLUTIONS = {'720': [[9504253, '7578', 'eb78'], [9504250, '83fe017
          [9504417, '48b800050000d0020000c5fa1005554a8100c5fa100d514a8100', None]]}
 
 
+# The constructor is used before loading saved graphics settings. The old
+# branch-only patch left it at 1080p, and modes 2/3 bypassed that branch entirely.
+# Keep the selected dimensions coherent across initialization and every enum.
+def complete_resolution_paths(changes, width, height):
+    changes = [c for c in changes if c[0] not in (0x9105fd, 0x9105fa)]
+    changes += [
+        (0x9104f2, "83fe030f8484000000", "e98001000090909090"),
+        (0x9104ec, "8988f4000000", None),  # retain mode bookkeeping
+    ]
+    for address, original, selected in [
+        (0x9103bb,1920,width),(0x9103c2,1080,height),
+        (0x9103d0,1920,width),(0x9103d7,1080,height),
+        (0x9103e5,1920,width),(0x9103ec,1080,height),
+        (0x91042b,1920,width),(0x910432,1080,height),
+        (0x910401,240,width//8),(0x910408,270,height//4),
+    ]:
+        changes.append((address,struct.pack("<I",original).hex(),struct.pack("<I",selected).hex()))
+    for address, original in [
+        (0x9103b8,"c7470880070000c7470c38040000"),
+        (0x9103cd,"c7471880070000c7471c38040000"),
+        (0x9103e2,"c7472480070000c7472838040000"),
+        (0x910428,"c7473880070000c7473c38040000"),
+        (0x9103fe,"c74740f0000000c747440e010000"),
+    ]:
+        changes.append((address,original,None))
+    return changes
+
+for _name, (_width, _height) in {"720":(1280,720),"540":(960,540),"360":(640,360)}.items():
+    PERFORMANCE_RESOLUTIONS[_name] = complete_resolution_paths(PERFORMANCE_RESOLUTIONS[_name],_width,_height)
+
+
 def selected_options(options):
     options = options or {}
     if not isinstance(options, dict):

@@ -17,7 +17,7 @@ da base usada pelo Bachata; os endereços abaixo são relativos ao ELF.
 | Bloom desativado | `0x9464a4` | MOV completo com máscara dos campos |
 | Sombras solares desativadas | `0x8efd22` | Salto e bloco anterior; destino preservado |
 | Subsurface desativado | `0x8f2490` | Salto e teste anterior; destino preservado |
-| 720p | `0x9105fd` | Perfil 1280×720 existente no jogo |
+| 720p | `0x9103a0`, `0x9104f2` | Inicialização e todos os modos usam 1280×720 |
 | 540p e 360p | `0x910677`–`0x9106ed` | Inteiros, RAX combinado, floats e downsample coerentes |
 
 A seleção de resolução é exclusiva. Em 540p/360p, os floats são convertidos
@@ -29,9 +29,16 @@ que gravava dimensões inteiras sobre instruções VMOVSS de 360p não é usada.
 Não foram transportados o workaround de memória de macOS nem a remoção total
 do watchdog: as correções existentes de jobs e timeout continuam ativas.
 
-Validação real executada com Unicorn 2.1.4 sobre o trecho do eboot fornecido:
+Validação real executada com Unicorn 2.1.4 sobre o eboot fornecido:
 720p = 1280/720, 540p = 960/540, 360p = 640/360; confirmados os campos inteiros,
-os floats XMM0/XMM1 e o tamanho combinado em RAX. Todas as assinaturas dos
+os floats XMM0/XMM1 e o tamanho combinado em RAX. A revisão 0.9 executa o
+construtor e a função de seleção desde sua entrada: 5 modos × 4 variantes
+de frequência × 3 resoluções (60 combinações), incluindo a cauda compartilhada
+até a notificação externa. A versão anterior só testava o trecho a partir de
+`0x9105fa`: não cobria a inicialização 1080p nem os desvios dos modos 2/3.
+Agora os campos de inicialização são alterados e o despacho em `0x9104f2`
+usa o bloco reduzido após preservar o registro de modo/frequência.
+Todas as assinaturas dos
 seis efeitos e dos três perfis coincidem com o SELF. Isso valida o código e os
 endereços, sem afirmar qualidade visual ou ganho de FPS já medidos no aparelho.
 
@@ -46,8 +53,7 @@ com o perfil solicitado e preserva o arquivo de patches anterior.
 ## Opções adicionais de desempenho
 
 O menu expõe VSync, limite de apresentação, fila de renderização 0/1/2,
-compilação assíncrona de shaders e readback 1/2. A resolução reduzida usa readback
-preciso (2), conforme a recomendação dos perfis do Bachata. Os padrões mantêm
+compilação assíncrona de shaders e readback 1/2, independente da resolução. Os padrões mantêm
 resolução original, efeitos originais e o caminho de renderização já funcional.
 HUD, opacidade/posição dos controles e proporção da apresentação mudam na hora;
 patches e opções do runtime são aplicados na próxima abertura. FSR temporal,
@@ -81,3 +87,19 @@ medir o mesmo trecho de jogo; ativar somente uma opção, reiniciar e
 comparar; se degradar ou causar glitch, desativá-la. Os valores efetivos
 são registrados no `launch.log` como `TLOU A/B`. A ação
 “Desativar todos os experimentos” restaura os knobs novos.
+
+
+## Logs 7/8 e revisão 0.9
+
+540p carregou 24 escritas/106 bytes; Original carregou 12 escritas/48 bytes,
+com os seis efeitos desligados nos dois testes. Não era uma falha de salvar a
+seleção: o perfil antigo não cobria todos os caminhos de configuração.
+`Output resolution: 1920x1080 (live)` informa a saída do upscaler, não mede os
+alvos internos do jogo. Os dois logs têm os quatro experimentos desligados e
+não contêm tempos de quadro CPU/GPU; não sustentam promessas de ganho desses
+knobs. A revisão corrige o trabalho de renderização solicitado ao jogo sem
+ativar novos experimentos. Validação no ARM64 real ainda é necessária para
+confirmar imagem, resolução efetivamente consumida e FPS. O setter separado
+de dimensões personalizadas em `0x910740` permanece intacto; não há chamada
+direta a ele no executável analisado. A validação cobre configuração por enum
+e inicialização, não prova cobertura de chamadas indiretas durante o jogo.

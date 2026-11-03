@@ -65,6 +65,18 @@ class PerformancePatches(unittest.TestCase):
             self.assertNotIn(0x91067a,restored);self.assertNotIn(0x946363,restored)
             self.assertEqual(json.loads((root/'patch-validation.json').read_text())['selected'],[])
 
+    def test_every_reduced_profile_covers_constructor_and_mode_dispatch(self):
+        for name,(w,h) in {'720':(1280,720),'540':(960,540),'360':(640,360)}.items():
+            writes={at:bytes.fromhex(new) for at,old,new in profiles.PERFORMANCE_RESOLUTIONS[name] if new}
+            self.assertEqual(writes[0x9104f2],bytes.fromhex('e98001000090909090'))
+            self.assertEqual(0x9104f2+5+struct.unpack('<i',writes[0x9104f2][1:5])[0],0x910677)
+            for at in (0x9103bb,0x9103d0,0x9103e5,0x91042b):
+                self.assertEqual(writes[at],struct.pack('<I',w))
+            for at in (0x9103c2,0x9103d7,0x9103ec,0x910432):
+                self.assertEqual(writes[at],struct.pack('<I',h))
+            self.assertEqual(writes[0x910401],struct.pack('<I',w//8))
+            self.assertEqual(writes[0x910408],struct.pack('<I',h//4))
+
     def test_bad_instruction_preserves_previous_patch_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);fixture(root)
