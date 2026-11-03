@@ -22,6 +22,8 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
         root = Path(temp)
         names = ['assets/runtime/gow3-probe', *[f'lib/arm64-v8a/{lib}' for lib in
             ('libgow3cpu.so', 'libgow3gpu.so', 'libgow3present.so', 'libc++_shared.so')]]
+        if b'g3PNjYKWqnQ#libSceRemoteplay' not in apk.read('assets/runtime/gow3-probe'):
+            raise ValueError('Stale runtime: base TLOU Remote Play service is absent')
         allowed = {'libc.so', 'libm.so', 'libdl.so', 'liblog.so', 'libandroid.so', 'libnativewindow.so',
                    'libc++_shared.so', 'libgow3cpu.so', 'libgow3gpu.so', 'libvulkan.so'}
         for name in names:

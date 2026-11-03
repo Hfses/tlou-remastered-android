@@ -12,6 +12,9 @@ on:
       - 'android/bionic/build_pkg.sh'
       - 'android/bionic/stage_tools.py'
       - 'android/bionic/package_apk.sh'
+      - 'gow3_pc/src/runtime_services.c'
+      - 'gow3_pc/src/import_names.inc'
+      - 'gow3_pc/tests/test_services.c'
       - '.github/workflows/tlou-launcher-apk.yml'
   workflow_dispatch:
 
@@ -39,9 +42,13 @@ jobs:
           python-version: '3.12'
       - name: Test automatic preparation and failure recovery
         run: python3 -m unittest discover -s android/tests -v
-      - name: Verify unchanged native runtime inputs
+      - name: Test service contracts including base TLOU Remote Play query
         run: |
-          git diff --exit-code 67bf61c2ccce5193e5cc3abeb72e38dba0f0b11a HEAD -- gow3_pc ci android/bionic/build_deps.sh android/bionic/build_fex.sh android/bionic/build_gpu.sh android/bionic/build_runtime.sh
+          cc -std=c11 -O2 -Wall -Wextra -Werror -pthread -I gow3_pc -I gow3_pc/src gow3_pc/tests/test_services.c -o "$RUNNER_TEMP/tlou-services-test"
+          "$RUNNER_TEMP/tlou-services-test"
+      - name: Verify unchanged GPU and FEX inputs; allow only the services relink
+        run: |
+          git diff --exit-code 67bf61c2ccce5193e5cc3abeb72e38dba0f0b11a HEAD -- gow3_pc ci android/bionic/build_deps.sh android/bionic/build_fex.sh android/bionic/build_gpu.sh android/bionic/build_runtime.sh ':!gow3_pc/src/runtime_services.c' ':!gow3_pc/src/import_names.inc' ':!gow3_pc/tests/test_services.c'
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;29.0.14206865'
@@ -63,6 +70,21 @@ jobs:
           path: out/android-bionic
           github-token: ${{ github.token }}
           run-id: 41502314852
+      - name: Restore matching Bionic link dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            .local-deps/android/bionic-prefix
+            .local-deps/android/bionic-src
+            .local-deps/android/bionic-build
+            .local-deps/FEX
+            ~/.cache/ccache
+          key: tlou-bionic-arm64-v2-${{ runner.os }}-${{ hashFiles('android/bionic/build_deps.sh', 'android/bionic/build_fex.sh') }}
+      - name: Rebuild runtime with base TLOU service implementation
+        run: |
+          git submodule update --init gow3_pc/third_party/LibAtrac9
+          bash android/bionic/build_deps.sh
+          bash android/bionic/build_runtime.sh --link-only
       - name: Restore Python and Rust compiler caches
         uses: actions/cache@v4
         with:

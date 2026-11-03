@@ -51,6 +51,16 @@ static ABI int32_t remoteplay_initialize(void) {
     note("Remote Play initialized (local execution, streaming unavailable)");
     return 0;
 }
+/* Base CUSA00552 calls g3PNjYKWqnQ with user in edi and a 32-bit
+ * output pointer in rsi (call at image+0x8afd7a), then compares *status
+ * against 1. Local execution has no remote session: write DISCONNECTED=0.
+ * Do not return success without initializing this caller-owned output. */
+static ABI int32_t remoteplay_connection_status(int32_t user, int32_t *status) {
+    (void)user;
+    if (!status) return (int32_t)0x80020016; /* EINVAL */
+    *status=0;
+    return 0;
+}
 
 /* ---- UserService ---- */
 static int login_event_pending=1;
@@ -909,5 +919,6 @@ static const RuntimeExport exports[]={
 };
 uintptr_t runtime_services_resolve(const char *name) {
     if (!strcmp(name,"k1SwgkMSOM8#libSceRemoteplay")) return (uintptr_t)remoteplay_initialize;
+    if (!strcmp(name,"g3PNjYKWqnQ#libSceRemoteplay")) return (uintptr_t)remoteplay_connection_status;
     return RUNTIME_LOOKUP(exports,name);
 }
