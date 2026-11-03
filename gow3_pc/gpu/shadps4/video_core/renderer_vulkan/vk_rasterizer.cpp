@@ -1,5 +1,8 @@
 #include "common/rdtsc.h"
 #include "common/arch.h"
+#ifndef ARCH_X86_64
+#include "shader_recompiler/ir/passes/srt_arm64.h"
+#endif
 #include <algorithm>
 #include <set>
 #include <tuple>
@@ -405,7 +408,7 @@ void NoteLateGuestCopy(VideoCore::Buffer& buffer, u64 offset, VAddr address, u32
         entry.due = due;
         entry.hash = hash;
         entry.address = address;
-        entry.walker = nullptr;
+        entry.walker = {};
         entry.shader = shader;
         entry.size = size;
         entry.ud_size = 0;
@@ -505,7 +508,7 @@ void RefreshLateConstants(Core::MemoryManager* memory) {
         const u64 key = entry.address
                             ? XXH3_64bits_withSeed(&entry.address, sizeof(entry.address), entry.size)
                             : XXH3_64bits_withSeed(entry.user_data.data(), entry.ud_size * sizeof(u32),
-                                                   reinterpret_cast<u64>(entry.walker) ^
+                                                   reinterpret_cast<u64>(Shader::SrtWalkerCode(entry.walker)) ^
                                                        (u64(entry.size) << 40));
         u64 hash = 0;
         bool valid = false;
@@ -3796,7 +3799,7 @@ const Rasterizer::SrtPlan& Rasterizer::SrtPlanFor(const Shader::Info& info) {
     // gow3 20 Oct 2026 (laptop CPUs): the map lookup on every walk was ~1% of the GPU command
     // thread on a Ryzen 7840HS (NVIDIA GPU and 780M). Plans are never erased and the
     // map's nodes do not move, so a small cache of plan addresses by walker is safe.
-    const void* walker = reinterpret_cast<const void*>(srt.walker_func);
+    const void* walker = Shader::SrtWalkerCode(srt.walker_func);
     auto& memo = srt_plan_memo[(reinterpret_cast<uintptr_t>(walker) >> 4) & (SrtPlanMemoSize - 1)];
     if (memo.first == walker && memo.second) {
         return *memo.second;
@@ -3811,10 +3814,13 @@ const Rasterizer::SrtPlan& Rasterizer::SrtPlanFor(const Shader::Info& info) {
     // flattened buffer; values pass through r10.
     std::vector<s32> saved;
     s32 current = -1;
+#ifdef ARCH_X86_64
     s32 last_node = -2;
     u32 last_off = 0;
-    const u8* code = reinterpret_cast<const u8*>(srt.walker_func);
+#endif
+    const u8* code = static_cast<const u8*>(Shader::SrtWalkerCode(srt.walker_func));
     const u8* end = code + srt.walker_func_size;
+#ifdef ARCH_X86_64
     ZydisDecodedInstruction inst;
     ZydisDecodedOperand ops[ZYDIS_MAX_OPERAND_COUNT];
     while (code < end && ZYAN_SUCCESS(Common::Decoder::Instance()->decodeInstruction(
@@ -3862,6 +3868,36 @@ const Rasterizer::SrtPlan& Rasterizer::SrtPlanFor(const Shader::Info& info) {
             }
         }
     }
+#else
+    // ARM walkers persist portable operations, not x86 instructions. Build the
+    // same readback/copy plan so GPU-written descriptors are synchronized too.
+    using namespace Shader::Arm64Srt;
+    const auto* words=reinterpret_cast<const u32*>(code);
+    const size_t count=(end-code)/sizeof(u32);
+    for(size_t pc=1;pc<count;) {
+        const u32 op=words[pc++] & ~OpZeroed;
+        if(op==OpEnd) break;
+        if(op==OpPushImm || op==OpPushDyn) {
+            saved.push_back(current);
+            const bool dynamic=op==OpPushDyn;
+            const u32 offset=dynamic ? 0 : words[pc++]<<2;
+            plan.nodes.push_back({current,offset,0,dynamic});
+            current=s32(plan.nodes.size()-1);
+        } else if(op==OpPop) {
+            current=saved.back(); saved.pop_back();
+        } else if(op==OpCopyImm || op==OpCopyDyn) {
+            const bool dynamic=op==OpCopyDyn;
+            const u32 offset=dynamic ? 0 : words[pc++]<<2;
+            const u32 dest=words[pc++];
+            if(current>=0) plan.nodes[current].extent=std::max(plan.nodes[current].extent,
+                                                             dynamic ? 1024u : offset+4);
+            if(!dynamic) plan.copies.push_back({dest,current,offset});
+        } else if(op==OpImm || op==OpUserData || op==OpFlat) {
+            ++pc;
+        }
+    }
+#endif
+
     return plan;
 }
 
