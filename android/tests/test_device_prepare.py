@@ -48,6 +48,16 @@ class DevicePreparation(unittest.TestCase):
             self.assertEqual((out / "device-ready.json").read_bytes(), original)
             self.assertEqual(list(root.glob(".prepare-*")), [])
 
+    def test_patch_options_do_not_repeat_preparation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);game=make_game(root/"game");out=root/"prepared"
+            with patch.object(device,"prepare",side_effect=self.fake_prepare) as prepare, patch.object(device,"write_selected") as selected:
+                device.ensure(root,game,out,{"resolution":"720"})
+                device.ensure(root,game,out,{"resolution":"540"})
+                self.assertEqual(prepare.call_count,1)
+                self.assertEqual(selected.call_count,2)
+                self.assertEqual(selected.call_args.args[2],{"resolution":"540"})
+
     def test_cannot_prepare_over_player_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

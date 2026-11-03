@@ -53,6 +53,8 @@ public final class Gow3Present {
     /** frames() for the status poll: 0 until the Bionic path was started. */
     public static long framesIfLoaded() { return used ? nativeFrames() : 0; }
 
+    public static synchronized void fullscreen(boolean enabled) { if(used)nativeSetFullscreen(enabled); }
+
     /** Ends the listener and the display (the app is closing). */
     public static synchronized void stop() { nativeShutdown(); }
 }

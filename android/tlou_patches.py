@@ -46,3 +46,112 @@ def select(eboot, fallback):
         print("Perfil TLOU verificado: entrada 0x56d9f0; patches próprios do executável.", flush=True)
         return dict(BASE_PATCHES)
     return fallback
+
+# Adapted from Bachata S4+ P36 performance XMLs. Addresses are ELF-relative
+# (Bachata guest base 0x400000 removed). Entire instruction guards were checked
+# against the supplied SELF. 360p uses the same int->float conversion as 540p;
+# obsolete XML bytes overwriting VMOVSS with packed dimensions are not used.
+PERFORMANCE_EFFECTS = {'ssao': [[9724771, '01', '00'], [9724765, 'c7834b01000001010101', None]],
+ 'motion_blur': [[9724898, '01', '00'],
+                 [9725988, '01', '00'],
+                 [9724892, 'c6836d01000001', None],
+                 [9725982, 'c6830e04000001', None]],
+ 'depth_of_field': [[9724926, '01', '00'], [9724920, 'c6837101000001', None]],
+ 'bloom': [[9725092, 'c783b401000001010101', 'c783b401000001000101']],
+ 'sunlight_shadows': [[9370914, '0f8583030000', 'e98403000090'],
+                      [9370900, '488d05d595fa0080b89c000000000f8583030000', None]],
+ 'subsurface': [[9381008, '0f84320b0000', 'e9330b000090'],
+                [9380998, '488b0080b8942e0000000f84320b0000', None]]}
+PERFORMANCE_RESOLUTIONS = {'720': [[9504253, '7578', 'eb78'], [9504250, '83fe017578', None]],
+ '540': [[9504253, '7578', 'eb78'],
+         [9504250, '83fe017578', None],
+         [9504378, '00050000', 'c0030000'],
+         [9504385, 'd0020000', '1c020000'],
+         [9504399, '00050000', 'c0030000'],
+         [9504406, 'd0020000', '1c020000'],
+         [9504454, '00050000', 'c0030000'],
+         [9504461, 'd0020000', '1c020000'],
+         [9504482, 'a0000000', '78000000'],
+         [9504489, 'b4000000', '87000000'],
+         [9504419, '00050000d0020000', 'c00300001c020000'],
+         [9504427, 'c5fa1005554a8100', 'c5fa2a4708909090'],
+         [9504435, 'c5fa100d514a8100', 'c5f22a4f0c909090'],
+         [9504375, 'c7470800050000c7470cd0020000', None],
+         [9504417, '48b800050000d0020000c5fa1005554a8100c5fa100d514a8100', None]],
+ '360': [[9504253, '7578', 'eb78'],
+         [9504250, '83fe017578', None],
+         [9504378, '00050000', '80020000'],
+         [9504385, 'd0020000', '68010000'],
+         [9504399, '00050000', '80020000'],
+         [9504406, 'd0020000', '68010000'],
+         [9504454, '00050000', '80020000'],
+         [9504461, 'd0020000', '68010000'],
+         [9504482, 'a0000000', '50000000'],
+         [9504489, 'b4000000', '5a000000'],
+         [9504419, '00050000d0020000', '8002000068010000'],
+         [9504427, 'c5fa1005554a8100', 'c5fa2a4708909090'],
+         [9504435, 'c5fa100d514a8100', 'c5f22a4f0c909090'],
+         [9504375, 'c7470800050000c7470cd0020000', None],
+         [9504417, '48b800050000d0020000c5fa1005554a8100c5fa100d514a8100', None]]}
+
+
+def selected_options(options):
+    options = options or {}
+    if not isinstance(options, dict):
+        raise ValueError("Configuração de patches inválida")
+    resolution = options.get("resolution", "original")
+    if not isinstance(resolution, str) or resolution not in {"original", "720", "540", "360"}:
+        raise ValueError("Resolução não suportada")
+    selected = {}
+    if resolution != "original":
+        selected["resolution-" + resolution] = PERFORMANCE_RESOLUTIONS[resolution]
+    for name, changes in PERFORMANCE_EFFECTS.items():
+        if type(options.get(name, False)) is not bool:
+            raise ValueError("Opção de patch inválida: " + name)
+        if options.get(name, False):
+            selected["disable-" + name] = changes
+    return selected
+
+
+def write_selected(source, prepared, options):
+    """Atomically publish launch patches; never change the player's SELF or linked image."""
+    import importlib.util
+    import json
+    from pathlib import Path
+    prepared, source = Path(prepared), Path(source)
+    requested = selected_options(options)
+    game_self = prepared / "tlou-view/eboot.bin"
+    if not game_self.is_file():
+        if requested:
+            raise ValueError("Esta pasta preparada não contém o eboot original para validar os patches")
+        return
+    if hashlib.sha256(game_self.read_bytes()).hexdigest() != BASE_SELF_SHA256:
+        if requested:
+            raise ValueError("Patches disponíveis apenas para o eboot CUSA00552 1.00 validado; restaure o perfil Original")
+        return
+    spec = importlib.util.spec_from_file_location("tlou_patch_writer", source / "tools/probe_tlou.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    elf_path = prepared / "eboot.elf"
+    elf = elf_path.read_bytes()
+    phoff = struct.unpack_from("<Q", elf, 0x20)[0]
+    size, count = struct.unpack_from("<HH", elf, 0x36)
+    segments = [struct.unpack_from("<IIQQQQQQ", elf, phoff + i*size) for i in range(count)]
+    def read(at, length):
+        for kind, _, offset, start, _, filesz, _, _ in segments:
+            if kind == 1 and start <= at and at + length <= start + filesz:
+                return elf[offset + at-start:offset + at-start+length]
+        return b""
+    patches = dict(BASE_PATCHES)
+    patches.update(requested)
+    for name, changes in patches.items():
+        for at, expected, _ in changes:
+            if read(at, len(bytes.fromhex(expected))) != bytes.fromhex(expected):
+                raise ValueError("Assinatura divergente no patch " + name + " em " + hex(at))
+    temp = prepared / "patches.bin.new"
+    module.image_patches(elf_path, temp, patches)
+    temp.replace(prepared / "patches.bin")
+    report = {"profile": BASE_SELF_SHA256, "selected": list(requested),
+              "resolution": (options or {}).get("resolution", "original"), "validated": True}
+    (prepared / "patch-validation.json").write_text(json.dumps(report, indent=2)+"\n")
+    print("Patches validados: " + (", ".join(requested) or "Original; correções de estabilidade"), flush=True)

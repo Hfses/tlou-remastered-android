@@ -17,6 +17,9 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.content.SharedPreferences;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -41,6 +44,8 @@ public final class GameActivity extends Activity {
     private volatile Process game;
     private File logFile;
     private TextView status;
+    private FrameLayout gameLayout;
+    private Button menuButton;
     private String prepared;
     private volatile boolean started;
     private boolean resumed;
@@ -87,35 +92,40 @@ public final class GameActivity extends Activity {
         layout.addView(surface,pos(-1,-1,Gravity.CENTER));
         touch=new TouchControllerOverlay(this,pad,false);
         layout.addView(touch,pos(-1,-1,Gravity.CENTER));
-        LinearLayout bar=new LinearLayout(this);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setBackgroundColor(0x99000000);
-        status=new TextView(this);
-        status.setTextColor(0xffeeeeee);
-        status.setTextSize(12);
-        status.setText("TLOU • Bionic ARM64");
-        status.setGravity(Gravity.CENTER_VERTICAL);
-        status.setPadding(16,6,16,6);
-        bar.addView(status,new LinearLayout.LayoutParams(0,-2,1));
-        Button log=new Button(this);
-        log.setText("LOG");
-        log.setAllCaps(false);
-        log.setOnClickListener(v->showLog());
-        bar.addView(log,new LinearLayout.LayoutParams(-2,-2));
-        Button exit=new Button(this);
-        exit.setText("SAIR");
-        exit.setAllCaps(false);
-        exit.setOnClickListener(v->stopAndExit());
-        bar.addView(exit,new LinearLayout.LayoutParams(-2,-2));
-        layout.addView(bar,pos(-1,-2,Gravity.TOP));
+        gameLayout=layout;
+        status=new TextView(this);status.setGravity(Gravity.CENTER);status.setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
+        status.setTextColor(0xffe0e9cf);status.setPadding(dp(10),dp(6),dp(10),dp(6));status.setText("0.0 FPS");
+        layout.addView(status,pos(-2,-2,Gravity.TOP|Gravity.LEFT));
+        status.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol || b-t!=ob-ot)placeHud();});
+        final float[] drag=new float[2];
+        status.setOnTouchListener((v,e)->{
+            FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)status.getLayoutParams();
+            if(e.getActionMasked()==MotionEvent.ACTION_DOWN){drag[0]=e.getRawX()-lp.leftMargin;drag[1]=e.getRawY()-lp.topMargin;return true;}
+            if(e.getActionMasked()==MotionEvent.ACTION_MOVE){
+                lp.leftMargin=Math.max(dp(4),Math.min(layout.getWidth()-status.getWidth()-dp(4),(int)(e.getRawX()-drag[0])));
+                lp.topMargin=Math.max(dp(4),Math.min(layout.getHeight()-status.getHeight()-dp(4),(int)(e.getRawY()-drag[1])));
+                status.setLayoutParams(lp);return true;
+            }
+            if(e.getActionMasked()==MotionEvent.ACTION_UP){
+                PortSettings.prefs(this).edit().putString("hud_corner","-1")
+                    .putFloat("hud_x",lp.leftMargin/(float)Math.max(1,layout.getWidth()-status.getWidth()))
+                    .putFloat("hud_y",lp.topMargin/(float)Math.max(1,layout.getHeight()-status.getHeight())).apply();
+                v.performClick();return true;
+            }
+            return true;
+        });
+        menuButton=new Button(this);menuButton.setText("☰");menuButton.setTextSize(20);menuButton.setTextColor(0xffdfe8d1);
+        menuButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x88202c24));menuButton.setContentDescription("Menu do emulador");
+        FrameLayout.LayoutParams menuPos=pos(dp(44),dp(44),Gravity.TOP|Gravity.RIGHT);menuPos.topMargin=dp(8);menuPos.rightMargin=dp(8);
+        menuButton.setOnClickListener(v->showMenu());layout.addView(menuButton,menuPos);
         setContentView(layout);
         // InsetsController is available only after a decor exists and is attached.
-        layout.post(this::immersive);
+        layout.post(()->{immersive();applyLiveSettings();});
 
         try {
             RunLog.write(this,"Carregando JNI e iniciando apresentação AHardwareBuffer");
             String bridge=Gow3Present.start(surface.getHolder(),
-                    new File(stateDir,"present.sock").getAbsolutePath(),false);
+                    new File(stateDir,"present.sock").getAbsolutePath(),PortSettings.prefs(this).getBoolean("fullscreen",false));
             if (!bridge.startsWith("bridge running")) throw new IllegalStateException(bridge);
             RunLog.write(this,"Apresentação: "+bridge);
             audio.start();
@@ -147,7 +157,7 @@ public final class GameActivity extends Activity {
 
     private void update(String message) {
         handler.post(()->{
-            if (status!=null && !closing.get()) status.setText(message);
+            if (status!=null && !closing.get()) status.setContentDescription(message);
         });
     }
 
@@ -163,7 +173,10 @@ public final class GameActivity extends Activity {
         try {
             if(resumed && game!=null && game.isAlive()) {
                 double fps=fpsMeter.sample(Gow3Present.framesIfLoaded(),SystemClock.elapsedRealtimeNanos());
-                status.setText(String.format(Locale.ROOT,"TLOU • %.1f FPS",fps));
+                String value=String.format(Locale.ROOT,"%.1f FPS",fps);
+                if(PortSettings.prefs(this).getString("hud_mode","compact").equals("compact"))
+                    value+="  ·  "+(fps>0?String.format(Locale.ROOT,"%.1f ms",1000.0/fps):"— ms");
+                status.setText(value);
             } else fpsMeter.reset();
         } catch (Throwable ignored) {}
         handler.postDelayed(this::refreshFps,500);
@@ -248,6 +261,7 @@ public final class GameActivity extends Activity {
             env.put("GOW3_OBJECT_MOTION","0");
             env.put("GOW3_FSR1","0");
             env.put("GOW3_RCAS","0");
+            PortSettings.environment(this,env);
             String driver=getSharedPreferences("tlou",MODE_PRIVATE).getString("driver_path", "");
             if(!driver.isEmpty()) {
                 File custom=new File(driver);
@@ -278,6 +292,41 @@ public final class GameActivity extends Activity {
             if(!closing.get()) error("Falha ao iniciar runtime TLOU: "+err+"\n"+tailLog());
         }
     }
+
+    private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
+    private void applyLiveSettings() {
+        if(status==null || touch==null)return;
+        SharedPreferences p=PortSettings.prefs(this);
+        status.setVisibility(p.getBoolean("hud_visible",true)?View.VISIBLE:View.GONE);
+        status.setTextSize(p.getInt("hud_size",14));
+        GradientDrawable bg=new GradientDrawable();bg.setColor((p.getInt("hud_opacity",65)*255/100)<<24|0x101813);bg.setCornerRadius(dp(8));status.setBackground(bg);
+        boolean show=p.getBoolean("touch_visible",true);if(!show)touch.release();touch.setVisibility(show?View.VISIBLE:View.GONE);touch.setAlpha(p.getInt("touch_opacity",55)/100f);
+        if(started)Gow3Present.fullscreen(p.getBoolean("fullscreen",false));
+        placeHud();
+    }
+    private void placeHud() {
+        SharedPreferences p=PortSettings.prefs(this);
+        status.post(()->{
+            if(gameLayout==null || closing.get())return;
+            FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)status.getLayoutParams();
+            int w=Math.max(1,gameLayout.getWidth()-status.getWidth()-dp(8));int h=Math.max(1,gameLayout.getHeight()-status.getHeight()-dp(8));
+            String corner=p.getString("hud_corner","0");
+            lp.leftMargin=dp(4)+(corner.equals("-1")?Math.round(p.getFloat("hud_x",0)*w):(corner.equals("1")||corner.equals("3")?w-dp(48):0));
+            lp.topMargin=dp(4)+(corner.equals("-1")?Math.round(p.getFloat("hud_y",0)*h):(corner.equals("2")||corner.equals("3")?h:0));
+            lp.leftMargin=Math.max(dp(4),Math.min(w,lp.leftMargin));lp.topMargin=Math.max(dp(4),Math.min(h,lp.topMargin));status.setLayoutParams(lp);
+        });
+    }
+    private void showMenu() {
+        if(closing.get())return;touch.release();
+        new PortMenu(this,true,new PortMenu.Actions(){
+            public void logs(){showLog();}public void exportLogs(){}public void chooseGame(){}public void installPkg(){}
+            public void importDriver(){}public void selectDriver(){}
+            public void editControls(){touch.setVisibility(View.VISIBLE);touch.setAlpha(.9f);menuButton.setVisibility(View.GONE);touch.edit(()->{menuButton.setVisibility(View.VISIBLE);applyLiveSettings();});}
+            public void resetControls(){touch.resetLayout();applyLiveSettings();}
+            public void exitGame(){stopAndExit();}public void changed(){applyLiveSettings();}
+        }).open("home");
+    }
+    @Override public void onBackPressed(){showMenu();}
 
     private String tailLog() { return RunLog.tail(RunLog.runtime(this),12000); }
 

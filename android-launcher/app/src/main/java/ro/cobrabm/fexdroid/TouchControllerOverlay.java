@@ -184,7 +184,7 @@ final class TouchControllerOverlay extends View {
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(name.equals(dragged) ? 0xffe8dfc9 : pressed.contains(name) ? 0xaae8dfc9 : 0x6630394c);
         c.drawCircle(p.x,p.y,r,paint);
-        paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(3); paint.setColor(accent);
+        paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(2); paint.setColor(accent);
         c.drawCircle(p.x,p.y,r,paint);
         paint.setStyle(Paint.Style.FILL); paint.setTypeface(Typeface.DEFAULT_BOLD);
         paint.setTextSize(label.length()>2 ? 19 : 33); paint.setTextAlign(Paint.Align.CENTER);
@@ -209,7 +209,7 @@ final class TouchControllerOverlay extends View {
         PointF center=center(name);
         paint.setStyle(Paint.Style.FILL); paint.setColor(name.equals(dragged) ? 0xffe8dfc9 : 0x6630394c);
         c.drawCircle(center.x,center.y,57,paint);
-        paint.setStyle(Paint.Style.STROKE); paint.setColor(0xffa0aec0); paint.setStrokeWidth(3);
+        paint.setStyle(Paint.Style.STROKE); paint.setColor(0xffa0aec0); paint.setStrokeWidth(2);
         c.drawCircle(center.x,center.y,57,paint);
         float knobX=center.x,knobY=center.y;
         for (int i=0;i<controls.size();i++) {
@@ -247,7 +247,7 @@ final class TouchControllerOverlay extends View {
             c.drawRoundRect(548,9,732,62,13,13,paint);
             paint.setStyle(Paint.Style.FILL); paint.setTextSize(20);
             paint.setTextAlign(Paint.Align.CENTER);
-            c.drawText("DONE",640,36-(paint.ascent()+paint.descent())/2,paint);
+            c.drawText("CONCLUIR",640,36-(paint.ascent()+paint.descent())/2,paint);
         }
         c.restore();
     }

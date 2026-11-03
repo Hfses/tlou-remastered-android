@@ -47,34 +47,46 @@ public final class MainActivity extends Activity {
         tools=new InstallTools(this);
         getWindow().setStatusBarColor(BACKGROUND);
         getWindow().setNavigationBarColor(BACKGROUND);
-        ScrollView scroll=new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(BACKGROUND);
-        LinearLayout root=column(); root.setPadding(dp(22),dp(22),dp(22),dp(28)); scroll.addView(root);
-        TextView brand=text("DAEDALUS  /  ANDROID",11,MUTED); brand.setLetterSpacing(0.18f); root.addView(brand);
-        TextView title=text("THE LAST\nOF US",40,TEXT); title.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
-        title.setLineSpacing(0,0.91f); root.addView(title);
-        TextView subtitle=text("R E M A S T E R E D",13,ACCENT); subtitle.setPadding(0,0,0,dp(20)); root.addView(subtitle);
-
-        LinearLayout game=card(root,"JOGO");
-        gameInfo=text("",14,MUTED); game.addView(gameInfo);
-        add(game,"Instalar jogo por PKG",true,()->withAccess(()->pickFile(PICK_PKG)));
+        buildHome();
+    }
+    private void buildHome() {
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(BACKGROUND);
+        LinearLayout root=column();root.setPadding(dp(22),dp(18),dp(22),dp(24));scroll.addView(root);
+        LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView brand=text("DAEDALUS  /  ANDROID",12,ACCENT);brand.setLetterSpacing(.14f);
+        header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
+        Button menu=new Button(this);menu.setText("☰");menu.setTextSize(23);menu.setContentDescription("Menu do emulador");
+        menu.setOnClickListener(v->{if(!busy)openMenu("home");});header.addView(menu,new LinearLayout.LayoutParams(dp(48),dp(48)));buttons.add(menu);root.addView(header);
+        TextView title=text("THE LAST OF US",34,TEXT);title.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));root.addView(title);
+        TextView subtitle=text("R E M A S T E R E D",12,ACCENT);subtitle.setPadding(0,0,0,dp(18));root.addView(subtitle);
+        LinearLayout game=card(root,"SEU JOGO");gameInfo=text("",14,TEXT);gameInfo.setMaxLines(3);game.addView(gameInfo);
+        add(game,"JOGAR",true,()->withAccess(()->prepareSelected(true)));
+        TextView detail=text("PKG ou pasta extraída. Preparação automática no celular.",12,MUTED);game.addView(detail);
         add(game,"Escolher pasta do jogo",false,()->withAccess(()->pickFolder(PICK_GAME)));
-        TextView hint=text("A preparação é automática no celular. Você também pode selecionar uma pasta já extraída.",12,MUTED); game.addView(hint);
-        TextView manual=text("Informar caminho da pasta",12,ACCENT); manual.setPadding(0,dp(10),0,dp(10));
-        manual.setOnClickListener(v->{ if (!busy) manualPath(); }); game.addView(manual);
-
-        LinearLayout drivers=card(root,"DRIVER VULKAN");
-        driverInfo=text("",14,TEXT); drivers.addView(driverInfo);
-        add(drivers,"Importar driver ZIP ou .so",false,()->pickFile(PICK_DRIVER));
-        add(drivers,"Selecionar driver",false,this::selectDriver);
-        root.addView(text("",4,MUTED));
-        add(root,"JOGAR",true,()->withAccess(()->prepareSelected(true)));
-        progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal); progress.setIndeterminate(true); progress.setVisibility(View.GONE); root.addView(progress);
-        status=text("Escolha seu PKG ou a pasta do jogo para começar.",13,MUTED); root.addView(status);
-        permission=text("Permitir acesso aos arquivos",13,ACCENT); permission.setPadding(0,dp(12),0,dp(12)); permission.setOnClickListener(v->withAccess(()->refresh())); root.addView(permission);
-        add(root,"Ver logs de execução e instalação",false,this::showLog);
-        add(root,"Exportar logs ZIP",false,()->{Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/zip");save.addCategory(Intent.CATEGORY_OPENABLE);save.putExtra(Intent.EXTRA_TITLE,"TLOU-Android-Logs.zip");startActivityForResult(save,SAVE_LOGS);});
-        root.addView(text("TLOU • CUSA00552 • Daedalus v0.7",11,MUTED));
-        setContentView(scroll); refresh();
+        add(game,"Instalar por PKG",false,()->withAccess(()->pickFile(PICK_PKG)));
+        TextView manual=text("Informar caminho da pasta",12,ACCENT);manual.setOnClickListener(v->{if(!busy)manualPath();});game.addView(manual);
+        LinearLayout config=card(root,"CONFIGURAÇÃO");
+        driverInfo=text("",13,MUTED);config.addView(driverInfo);
+        add(config,"Vídeo e desempenho",false,()->openMenu("video"));
+        add(config,"Patches do jogo",false,()->openMenu("patches"));
+        progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setIndeterminate(true);progress.setVisibility(View.GONE);root.addView(progress);
+        status=text("Pronto para continuar. Abra o menu lateral para drivers, HUD e controles.",13,MUTED);root.addView(status);
+        permission=text("Permitir acesso aos arquivos",13,ACCENT);permission.setPadding(0,dp(12),0,dp(12));permission.setOnClickListener(v->withAccess(this::refresh));root.addView(permission);
+        root.addView(text("CUSA00552  ·  Daedalus v0.8",11,MUTED));setContentView(scroll);refresh();
+    }
+    private void exportLogs() {
+        Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/zip");save.addCategory(Intent.CATEGORY_OPENABLE);
+        save.putExtra(Intent.EXTRA_TITLE,"TLOU-Android-Logs.zip");startActivityForResult(save,SAVE_LOGS);
+    }
+    private void openMenu(String section) {
+        new PortMenu(this,false,new PortMenu.Actions(){
+            public void logs(){showLog();} public void exportLogs(){MainActivity.this.exportLogs();}
+            public void chooseGame(){withAccess(()->pickFolder(PICK_GAME));}
+            public void installPkg(){withAccess(()->pickFile(PICK_PKG));}
+            public void importDriver(){pickFile(PICK_DRIVER);}public void selectDriver(){MainActivity.this.selectDriver();}
+            public void editControls(){}public void resetControls(){}public void exitGame(){}
+            public void changed(){refresh();}
+        }).open(section);
     }
     private int dp(int value) { return Math.round(value*getResources().getDisplayMetrics().density); }
     private LinearLayout column() { LinearLayout l=new LinearLayout(this); l.setOrientation(LinearLayout.VERTICAL); return l; }
@@ -107,7 +119,7 @@ public final class MainActivity extends Activity {
         if(gameInfo==null)return;
         String folder=prefs.getString("game_path","");
         gameInfo.setText(folder.isEmpty()?"Nenhum jogo selecionado":folder);
-        driverInfo.setText("Ativo: "+prefs.getString("driver_name","Driver do sistema"));
+        driverInfo.setText(PortSettings.summary(this)+"\n"+prefs.getString("driver_name","Driver do sistema"));
         permission.setVisibility(access()?View.GONE:View.VISIBLE);
     }
     private void task(String message, Work work) {
@@ -127,7 +139,9 @@ public final class MainActivity extends Activity {
         if(launch){RunLog.begin(this);RunLog.write(this,"Jogo selecionado: "+prefs.getString("game_path","")+" • driver="+prefs.getString("driver_name","Sistema"));}
         if(prefs.getString("game_path","").isEmpty()){alert("Selecione o jogo","Instale um PKG ou escolha a pasta do jogo.");return;}
         task("Verificando e preparando jogo…",()->{
-            File folder=selected(); File prepared=InstallTools.prepared(folder)?folder:tools.prepare(folder,this::update);
+            File folder=selected(); File prepared;
+            if(InstallTools.prepared(folder)){prepared=folder;tools.applyPatches(prepared,this::update);}
+            else prepared=tools.prepare(folder,this::update);
             prefs.edit().putString("prepared_path",prepared.getAbsolutePath()).apply();
             update("Pronto para jogar.");
             if(launch)runOnUiThread(()->{if(!isDestroyed()){try { RunLog.write(this,"Preparação verificada. Abrindo GameActivity: "+prepared); Intent i=new Intent(this,GameActivity.class);i.putExtra("prepared_path",prepared.getAbsolutePath());startActivity(i); } catch(Throwable error) { RunLog.failure(this,"Falha ao abrir GameActivity",error);alert("Inicialização",error.toString()); }}});

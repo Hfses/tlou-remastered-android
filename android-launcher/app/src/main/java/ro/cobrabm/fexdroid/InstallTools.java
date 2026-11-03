@@ -65,9 +65,18 @@ final class InstallTools {
         File out=new File(context.getFilesDir(),"tlou-prepared");
         run(Arrays.asList(new File(root,"python/bin/python3.13").getAbsolutePath(),
             new File(root,"source/android/device_prepare.py").getAbsolutePath(),
-            "--game",game.getCanonicalPath(),"--out",out.getAbsolutePath()),progress);
+            "--game",game.getCanonicalPath(),"--out",out.getAbsolutePath(),
+            "--options",PortSettings.patchOptions(context).getAbsolutePath()),progress);
         if (!prepared(out)) throw new IOException("Preparação incompleta; consulte o log de instalação");
         return out;
+    }
+
+    void applyPatches(File prepared,Consumer<String> progress) throws Exception {
+        install();
+        run(Arrays.asList(new File(root,"python/bin/python3.13").getAbsolutePath(),
+            new File(root,"source/android/device_prepare.py").getAbsolutePath(),
+            "--game",new File(prepared,"tlou-view").getAbsolutePath(),"--out",prepared.getAbsolutePath(),
+            "--options",PortSettings.patchOptions(context).getAbsolutePath(),"--patch-only"),progress);
     }
 
     File extract(File pkg, File parent, Consumer<String> progress) throws Exception {
