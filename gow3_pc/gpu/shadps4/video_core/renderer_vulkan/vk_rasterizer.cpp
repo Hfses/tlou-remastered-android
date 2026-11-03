@@ -6859,9 +6859,16 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
         return size;
     }();
     if (expected_scene.first && cb_descs[0].first) {
-        const bool requested = state.width == expected_scene.first &&
-                               state.height == expected_scene.second;
-        if (requested || (state.width == 1920 && state.height == 1080)) {
+        const float viewport_width = std::abs(regs.viewports[0].xscale) * 2.0f;
+        const float viewport_height = std::abs(regs.viewports[0].yscale) * 2.0f;
+        // Tiled attachments may be padded; log a matching viewport as well,
+        // retaining the actual image/render-area dimensions in the record.
+        const bool requested = (state.width == expected_scene.first &&
+                                state.height == expected_scene.second) ||
+                               (viewport_width == expected_scene.first &&
+                                viewport_height == expected_scene.second);
+        if (requested || (state.width == 1920 && state.height == 1080) ||
+            (viewport_width == 1920.0f && viewport_height == 1080.0f)) {
             static std::atomic<unsigned> reported{0};
             const unsigned bit = 1u << ((requested ? 0 : 2) + (db_desc.first ? 1 : 0));
             if (!(reported.load(std::memory_order_relaxed) & bit) &&
@@ -6874,8 +6881,8 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
                             "render-area=%ux%u viewport=%.0fx%.0f MRT=%u ps=%016llx\n",
                             expected_scene.first, expected_scene.second,
                             color.size.width, color.size.height, depth.width, depth.height,
-                            state.width, state.height, std::abs(regs.viewports[0].xscale) * 2.0f,
-                            std::abs(regs.viewports[0].yscale) * 2.0f, state.num_color_attachments,
+                            state.width, state.height, viewport_width, viewport_height,
+                            state.num_color_attachments,
                             static_cast<unsigned long long>(ps ? ps->pgm_hash : 0));
             }
         }
