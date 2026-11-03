@@ -385,6 +385,13 @@ void Scheduler::SyncRecording() {
 
 void Scheduler::RecorderThread(std::stop_token stoken) {
     Common::SetCurrentThreadName("gow3:VkRecorder");
+#ifdef __ANDROID__
+    tlou_cpu_policy_apply("Vulkan recorder",1);
+#endif
+#ifndef _WIN32
+    if (clockid_t clock; pthread_getcpuclockid(pthread_self(), &clock) == 0)
+        Gow3Stats::recorder_thread_clock.store(static_cast<int>(clock));
+#endif
 #ifdef _WIN32
     Gow3Profiler::Start(GetCurrentThreadId(), "Vulkan recording thread");
     Gow3Threads::ApplyGpuThreadPriority("Vulkan recording thread");

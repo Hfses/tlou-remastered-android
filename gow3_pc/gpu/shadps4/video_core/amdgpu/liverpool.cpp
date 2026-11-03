@@ -345,6 +345,9 @@ bool g_readback_woken = false;               ///< guarded by the target's submit
 
 void Liverpool::ProcessLoop(std::stop_token stoken) {
     Common::SetCurrentThreadName("shadPS4:GpuCommandProcessor");
+#ifdef __ANDROID__
+    tlou_cpu_policy_apply("GPU command",1);
+#endif
 #ifndef _WIN32
     if (clockid_t clock; pthread_getcpuclockid(pthread_self(), &clock) == 0) {
         Gow3Stats::gpu_thread_clock.store(static_cast<int>(clock));

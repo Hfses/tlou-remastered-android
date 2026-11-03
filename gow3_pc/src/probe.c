@@ -8,6 +8,9 @@
 #include "runtime.h"
 #include "guest_cpu.h"
 #include "cpu_check.h"
+#ifdef __ANDROID__
+#include "android_cpu_policy.h"
+#endif
 #include "red_zone.h"
 #include "orb_hook.h"
 #include "cheat_hook.h"
@@ -1006,6 +1009,9 @@ void runtime_restart(void) {
 
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
+#ifdef __ANDROID__
+    tlou_cpu_policy_prepare();
+#endif
 #ifndef _WIN32
     /* Keep host heap objects handed to the guest (thread handles, TLS) in the
        non-PIE brk heap, i.e. below 1 TiB: the guest packs pointers into 40 bits. */
@@ -1388,6 +1394,9 @@ int main(int argc, char **argv) {
 #else
     guest_cpu_thread_stack(stack+MAIN_STACK-64, MAIN_STACK-64);
     const uint64_t entry_args[2]={(uint64_t)(uintptr_t)&params,guest_cpu_host_function((void *)guest_exit)};
+#ifdef __ANDROID__
+    tlou_cpu_policy_apply("guest main",1);
+#endif
     guest_cpu_call((uintptr_t)(image+entry),2,entry_args);
 #endif
 #endif

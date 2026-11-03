@@ -8,6 +8,9 @@
 #define _GNU_SOURCE
 #include "runtime.h"
 #include "guest_cpu.h"
+#ifdef __ANDROID__
+#include "android_cpu_policy.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -347,6 +350,9 @@ static void apply_guest_scheduling(GuestThread *t,HANDLE h,const char *why) {
 #endif
 static void *host_start(void *p) {
     GuestThread *t=p;
+#ifdef __ANDROID__
+    tlou_cpu_policy_apply(NULL,0);
+#endif
     attach(t);
     set_host_name(t->name);
 #ifdef _WIN32

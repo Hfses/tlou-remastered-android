@@ -13,6 +13,7 @@
 
 #include <cstdlib>
 #include "gow3_threads.h"
+#include "gow3_toggles.h"
 #include "gow3_profiler.h"
 
 #include <array>
@@ -160,6 +161,13 @@ private:
 
     void Run(std::stop_token stop) {
         Common::SetCurrentThreadName("gow3:DrawRec");
+#ifdef __ANDROID__
+        tlou_cpu_policy_apply("draw recording",1);
+#endif
+#ifndef _WIN32
+        if (clockid_t clock; pthread_getcpuclockid(pthread_self(), &clock) == 0)
+            Gow3Stats::draw_thread_clock.store(static_cast<int>(clock));
+#endif
 #ifdef _WIN32
         Gow3Profiler::Start(GetCurrentThreadId(), "draw recording thread");
         Gow3Threads::ApplyGpuThreadPriority("draw recording thread");

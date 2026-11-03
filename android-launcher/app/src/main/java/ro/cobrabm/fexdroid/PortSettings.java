@@ -24,6 +24,7 @@ final class PortSettings {
         String resolution=p.getString("resolution","original");
         env.put("TLOU_EXPECT_SCENE_SIZE",resolution.equals("540")?"960x540":
             resolution.equals("720")?"1280x720":resolution.equals("360")?"640x360":"1920x1080");
+        env.put("TLOU_FAST_RENDER_CORES",p.getBoolean("fast_render_cores",true)?"1":"0");
         env.put("GOW3_VSYNC",p.getBoolean("vsync",true)?"1":"0");
         env.put("GOW3_FPS_LIMIT",p.getString("fps_limit","60"));
         env.put("GOW3_FRAMES_AHEAD",p.getString("frames_ahead","1"));
@@ -48,7 +49,7 @@ final class PortSettings {
     static String experimentReport(Context context,Map<String,String> env) {
         StringBuilder result=new StringBuilder("TLOU A/B: resolution=")
             .append(prefs(context).getString("resolution","original"));
-        for(String key:new String[]{"GOW3_READBACKS","GOW3_FRAMES_AHEAD",
+        for(String key:new String[]{"TLOU_FAST_RENDER_CORES","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
                 "GOW3_ASYNC_SHADERS","GOW3_PREP_POOL","GOW3_CPU_TRIMS",
                 "GOW3_PREFETCH_PIPELINES","GOW3_PARALLEL_PIPELINES",
                 "GOW3_PREP_WORKERS"})

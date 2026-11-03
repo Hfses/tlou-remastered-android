@@ -9,6 +9,9 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#ifdef __ANDROID__
+#include "gow3_threads.h"
+#endif
 #include "common/rdtsc.h"
 #include "common/arch.h"
 
@@ -87,6 +90,9 @@ public:
 private:
     void Run(std::stop_token stop) {
         Common::SetCurrentThreadName("gow3:TexBind");
+#ifdef __ANDROID__
+        tlou_cpu_policy_apply(nullptr,0);
+#endif
         on_helper = true;
         u64 seen = 0;
         while (!stop.stop_requested()) {

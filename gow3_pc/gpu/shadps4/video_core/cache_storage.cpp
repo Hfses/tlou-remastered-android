@@ -13,6 +13,9 @@
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 
 #include <miniz.h>
+#ifdef __ANDROID__
+#include "gow3_threads.h"
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -37,6 +40,9 @@ namespace Storage {
 void ProcessIO(const std::stop_token& token) {
     std::stop_callback stop{token, [] { io_queue.Close(); }};
     Common::SetCurrentThreadName("shadPS4:PipelineCacheIO");
+#ifdef __ANDROID__
+    tlou_cpu_policy_apply(nullptr,0);
+#endif
     io_queue.Run();
 }
 

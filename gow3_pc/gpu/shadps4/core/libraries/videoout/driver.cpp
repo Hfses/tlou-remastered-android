@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <array>
+#include <cstdint>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -383,6 +385,25 @@ static void LogFrameEvent(char kind) {
     }
 }
 
+// CPU time of the four critical threads, sampled only at five-second summaries.
+static std::array<std::int64_t,4> ReadRendererCpuTimes() {
+    std::array<std::int64_t,4> result{-1,-1,-1,-1};
+#ifdef __linux__
+    static const int main_clock = [] {
+        const char* value=std::getenv("TLOU_MAIN_CPU_CLOCK");
+        return value ? static_cast<int>(std::strtol(value,nullptr,10)) : -1;
+    }();
+    const int clocks[4]={main_clock,Gow3Stats::gpu_thread_clock.load(),Gow3Stats::draw_thread_clock.load(),
+                        Gow3Stats::recorder_thread_clock.load()};
+    for (unsigned i=0;i<4;++i) {
+        timespec time{};
+        if (clocks[i]!=-1 && clock_gettime(static_cast<clockid_t>(clocks[i]),&time)==0)
+            result[i]=std::int64_t(time.tv_sec)*1000000000+time.tv_nsec;
+    }
+#endif
+    return result;
+}
+
 void VideoOutDriver::Flip(const Request& req) {
     LogFrameEvent('P');
     // Update HDR status before presenting, then present the frame (gow3: on the swap thread).
@@ -403,12 +424,21 @@ void VideoOutDriver::Flip(const Request& req) {
         static auto start = Clock::now(), last = start;
         static u32 frames = 0;
         static double worst = 0;
+        static auto cpu_previous = ReadRendererCpuTimes();
         const auto now = Clock::now();
         worst = std::max(worst, std::chrono::duration<double,std::milli>(now-last).count());
         last = now;
         ++frames;
         const double window = std::chrono::duration<double>(now-start).count();
         if (window >= 5.0) {
+            const auto cpu_now=ReadRendererCpuTimes();
+            std::array<double,4> busy{-1,-1,-1,-1};
+            for (unsigned i=0;i<4;++i)
+                if (cpu_previous[i]>=0 && cpu_now[i]>=cpu_previous[i])
+                    busy[i]=100.0*double(cpu_now[i]-cpu_previous[i])/(window*1e9);
+            cpu_previous=cpu_now;
+            std::printf("TLOU CPU critical: main=%.1f%% command=%.1f%% draw=%.1f%% recorder=%.1f%% "
+                        "(100%%=one-core CPU time; -1=unavailable)\n",busy[0],busy[1],busy[2],busy[3]);
             std::printf("TLOU frame summary: %.1f flips/s worst=%.1fms compiles=%u "
                         "main-compile=%.1fms worker-compile=%.1fms wait=%.1fms pending-draws=%u\n",
                         frames/window,worst,Vulkan::g_gow3_compiles.exchange(0),
