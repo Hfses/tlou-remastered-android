@@ -133,6 +133,16 @@ def write_selected(source, prepared, options):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     elf_path = prepared / "eboot.elf"
+    if not elf_path.is_file():
+        # Imported prepared folders may contain only the linked image. Rebuild
+        # the inspection ELF from the validated SELF without relinking the game.
+        spec = importlib.util.spec_from_file_location("tlou_owned_self", source / "gow3_pc/scripts/prepare.py")
+        inspector = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inspector)
+        raw, _, _, _, _ = inspector.parse_self(game_self.read_bytes())
+        inspection_temp = prepared / "eboot.elf.new"
+        inspection_temp.write_bytes(raw)
+        inspection_temp.replace(elf_path)
     elf = elf_path.read_bytes()
     phoff = struct.unpack_from("<Q", elf, 0x20)[0]
     size, count = struct.unpack_from("<HH", elf, 0x36)
