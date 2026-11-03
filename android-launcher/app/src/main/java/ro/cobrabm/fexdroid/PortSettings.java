@@ -32,7 +32,8 @@ final class PortSettings {
     }
     static String summary(Context context) {
         SharedPreferences p=prefs(context); String r=p.getString("resolution","original");
-        return (r.equals("original")?"Resolução original":r+"p")+"  ·  "+p.getString("fps_limit","60")+" FPS  ·  "+
+        String limit=p.getString("fps_limit","60");
+        return (r.equals("original")?"Resolução original":r+"p")+"  ·  "+(limit.equals("0")?"Sem limite":limit+" FPS")+"  ·  "+
             (p.getBoolean("vsync",true)?"VSync ligado":"VSync desligado");
     }
 }
