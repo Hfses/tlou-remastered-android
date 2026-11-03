@@ -92,14 +92,16 @@ final class PortMenu {
             row("Análise de desempenho",()->go("profiling"));
             action("Ver logs",actions::logs);if(!inGame)action("Exportar logs ZIP",actions::exportLogs);
             if(inGame)action("Voltar ao launcher",actions::exitGame);
-            note("TLOU Remastered  ·  Daedalus v0.13");
+            note("TLOU Remastered  ·  Daedalus v0.14");
         } else if(section.equals("video")) {
             heading("VÍDEO E DESEMPENHO");note("Aplicados ao iniciar o jogo. Compare as opções no mesmo cenário.");
             choice("resolution","Resolução interna (patch de eboot)",new String[]{"Original (referência)","1280 × 720 · experimental","960 × 540 · experimental","640 × 360 · experimental"},new String[]{"original","720","540","360"},"original");
             note("540p/360p podem causar bugs e reduzir FPS: o patch altera dimensões internas, mas não garante que todos os buffers e passes sejam reduzidos. Volte para Original se houver regressão.");
             choice("readback","Readback (independente da resolução)",new String[]{"1 · Relaxado (padrão)","2 · Preciso (mais sincronização)"},new String[]{"1","2"},"1");
             note("Readback 2 NÃO é ativado automaticamente em 720/540/360p. Teste o mesmo cenário antes e depois.");
-            toggle("batch_dma_uploads","Agrupar uploads de memória GPU",true);
+            toggle("mapped_readbacks","Readback direto de buffers",true);
+            note("Lê a memória compartilhada após esperar os dados da GPU. Desligue para comparar a cópia intermediária anterior; requer reabrir o jogo.");
+            toggle("batch_dma_uploads","Agrupar uploads de memória GPU",false);
             note("Agrupa cópias de buffers por arena. Desligue para comparar o caminho anterior na mesma cena; requer reabrir o jogo.");
             toggle("fast_render_cores","Threads nos núcleos rápidos (experimental)",false);
             note("Requer reabrir o jogo. Usa apenas CPUs permitidas pelo Android; desligue para comparar com o agendamento do sistema.");

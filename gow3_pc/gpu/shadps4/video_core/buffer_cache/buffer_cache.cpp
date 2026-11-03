@@ -28,6 +28,7 @@
 #include "video_core/buffer_cache/buffer.h"
 #include "video_core/buffer_cache/buffer_cache.h"
 #include "video_core/buffer_cache/memory_tracker.h"
+#include "video_core/buffer_cache/mapped_readback_plan.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
@@ -1880,6 +1881,76 @@ void BufferCache::DownloadRanges(std::span<const std::pair<VAddr, u64>> ranges) 
     if (total_size_bytes == 0) {
         return;
     }
+    // Log 20: ~9400 synchronous downloads / 5 s, predominantly small SRT tables.
+    // Coherent mapped arenas already expose the source bytes after their writing
+    // submission's HOST_READ barrier. Avoid a second GPU copy and an unrelated
+    // current submission when the source's own submission is already queued.
+    static const bool mapped_reads = [] {
+        const char* env = std::getenv("TLOU_MAPPED_READBACKS");
+        return env && env[0] == '1';
+    }();
+    struct MappedStats {
+        u64 direct{}, bytes{}, no_submit{}, fallback{};
+        std::chrono::steady_clock::time_point at = std::chrono::steady_clock::now();
+    };
+    static MappedStats mapped_stats;
+    const auto report = [] {
+        const auto now = std::chrono::steady_clock::now();
+        if (now - mapped_stats.at >= std::chrono::seconds(5)) {
+            std::printf("TLOU mapped readbacks (5 s): direct=%llu bytes=%llu no-extra-submit=%llu staging-fallback=%llu\n",
+                (unsigned long long)mapped_stats.direct, (unsigned long long)mapped_stats.bytes,
+                (unsigned long long)mapped_stats.no_submit, (unsigned long long)mapped_stats.fallback);
+            mapped_stats = MappedStats{};
+        }
+    };
+    const auto finish_ranges = [&] {
+        for (const auto& [address, size] : ranges) if (size != 0) {
+            EraseLazyPages(address, size);
+            memory_tracker->UnmarkRegionAsGpuModified(address, size);
+        }
+    };
+    const auto coherent = vk::MemoryPropertyFlagBits::eHostCoherent;
+    if (mapped_reads && arena_host_mapped && scheduler.host_read_barrier &&
+        (instance.GetMemoryProperties().memoryTypes[arena_memory_type_index].propertyFlags & coherent) &&
+        total_size_bytes <= MaxMappedReadbackBytes) {
+        const u64 current_tick = scheduler.CurrentTick();
+        const auto plan = [&]() -> std::optional<MappedReadbackPlan> {
+            std::shared_lock lock{gpu_ranges_mutex};
+            return PlanMappedReadback(std::span{pending}, total_size_bytes, current_tick,
+                [this](u64 address) -> ReadbackMapping {
+                    const auto it = resident_ranges.Find(address >> block_shift);
+                    if (it == resident_ranges.end() || !it->mapped ||
+                        (it->offset & ((u64{1} << block_shift) - 1))) return {};
+                    const u64 base = it->start << block_shift;
+                    const u64 end = it->end << block_shift;
+                    if (address < base || address >= end) return {};
+                    return {it->mapped + it->offset + (address - base), end - address};
+                }, [this](u64 page) {
+                    u64 tick = 0;
+                    if (const auto w = gpu_write_window_tick.find(page >> 8); w != gpu_write_window_tick.end())
+                        tick = w->second;
+                    if (const auto p = gpu_write_page_tick.find(page); p != gpu_write_page_tick.end())
+                        tick = std::max(tick, p->second);
+                    return tick;
+                });
+        }(); // release the cache history lock before Wait can submit callbacks
+        if (plan) {
+            std::vector<u8> snapshot(total_size_bytes);
+            if (CopyMappedReadback(*plan, std::span{snapshot}, [this](u64 tick) { scheduler.Wait(tick); })) {
+                // Same lazy-page / newer guest-byte merge as the staging path.
+                // Never publish the mapping by a raw guest memcpy.
+                for (const auto& p : pending)
+                    WriteBackGpuData(p.address, snapshot.data() + p.offset, p.size);
+                finish_ranges();
+                ++mapped_stats.direct;
+                mapped_stats.bytes += total_size_bytes;
+                mapped_stats.no_submit += plan->tick < current_tick;
+                report();
+                return;
+            }
+        }
+    }
+    if (mapped_reads) { ++mapped_stats.fallback; report(); }
     const auto download = staging_pool.Request(total_size_bytes, VideoCore::MemoryType::HostCached);
     for (size_t i = 0; i < pending.size();) {
         boost::container::small_vector<vk::BufferCopy, 16> copies;
@@ -1898,12 +1969,7 @@ void BufferCache::DownloadRanges(std::span<const std::pair<VAddr, u64>> ranges) 
     for (const auto& p : pending) {
         WriteBackGpuData(p.address, download.mapped + p.offset, p.size);
     }
-    for (const auto& [address, size] : ranges) {
-        if (size != 0) {
-            EraseLazyPages(address, size);
-            memory_tracker->UnmarkRegionAsGpuModified(address, size);
-        }
-    }
+    finish_ranges();
 }
 
 void BufferCache::DownloadMemory(const Buffer* arena, VAddr device_addr, u64 size) {
