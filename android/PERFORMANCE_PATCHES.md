@@ -1,105 +1,88 @@
-# TLOU Android: perfil de desempenho validado
+# TLOU Android: resolução do Bachata Plus 0.2.7
 
-Perfil exclusivo do SELF fornecido em 03/11/2026:
-`e5f0aa322f60bd90637cc10d83de08c77885b1921084021c630e04ed3d6febf7`.
-Título CUSA00552, versão base 1.00, entrada ELF `0x56d9f0`.
+SELF validado: `e5f0aa322f60bd90637cc10d83de08c77885b1921084021c630e04ed3d6febf7`,
+CUSA00552 base 1.00, entrada `0x56d9f0`. Nenhum binário do jogo é incluído.
 
-Origem: XMLs de TLOU incluídos no runtime do Bachata S4+ v0.2.7 P36,
-`TheLastOfUsRemastered_CUSA00552_Performance.xml` e assinaturas equivalentes
-em `TheLastOfUsRemastered_CUSA00554.xml`. Foram removidos os `0x400000`
-da base usada pelo Bachata; os endereços abaixo são relativos ao ELF.
+## Diferença encontrada na 0.9
 
-| Opção | Endereço principal | Validação |
+O APK oficial Bachata S4 Plus 0.2.7 contém dois conjuntos distintos:
+
+| XML | Região | Perfil de resolução |
 |---|---|---|
-| SSAO desativado | `0x946363` | Imediato e instrução MOV completos |
-| Motion blur desativado | `0x9463e2`, `0x946824` | Duas instruções MOV |
-| Profundidade de campo desativada | `0x9463fe` | MOV do campo de configuração |
-| Bloom desativado | `0x9464a4` | MOV completo com máscara dos campos |
-| Sombras solares desativadas | `0x8efd22` | Salto e bloco anterior; destino preservado |
-| Subsurface desativado | `0x8f2490` | Salto e teste anterior; destino preservado |
-| 720p | `0x9103a0`, `0x9104f2` | Inicialização e todos os modos usam 1280×720 |
-| 540p e 360p | `0x910677`–`0x9106ed` | Inteiros, RAX combinado, floats e downsample coerentes |
+| `TheLastOfUsRemastered_CUSA00552_Performance.xml` | CUSA00552 | Simplificado: 1 escrita em 720p, 12 em 540p |
+| `TheLastOfUsRemastered.xml` | CUSA00556 | Completo: 32 escritas em cada resolução |
 
-A seleção de resolução é exclusiva. Em 540p/360p, os floats são convertidos
-com VCVTSI2SS a partir dos próprios campos inteiros alterados. XORPS limpa as
-lanes superiores de XMM0/XMM1 antes da conversão, preservando o resultado
-completo das instruções VMOVSS originais, inclusive quando a entrada contém
-registradores com lanes não zeradas. A variante antiga
-que gravava dimensões inteiras sobre instruções VMOVSS de 360p não é usada.
-Não foram transportados o workaround de memória de macOS nem a remoção total
-do watchdog: as correções existentes de jobs e timeout continuam ativas.
+A implementação anterior partiu do XML simplificado. A 0.9 acrescentou
+construtor e despacho por enum, mas deixou intactos o setter personalizado,
+a inicialização global ao carregar configurações e o consumidor que fornece
+as dimensões à criação da cena. Portanto seus testes de setters não provavam
+a resolução realmente usada durante o jogo. Os logs 9/10 confirmam aplicação
+dos patches (23/34 escritas com todos os seis efeitos desligados), não alvos 540p.
 
-Validação real executada com Unicorn 2.1.4 sobre o eboot fornecido:
-720p = 1280/720, 540p = 960/540, 360p = 640/360; confirmados os campos inteiros,
-os floats XMM0/XMM1 e o tamanho combinado em RAX. A revisão 0.9 executa o
-construtor e a função de seleção desde sua entrada: 5 modos × 4 variantes
-de frequência × 3 resoluções (60 combinações), incluindo a cauda compartilhada
-até a notificação externa. A versão anterior só testava o trecho a partir de
-`0x9105fa`: não cobria a inicialização 1080p nem os desvios dos modos 2/3.
-Agora os campos de inicialização são alterados e o despacho em `0x9104f2`
-usa o bloco reduzido após preservar o registro de modo/frequência.
-Todas as assinaturas dos
-seis efeitos e dos três perfis coincidem com o SELF. Isso valida o código e os
-endereços, sem afirmar qualidade visual ou ganho de FPS já medidos no aparelho.
+A 0.10 usa **as mesmas 32 escritas do perfil completo do Bachata 0.2.7**,
+removendo `0x400000` dos endereços XML. Todos os 32 trechos originais de cada
+perfil também coincidem com o SELF CUSA00552 fornecido. O conjunto substitui
+inteiramente a implementação parcial, sem acumular saltos antigos.
 
-Para repetir com a própria cópia: `python tools/validate_tlou_performance.py /caminho/eboot.bin`
-(requer Unicorn). Nenhum binário do jogo é armazenado no repositório.
+| Caminho | Endereços principais | Comportamento do Bachata portado |
+|---|---|---|
+| Construtor | `0x9103bb`–`0x910432` | Tamanhos e downsample selecionados |
+| Configuração por enum | `0x9104f2` | Encaminha ao setter completo |
+| Setter personalizado | `0x910740` | Força tamanho da cena mesmo em chamadas indiretas |
+| Inicialização global/configuração salva | `0x910b22`–`0x910ba0` | Impede restaurar 1080p nesse caminho |
+| Consumidor da cena | `0x91adbc` | Fornece tamanho selecionado à alocação |
+| Buffers de saída/AA | `0x92ef1a`, `0x92ef7d`, `0x92efc0`, `0x92f00d` | Mantém tamanhos nativos 1920×1080 e 960×540 |
+| Composição e AA de saída | `0x91f6e8`, `0x91a37a`, `0x9d4023` | Mantém saída nativa e seus inversos |
+| Viewport de vídeo | `0x8e441c`, `0x910580` | Vídeos usam viewport nativo separado da cena |
 
-O launcher gera `patches.bin` por troca atômica e registra `patch-validation.json`.
-Alterar patches não repete a extração nem a ligação do jogo. Original regenera
-somente as correções de estabilidade. Uma assinatura divergente impede o início
-com o perfil solicitado e preserva o arquivo de patches anterior.
+A fidelidade inclui os parâmetros de aspecto do próprio Bachata: o caminho
+por enum passa 1.0 ao setter; chamadas diretas preservam o parâmetro recebido.
+Não foram introduzidas alterações adicionais de aspecto por suposição.
 
-## Opções adicionais de desempenho
+## Origem verificável
 
-O menu expõe VSync, limite de apresentação, fila de renderização 0/1/2,
-compilação assíncrona de shaders e readback 1/2, independente da resolução. Os padrões mantêm
-resolução original, efeitos originais e o caminho de renderização já funcional.
-HUD, opacidade/posição dos controles e proporção da apresentação mudam na hora;
-patches e opções do runtime são aplicados na próxima abertura. FSR temporal,
-leituras atrasadas e ajustes de temporização da lógica do jogo não foram ativados.
+APK: https://github.com/erickmendes22/Bachata-S4-Plus/releases/tag/0.2.7
 
+- SHA256 do APK: `35c6fad39430e54aba561877953323e03b322a589a44442931317450e0b952d8`
+- SHA256 do XML completo: `b6e6fe68d8009128368a96d4debd78cb8998674e71d8edd3c5876a6b8b28a854`
+- As duas cópias de patches no runtime (normal/user) são iguais.
+- Os bytes completos também coincidem com o relatório histórico R22; a fonte
+  principal desta revisão é o XML extraído do APK 0.2.7, não apenas o relatório.
+- O teste de paridade compara endereço, comprimento e bytes de todas as 32
+  escritas de cada perfil com hashes extraídos desse XML.
 
-## A/B de novembro de 2026: não misturar resolução com readback
+## Validação e limites
 
-O launcher antigo mudava automaticamente `GOW3_READBACKS` para 2 sempre que a resolução
-era diferente de Original. O log de 03/11 mostra 540p selecionado, porém saída
-`1920x1080`, sincronizações de SRT e páginas protegidas; portanto não havia
-isolamento de variáveis na comparação de FPS. A saída 1080p pode ser o buffer
-de apresentação e não prova a resolução efetiva da cena.
+`python tools/validate_tlou_performance.py /caminho/eboot.bin` verifica todas
+as assinaturas e executa: construtor, 20 combinações de modo/frequência por
+resolução, setter personalizado, inicialização global, consumidor da cena,
+as quatro chamadas de criação de buffers nativos e os caminhos de vídeo/AA.
+Usa Unicorn 2.1.4 para fluxo/argumentos e execução nativa x86-64 com AVX para
+a aritmética dos setters. Um teste mínimo mostrou VMULSS retornando zero no
+Unicorn usado aqui; não se interpreta esse resultado como defeito do jogo.
+A execução nativa isola os setters e substitui apenas a notificação externa
+por RET; não inicia o loop do jogo. Requer host x86-64 com AVX.
 
-Agora a escolha de readback é **independente** da resolução. Isso remove o
-sobrecusto obrigatório de Precise ao testar 720p/540p/360p, mas **não**
-comprova que os patches de 540p/360p estejam corretos graficamente.
-Alterar os campos do eboot não garante que os alvos de post-processing,
-vídeo e composição sejam escalados. Todos os três presets reduzidos
-continuam experimentais; Original é a referência confiável.
+O preparador continua publicando `patches.bin` atomicamente, com SHA256 do
+SELF e comparação dos bytes originais. Original remove todas as escritas de
+resolução, preservando somente os fixes de estabilidade. Alterações não
+exigem nova extração/ligação do jogo e nunca modificam o SELF do usuário.
 
-Experimentos adicionais, **desligados por padrão**, já têm implementações
-nativas no renderizador desta branch e agora aparecem separadamente no menu:
-`GOW3_PREP_POOL` (reuso de alocações), `GOW3_CPU_TRIMS` (menos CPU por draw),
-`GOW3_PREFETCH_PIPELINES` (pré-compilação), `GOW3_PARALLEL_PIPELINES`
-(compilação paralela, risco visual), e `GOW3_PREP_WORKERS` (Auto/0/2/4/6).
-Nenhum altera o código do jogo, e nenhum tem ganho Android confirmado.
+A 0.10 registra até quatro linhas `TLOU target audit` no renderizador: tamanho
+solicitado, alvos reais de cor/profundidade, área de render, viewport, MRT e
+shader. Isso distingue o alvo consumido de `Output resolution: 1920x1080`, que
+é apenas configuração de saída. Não há captura de quadros, readback extra ou
+espera de GPU nesse registro. Alvos nativos de saída continuam esperados;
+ver apenas um alvo 1080p não significa que a cena 3D use 1080p.
 
-Procedimento: começar com Original, readback 1 e experimentos desligados;
-medir o mesmo trecho de jogo; ativar somente uma opção, reiniciar e
-comparar; se degradar ou causar glitch, desativá-la. Os valores efetivos
-são registrados no `launch.log` como `TLOU A/B`. A ação
-“Desativar todos os experimentos” restaura os knobs novos.
+Os testes verificam a implementação e a paridade com o Bachata, não substituem
+validação visual Android nem medem ganho de FPS no aparelho.
 
+## Desempenho
 
-## Logs 7/8 e revisão 0.9
-
-540p carregou 24 escritas/106 bytes; Original carregou 12 escritas/48 bytes,
-com os seis efeitos desligados nos dois testes. Não era uma falha de salvar a
-seleção: o perfil antigo não cobria todos os caminhos de configuração.
-`Output resolution: 1920x1080 (live)` informa a saída do upscaler, não mede os
-alvos internos do jogo. Os dois logs têm os quatro experimentos desligados e
-não contêm tempos de quadro CPU/GPU; não sustentam promessas de ganho desses
-knobs. A revisão corrige o trabalho de renderização solicitado ao jogo sem
-ativar novos experimentos. Validação no ARM64 real ainda é necessária para
-confirmar imagem, resolução efetivamente consumida e FPS. O setter separado
-de dimensões personalizadas em `0x910740` permanece intacto; não há chamada
-direta a ele no executável analisado. A validação cobre configuração por enum
-e inicialização, não prova cobertura de chamadas indiretas durante o jogo.
+Readback 1/2 permanece independente da resolução. Os seis efeitos e os fixes
+de jobs/timeout continuam iguais. Os experimentos de CPU/pipelines permanecem
+opcionais, desligados por padrão, sem novas opções ou promessas de ganho.
+Nos logs 9/10 os quatro experimentos estavam ligados e `PREP_WORKERS=0`;
+esses testes não isolam o efeito individual. Esta revisão corrige somente o
+conjunto de resolução e sua verificação no renderizador.

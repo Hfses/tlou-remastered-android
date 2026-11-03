@@ -21,6 +21,9 @@ final class PortSettings {
     }
     static void environment(Context context,Map<String,String> env) {
         SharedPreferences p=prefs(context);
+        String resolution=p.getString("resolution","original");
+        env.put("TLOU_EXPECT_SCENE_SIZE",resolution.equals("540")?"960x540":
+            resolution.equals("720")?"1280x720":resolution.equals("360")?"640x360":"1920x1080");
         env.put("GOW3_VSYNC",p.getBoolean("vsync",true)?"1":"0");
         env.put("GOW3_FPS_LIMIT",p.getString("fps_limit","60"));
         env.put("GOW3_FRAMES_AHEAD",p.getString("frames_ahead","1"));

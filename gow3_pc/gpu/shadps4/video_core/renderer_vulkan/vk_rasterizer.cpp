@@ -6848,6 +6848,38 @@ RenderState Rasterizer::BeginRenderingFull(const GraphicsPipeline* pipeline) {
             db_desc.first ? &texture_cache.GetImage(db_desc.first).info : nullptr;
         FrameCapture::BeginPass(colors.data(), state.num_color_attachments, depth);
     }
+    // TLOU: verify consumed attachment dimensions, not merely a patch-file count.
+    // At most four records per process (requested/native, with/without depth).
+    // No frame captures, readbacks, GPU waits or per-frame logging.
+    static const auto expected_scene = [] {
+        std::pair<unsigned, unsigned> size{};
+        if (const char* value = std::getenv("TLOU_EXPECT_SCENE_SIZE")) {
+            if (std::sscanf(value, "%ux%u", &size.first, &size.second) != 2) size = {};
+        }
+        return size;
+    }();
+    if (expected_scene.first && cb_descs[0].first) {
+        const bool requested = state.width == expected_scene.first &&
+                               state.height == expected_scene.second;
+        if (requested || (state.width == 1920 && state.height == 1080)) {
+            static std::atomic<unsigned> reported{0};
+            const unsigned bit = 1u << ((requested ? 0 : 2) + (db_desc.first ? 1 : 0));
+            if (!(reported.load(std::memory_order_relaxed) & bit) &&
+                !(reported.fetch_or(bit, std::memory_order_relaxed) & bit)) {
+                const auto& color = texture_cache.GetImage(cb_descs[0].first).info;
+                const auto depth = db_desc.first
+                    ? texture_cache.GetImage(db_desc.first).info.size : VideoCore::Extent3D{};
+                const auto* ps = pipeline->GetStages()[u32(Shader::SwStage::Fragment)];
+                std::printf("TLOU target audit: requested=%ux%u color0=%ux%u depth=%ux%u "
+                            "render-area=%ux%u viewport=%.0fx%.0f MRT=%u ps=%016llx\n",
+                            expected_scene.first, expected_scene.second,
+                            color.size.width, color.size.height, depth.width, depth.height,
+                            state.width, state.height, std::abs(regs.viewports[0].xscale) * 2.0f,
+                            std::abs(regs.viewports[0].yscale) * 2.0f, state.num_color_attachments,
+                            static_cast<unsigned long long>(ps ? ps->pgm_hash : 0));
+            }
+        }
+    }
     // gow3: object motion vector attachment of G-buffer pipelines.
     if (key.motion_vectors) {
         object_motion->Attach(state, state.width, state.height);

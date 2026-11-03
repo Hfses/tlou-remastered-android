@@ -55,27 +55,30 @@ class PerformancePatches(unittest.TestCase):
             options={key:True for key in profiles.PERFORMANCE_EFFECTS};options['resolution']='360'
             with self.trusted(): profiles.write_selected(ROOT,root,options)
             selected=entries(root/'patches.bin')
-            self.assertEqual(selected[0x91067a],struct.pack('<I',640))
-            self.assertEqual(selected[0x910681],struct.pack('<I',360))
-            self.assertEqual(selected[0x9106ab],bytes.fromhex('0f57c0c5fa2a4708'))
+            self.assertTrue(selected[0x910740].startswith(bytes.fromhex('be80020000ba68010000')))
+            self.assertEqual(selected[0x910b22],struct.pack('<I',640))
+            self.assertEqual(selected[0x910b29],struct.pack('<I',360))
+            self.assertIn(0x91adbc,selected)
+            self.assertIn(0x92ef1a,selected)
             self.assertEqual(selected[0x946363],b'\0')
             self.assertEqual((root/'eboot.elf').read_bytes(),before)
             with self.trusted(): profiles.write_selected(ROOT,root,{})
             restored=entries(root/'patches.bin')
-            self.assertNotIn(0x91067a,restored);self.assertNotIn(0x946363,restored)
+            self.assertNotIn(0x910740,restored);self.assertNotIn(0x910b22,restored);self.assertNotIn(0x946363,restored)
             self.assertEqual(json.loads((root/'patch-validation.json').read_text())['selected'],[])
 
-    def test_every_reduced_profile_covers_constructor_and_mode_dispatch(self):
-        for name,(w,h) in {'720':(1280,720),'540':(960,540),'360':(640,360)}.items():
-            writes={at:bytes.fromhex(new) for at,old,new in profiles.PERFORMANCE_RESOLUTIONS[name] if new}
-            self.assertEqual(writes[0x9104f2],bytes.fromhex('e98001000090909090'))
-            self.assertEqual(0x9104f2+5+struct.unpack('<i',writes[0x9104f2][1:5])[0],0x910677)
-            for at in (0x9103bb,0x9103d0,0x9103e5,0x91042b):
-                self.assertEqual(writes[at],struct.pack('<I',w))
-            for at in (0x9103c2,0x9103d7,0x9103ec,0x910432):
-                self.assertEqual(writes[at],struct.pack('<I',h))
-            self.assertEqual(writes[0x910401],struct.pack('<I',w//8))
-            self.assertEqual(writes[0x910408],struct.pack('<I',h//4))
+    def test_complete_bachata_027_write_parity(self):
+        # Hash of ordered VA/length/bytes extracted from the actual 0.2.7 APK,
+        # TheLastOfUsRemastered.xml. Protects all 32 writes, including native
+        # movie/output separation, rather than just the preset immediates.
+        golden={'720':'7ececeace75c9ce869b9635d137ba0f3decee1fc45daea545149d2476c2c1283',
+                '540':'abaeb0dd67969b7c43293962e14a0d60fbcd3a9093b8df4a4ad54cfeb03e307b',
+                '360':'a2a8ecfdd42436ed9fb200796a335d8a254bb365dbd3ca10ed7ea82826e3a522'}
+        for name,changes in profiles.PERFORMANCE_RESOLUTIONS.items():
+            writes=[(at,bytes.fromhex(new)) for at,old,new in changes if new]
+            self.assertEqual(len(writes),32)
+            blob=b''.join(struct.pack('<QQ',at,len(data))+data for at,data in writes)
+            self.assertEqual(hashlib.sha256(blob).hexdigest(),golden[name])
 
     def test_bad_instruction_preserves_previous_patch_file(self):
         with tempfile.TemporaryDirectory() as tmp:
