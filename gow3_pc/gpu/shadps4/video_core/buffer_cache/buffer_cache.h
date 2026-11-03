@@ -27,6 +27,7 @@
 #include "common/interval_set.h"
 #include "common/types.h"
 #include "video_core/buffer_cache/buffer.h"
+#include "video_core/buffer_cache/dma_upload_batch.h"
 #include "video_core/buffer_cache/fault_manager.h"
 #include "video_core/buffer_cache/range_set.h"
 #include "video_core/renderer_vulkan/vk_semaphore.h"
@@ -402,8 +403,10 @@ private:
     /// count (not rewritten by the GPU since).
     u64 PendingReadbackTick(VAddr address, u64 size, bool newest_only) const;
 
+    using DmaBatch = DmaUploadBatch<const Buffer*, vk::BufferCopy>;
+    void FlushDmaUpload(const Buffer* arena, std::span<vk::BufferCopy> copies, u64 bytes);
     bool SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 size, bool is_written,
-                           bool is_texel_buffer);
+                           bool is_texel_buffer, DmaBatch* dma_batch = nullptr);
 
     /// gow3: batched small copies on the copy threads (Gow3Copy::QueueCopy).
     static void RunGuestCopy(const Gow3Copy::Item& item);

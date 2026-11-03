@@ -23,3 +23,6 @@ cc -std=c11 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_crash_guest_dump.c -o "
 
 cc -std=c11 -O2 -Wall -Wextra -Werror -pthread gow3_pc/tests/test_android_cpu_policy.c -o "$test_dir/cpu-policy"
 "$test_dir/cpu-policy"
+
+g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_dma_upload_batch.cpp -o "$test_dir/dma-batch"
+"$test_dir/dma-batch"

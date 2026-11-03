@@ -89,16 +89,19 @@ final class PortMenu {
             row("Vídeo e desempenho",()->go("video"));row("Patches do jogo",()->go("patches"));
             row("Controles e HUD",()->go("hud"));
             if(!inGame){row("Jogo e drivers",()->go("library"));}
+            row("Análise de desempenho",()->go("profiling"));
             action("Ver logs",actions::logs);if(!inGame)action("Exportar logs ZIP",actions::exportLogs);
             if(inGame)action("Voltar ao launcher",actions::exitGame);
-            note("TLOU Remastered  ·  Daedalus v0.12");
+            note("TLOU Remastered  ·  Daedalus v0.13");
         } else if(section.equals("video")) {
             heading("VÍDEO E DESEMPENHO");note("Aplicados ao iniciar o jogo. Compare as opções no mesmo cenário.");
             choice("resolution","Resolução interna (patch de eboot)",new String[]{"Original (referência)","1280 × 720 · experimental","960 × 540 · experimental","640 × 360 · experimental"},new String[]{"original","720","540","360"},"original");
             note("540p/360p podem causar bugs e reduzir FPS: o patch altera dimensões internas, mas não garante que todos os buffers e passes sejam reduzidos. Volte para Original se houver regressão.");
             choice("readback","Readback (independente da resolução)",new String[]{"1 · Relaxado (padrão)","2 · Preciso (mais sincronização)"},new String[]{"1","2"},"1");
             note("Readback 2 NÃO é ativado automaticamente em 720/540/360p. Teste o mesmo cenário antes e depois.");
-            toggle("fast_render_cores","Threads principais nos núcleos rápidos",true);
+            toggle("batch_dma_uploads","Agrupar uploads de memória GPU",true);
+            note("Agrupa cópias de buffers por arena. Desligue para comparar o caminho anterior na mesma cena; requer reabrir o jogo.");
+            toggle("fast_render_cores","Threads nos núcleos rápidos (experimental)",false);
             note("Requer reabrir o jogo. Usa apenas CPUs permitidas pelo Android; desligue para comparar com o agendamento do sistema.");
             row("Experimentos de CPU / pipelines",()->go("experiments"));
             choice("fps_limit","Limite de FPS",new String[]{"30 FPS","60 FPS","Sem limite de apresentação"},new String[]{"30","60","0"},"60");
@@ -123,6 +126,12 @@ final class PortMenu {
                     .putString("prep_workers","auto").apply();
                 actions.changed();render();
             });
+        } else if(section.equals("profiling")) {
+            heading("ANÁLISE DE DESEMPENHO");
+            toggle("gpu_profile","Medir passes da GPU",false);
+            note("Reabra o jogo após mudar. Registra tempos por passe, shader e transferência no ZIP de logs. A medição acrescenta trabalho: deixe desligada ao comparar FPS.");
+            action("Ver logs",actions::logs);
+            if(!inGame)action("Exportar logs ZIP",actions::exportLogs);
         } else if(section.equals("patches")) {
             heading("PATCHES · CUSA00552 1.00");note("Adaptados do Bachata S4+. O eboot e as instruções são validados ao iniciar. Alterações exigem reabrir o jogo.");
             toggle("ssao","Desativar SSAO",false);toggle("motion_blur","Desativar motion blur",false);

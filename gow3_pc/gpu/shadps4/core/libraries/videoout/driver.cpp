@@ -425,6 +425,17 @@ void VideoOutDriver::Flip(const Request& req) {
         static u32 frames = 0;
         static double worst = 0;
         static auto cpu_previous = ReadRendererCpuTimes();
+        // These counters are already collected by the runtime. Read cumulative
+        // deltas, so full profiling remains off and no extra per-draw timers run.
+        const auto read_transfer_stats = [] {
+            return std::array<u64,11>{Gow3Stats::buffer_upload_bytes.load(),
+                Gow3Stats::buffer_upload_batches.load(),Gow3Stats::gpu_idle_ns.load(),
+                Gow3Stats::tick_wait_ns.load(),Gow3Stats::sync_recording_ns.load(),
+                Gow3Stats::host_copies_wait_ns.load(),Gow3Stats::copy_threads_wait_ns.load(),
+                Gow3Stats::frame_wait_ns.load(),Gow3Stats::submit_lock_ns.load(),
+                Gow3Stats::acquire_ns.load(),Gow3Stats::present_ns.load()};
+        };
+        static auto transfer_previous = read_transfer_stats();
         const auto now = Clock::now();
         worst = std::max(worst, std::chrono::duration<double,std::milli>(now-last).count());
         last = now;
@@ -440,12 +451,25 @@ void VideoOutDriver::Flip(const Request& req) {
             std::printf("TLOU CPU critical: main=%.1f%% command=%.1f%% draw=%.1f%% recorder=%.1f%% "
                         "(100%%=one-core CPU time; -1=unavailable)\n",busy[0],busy[1],busy[2],busy[3]);
             std::printf("TLOU frame summary: %.1f flips/s worst=%.1fms compiles=%u "
-                        "main-compile=%.1fms worker-compile=%.1fms wait=%.1fms pending-draws=%u\n",
+                        "main-compile=%.1fms worker-compile=%.1fms compile-wait=%.1fms pending-draws=%u\n",
                         frames/window,worst,Vulkan::g_gow3_compiles.exchange(0),
                         Vulkan::g_gow3_compile_ns.exchange(0)/1e6,
                         Vulkan::g_gow3_async_ns.exchange(0)/1e6,
                         Vulkan::g_gow3_compile_wait_ns.exchange(0)/1e6,
                         Vulkan::g_gow3_pending_draws.exchange(0));
+            const auto transfer_now=read_transfer_stats();
+            std::array<double,11> delta{};
+            for (unsigned i=0;i<delta.size();++i)
+                if (transfer_now[i]>=transfer_previous[i])
+                    delta[i]=double(transfer_now[i]-transfer_previous[i]);
+            transfer_previous=transfer_now;
+            std::printf("TLOU transfers: uploads=%.1fMiB batches=%.0f; waits over %.2fs: "
+                        "no-submissions=%.1fms gpu-ticks=%.1fms recording=%.1fms "
+                        "host-copies=%.1fms copy-workers=%.1fms free-frame=%.1fms "
+                        "submit-lock=%.1fms acquire=%.1fms present-ipc=%.1fms "
+                        "(instrumented overlapping wall times, not GPU busy time)\n",
+                        delta[0]/1048576.0,delta[1],window,delta[2]/1e6,delta[3]/1e6,
+                        delta[4]/1e6,delta[5]/1e6,delta[6]/1e6,delta[7]/1e6,delta[8]/1e6,delta[9]/1e6,delta[10]/1e6);
             frames=0;worst=0;start=now;
         }
     }

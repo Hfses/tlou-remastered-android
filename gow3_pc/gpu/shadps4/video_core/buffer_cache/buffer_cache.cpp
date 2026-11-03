@@ -5430,12 +5430,27 @@ void BufferCache::ProcessFaultBuffer() {
 }
 
 void BufferCache::SynchronizeDmaBuffers() {
+    static const bool batch_uploads = [] {
+        const char* env = std::getenv("TLOU_BATCH_DMA_UPLOADS");
+        return env && env[0] == '1';
+    }();
+    DmaBatch batch;
     for (const auto& range : resident_ranges) {
         const u64 page = range.start >> (arena_page_bits - block_shift);
         const VAddr device_addr = range.start << block_shift;
         const u64 size = (range.end - range.start) << block_shift;
-        SynchronizeMemory(address_space[page], device_addr, size, false, false);
+        // Read-only synchronization retains the original dirty-page selection.
+        // Batch staging reservations/copy commands, not the resident address span.
+        for (u64 offset = 0; offset < size;) {
+            const u32 bytes = static_cast<u32>(std::min<u64>(size - offset, 1ULL << 30));
+            SynchronizeMemory(address_space[page], device_addr + offset, bytes, false, false,
+                              batch_uploads ? &batch : nullptr);
+            offset += bytes;
+        }
     }
+    batch.Finish([this](const Buffer* arena, std::span<vk::BufferCopy> copies, u64 bytes) {
+        FlushDmaUpload(arena, copies, bytes);
+    });
 }
 
 void BufferCache::SynchronizeDmaRange(VAddr address, u64 size) {
@@ -5848,8 +5863,16 @@ void BufferCache::ReclaimArenaMemory() {
     }
 }
 
+void BufferCache::FlushDmaUpload(const Buffer* arena, std::span<vk::BufferCopy> copies, u64 bytes) {
+    if (const auto* source = UploadCopies(arena, copies, bytes)) {
+        const ProfileCopy mark{scheduler, 0xB0F7'0001ull, "buffer upload (CPU-written guest memory)"};
+        runtime.CopyBuffer(source, arena, copies);
+    }
+}
+
 bool BufferCache::SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 size,
-                                    bool is_written, bool is_texel_buffer) {
+                                    bool is_written, bool is_texel_buffer, DmaBatch* dma_batch) {
+    ASSERT(!dma_batch || (!is_written && !is_texel_buffer));
     boost::container::small_vector<vk::BufferCopy, 4> copies;
     size_t total_size_bytes{};
     const Buffer* src_buffer{};
@@ -5869,7 +5892,18 @@ bool BufferCache::SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 
                 }
             });
         },
-        [&] { src_buffer = UploadCopies(arena, copies, total_size_bytes); });
+        [&] {
+            if (!dma_batch) {
+                src_buffer = UploadCopies(arena, copies, total_size_bytes);
+                return;
+            }
+            const auto flush = [this](const Buffer* target, std::span<vk::BufferCopy> batch, u64 bytes) {
+                FlushDmaUpload(target, batch, bytes);
+            };
+            for (const auto& copy : copies) {
+                dma_batch->Add(arena, copy.dstOffset, copy.size, flush);
+            }
+        });
 
     if (src_buffer) {
         const ProfileCopy mark{scheduler, 0xB0F7'0001ull, "buffer upload (CPU-written guest memory)"};
@@ -5886,6 +5920,7 @@ const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::Buffe
     if (copies.empty()) {
         return nullptr;
     }
+    Gow3Stats::buffer_upload_batches.fetch_add(1, std::memory_order_relaxed);
     // Resolve before launching host copies: a copy-thread fault could deadlock submission.
     for (const auto& copy : copies) {
         texture_cache.ResolveReadbacks(copy.dstOffset, copy.size, true, ReadbackSource::BufferUpload);

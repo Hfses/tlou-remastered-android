@@ -3499,7 +3499,9 @@ void Rasterizer::SyncDmaMemory(const Shader::Info* stage) {
             parse(text);
         }
     }
-    static const bool stats = std::getenv("GOW3_FRAME_STATS") != nullptr;
+    static const bool stats = std::getenv("GOW3_FRAME_STATS") != nullptr ||
+                              EmulatorSettingsImpl::Flag("TLOU_FRAME_SUMMARY", false);
+    const u64 batches_before = Gow3Stats::buffer_upload_batches.load(std::memory_order_relaxed);
     const u64 bytes_before = Gow3Stats::buffer_upload_bytes.load(std::memory_order_relaxed);
     const auto start = std::chrono::steady_clock::now();
     u32 windows = 0;
@@ -3546,19 +3548,20 @@ void Rasterizer::SyncDmaMemory(const Shader::Info* stage) {
         windows = static_cast<u32>(bases.size());
     }
     if (stats) {
-        static u64 calls, bytes, ns, window_count;
+        static u64 calls, bytes, ns, window_count, batches;
         static auto report = std::chrono::steady_clock::now();
         const auto end = std::chrono::steady_clock::now();
         ++calls;
+        batches += Gow3Stats::buffer_upload_batches.load(std::memory_order_relaxed) - batches_before;
         bytes += Gow3Stats::buffer_upload_bytes.load(std::memory_order_relaxed) - bytes_before;
         ns += std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
         window_count += windows;
         if (end - report >= std::chrono::seconds(5)) {
             report = end;
-            std::printf("DMA sync (5 s): %llu calls, %.1f MB uploaded, %.1f ms on the GPU thread, %llu windows\n",
-                        (unsigned long long)calls, bytes / 1e6, ns / 1e6, (unsigned long long)window_count);
+            std::printf("DMA sync (5 s): %llu calls, %.1f MB uploaded, %.1f ms on the GPU thread, %llu windows, %llu upload batches\n",
+                        (unsigned long long)calls, bytes / 1e6, ns / 1e6, (unsigned long long)window_count, (unsigned long long)batches);
             std::fflush(stdout);
-            calls = bytes = ns = window_count = 0;
+            calls = bytes = ns = window_count = batches = 0;
         }
     }
 }

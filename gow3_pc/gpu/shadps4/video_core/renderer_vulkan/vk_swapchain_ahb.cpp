@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include "common/assert.h"
 #include "gow3_settings.h"
+#include "gow3_toggles.h"
 #include "common/logging/log.h"
 #include "imgui/renderer/imgui_core.h"
 #include "sdl_window.h"
@@ -307,6 +308,7 @@ void Swapchain::HandleRelease(Gow3Present::Release& release) {
 }
 
 bool Swapchain::AcquireNextImage() {
+    Gow3Stats::WaitTimer timer{Gow3Stats::acquire_ns};
     if (zero_extent || buffers.empty()) {
         needs_recreation = true;
         return false;
@@ -399,6 +401,7 @@ int Swapchain::ExportPresentReady() {
 }
 
 bool Swapchain::Present() {
+    Gow3Stats::WaitTimer timer{Gow3Stats::present_ns};
     const int fence_fd = ExportPresentReady();
     ++frame_counter;
     if (client.Connected()) {
