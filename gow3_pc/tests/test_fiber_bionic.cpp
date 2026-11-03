@@ -49,6 +49,11 @@ int main() {
         u64 outgoing=0;
         assert(sceFiberRun(&f,1,&outgoing)==0);
         migrated_id=Dispatch();
+        std::thread competing([&] {
+            alignas(16) u64 other_stack[128];
+            assert(sceFiberRunImpl(&f,other_stack,sizeof(other_stack),0,nullptr)==ORBIS_FIBER_ERROR_STATE);
+            assert(f.addr_context==nullptr);
+        }); competing.join();
         u64 rbp=0; assert(sceFiberGetThreadFramePointerAddress(&rbp)==0 && rbp==101);
         assert(sceFiberReturnToThread(7,&resumed)==0);
         assert(f.state==FiberState::Run && outgoing==7);

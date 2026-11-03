@@ -179,12 +179,14 @@ s32 sceFiberRunImpl(OrbisFiber* f,void* memory,u64 bytes,u64 incoming,u64* outgo
     if(!f) return ORBIS_FIBER_ERROR_NULL;
     if(!Valid(f)) return ORBIS_FIBER_ERROR_INVALID;
     if(session.active) return ORBIS_FIBER_ERROR_PERMISSION;
-    if(memory||bytes) {
-        if(!Attach(f,memory,bytes)) return ORBIS_FIBER_ERROR_INVALID;
-    }
     auto expected=FiberState::Idle;
     if(!f->state.compare_exchange_strong(expected,FiberState::Run))
         return ORBIS_FIBER_ERROR_STATE;
+    // Claim ownership before attaching a stack; another worker may be running it.
+    if((memory||bytes) && !Attach(f,memory,bytes)) {
+        f->state=FiberState::Idle;
+        return ORBIS_FIBER_ERROR_INVALID;
+    }
     if(!Prepare(f,incoming)) { f->state=FiberState::Idle; return ORBIS_FIBER_ERROR_RANGE; }
     if(!session.root) session.root=guest_cpu_fiber_create();
     guest_cpu_fiber_save(session.root);
@@ -201,12 +203,14 @@ s32 sceFiberSwitchImpl(OrbisFiber* target,void* memory,u64 bytes,u64 incoming,u6
     if(!target) return ORBIS_FIBER_ERROR_NULL;
     if(!Valid(target)) return ORBIS_FIBER_ERROR_INVALID;
     if(!session.active) return ORBIS_FIBER_ERROR_PERMISSION;
-    if(memory||bytes) {
-        if(!Attach(target,memory,bytes)) return ORBIS_FIBER_ERROR_INVALID;
-    }
     auto expected=FiberState::Idle;
     if(!target->state.compare_exchange_strong(expected,FiberState::Run))
         return ORBIS_FIBER_ERROR_STATE;
+    // Claim ownership before attaching a stack; another worker may be running it.
+    if((memory||bytes) && !Attach(target,memory,bytes)) {
+        target->state=FiberState::Idle;
+        return ORBIS_FIBER_ERROR_INVALID;
+    }
     OrbisFiber* previous=session.active;
     Record& old=RecordFor(previous);
     if (!old.cpu) old.cpu=guest_cpu_fiber_create();
