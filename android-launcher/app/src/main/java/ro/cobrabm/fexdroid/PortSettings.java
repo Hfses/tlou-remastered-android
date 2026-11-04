@@ -30,6 +30,7 @@ final class PortSettings {
         env.put("TLOU_STACK_MAPPED_READBACK",p.getBoolean("stack_mapped_readback",false)?"1":"0");
         env.put("GOW3_FETCH_NO_BLOCK",p.getBoolean("fetch_no_block",false)?"1":"0");
         env.put("GOW3_LAND_ON_GUEST",p.getBoolean("land_on_guest",false)?"1":"0");
+        env.put("TLOU_SRT_DEP_BATCH",p.getBoolean("srt_dep_batch",false)?"1":"0");
         // The normal value is 1024; reducing the threshold lets small truly
         // immutable buffers reach the same tracked, write-guarded arena.
         if(p.getBoolean("static_min_512",false)) env.put("GOW3_STATIC_MIN_BYTES","512");
@@ -66,7 +67,7 @@ final class PortSettings {
     static String experimentReport(Context context,Map<String,String> env) {
         StringBuilder result=new StringBuilder("TLOU A/B: resolution=")
             .append(prefs(context).getString("resolution","original"));
-        for(String key:new String[]{"GOW3_FETCH_NO_BLOCK","GOW3_LAND_ON_GUEST","GOW3_STATIC_MIN_BYTES","TLOU_STACK_MAPPED_READBACK","TLOU_INLINE_SINGLE_COPY","TLOU_SPLIT_CS64","TLOU_MAPPED_FAULT_READBACKS","TLOU_MAPPED_READBACKS","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
+        for(String key:new String[]{"TLOU_SRT_DEP_BATCH","GOW3_FETCH_NO_BLOCK","GOW3_LAND_ON_GUEST","GOW3_STATIC_MIN_BYTES","TLOU_STACK_MAPPED_READBACK","TLOU_INLINE_SINGLE_COPY","TLOU_SPLIT_CS64","TLOU_MAPPED_FAULT_READBACKS","TLOU_MAPPED_READBACKS","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
                 "GOW3_ASYNC_SHADERS","GOW3_PREP_POOL","GOW3_CPU_TRIMS",
                 "GOW3_PREFETCH_PIPELINES","GOW3_PARALLEL_PIPELINES",
                 "GOW3_PREP_WORKERS"})
