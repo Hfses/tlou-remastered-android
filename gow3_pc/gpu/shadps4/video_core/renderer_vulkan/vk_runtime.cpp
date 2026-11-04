@@ -3,6 +3,8 @@
 #include "video_core/renderer_vulkan/image_copy_plan.h"
 #include <unordered_map>
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
 // SPDX-FileCopyrightText: Copyright 2025 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -12,6 +14,7 @@
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
+#include "video_core/renderer_vulkan/vk_inline_copy_record.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "video_core/renderer_vulkan/vk_scene_resolution.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -21,6 +24,16 @@
 #include <vulkan/vulkan_format_traits.hpp>
 
 namespace Vulkan {
+
+namespace {
+const bool tlou_inline_enabled = [] {
+    const char* value = std::getenv("TLOU_INLINE_SINGLE_COPY");
+    return value && value[0] == '1' && value[1] == 0;
+}();
+const bool tlou_inline_report = std::getenv("TLOU_INLINE_SINGLE_COPY") != nullptr;
+std::atomic<u64> tlou_inline_eligible{0};
+std::atomic<u64> tlou_inline_used{0};
+}
 
 static vk::ImageType ConvertImageType(AmdGpu::ImageType type) noexcept {
     switch (type) {
@@ -151,6 +164,18 @@ Runtime::Runtime(const Instance& instance_, Scheduler& scheduler_)
 
 void Runtime::TickFrame() {
     staging_pool.TickFrame();
+    static auto last_copy_report = std::chrono::steady_clock::now();
+    const auto now = std::chrono::steady_clock::now();
+    if (now - last_copy_report >= std::chrono::seconds(5)) {
+        last_copy_report = now;
+        const u64 eligible = tlou_inline_eligible.exchange(0, std::memory_order_relaxed);
+        const u64 used = tlou_inline_used.exchange(0, std::memory_order_relaxed);
+        if (tlou_inline_report) {
+            std::printf("TLOU inline copy record (5 s): eligible=%llu inlined=%llu mode=%d\n",
+                        static_cast<unsigned long long>(eligible),
+                        static_cast<unsigned long long>(used), int(tlou_inline_enabled));
+        }
+    }
 }
 
 void Runtime::CopyBuffer(const VideoCore::Buffer* src, const VideoCore::Buffer* dst,
