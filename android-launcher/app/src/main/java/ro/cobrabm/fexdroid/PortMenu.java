@@ -121,8 +121,6 @@ final class PortMenu {
             note("Evita uma reserva e uma cópia do descritor no gravador Vulkan. Mantém transferências e barreiras; desligado por padrão.");
             toggle("split_cs64","Compute de vértices: grupos de 64 (2 shaders)",false);
             note("Experimento isolado, desligado por padrão: divide o grupo virtual de 1024 em 16 de 64, apenas nos dois shaders mais caros. Dispatch indireto permanece original. Reinicie e compare com o perfil GPU desligado.");
-            toggle("cp_nop_fast","Processador de comandos: ignorar NOPs inertes (SotC PC)",false);
-            note("Adaptação do caminho rápido de PM4 no SotC PC. Preserva flips, marcadores e leitura periódica da fila; imprime quantos NOPs foram evitados. Reinicie o jogo.");
             toggle("mapped_fault_readbacks","Readback direto para acessos da CPU",false);
             note("Evita cópias intermediárias quando a CPU precisa ler dados da GPU. Compare separadamente; requer reabrir o jogo.");
             toggle("prep_pool","Reutilizar buffers de preparação de draws",false);
@@ -134,7 +132,7 @@ final class PortMenu {
                 new String[]{"auto","0","2","4","6"},"auto");
             note("Prefetch e compilação paralela podem mudar travamentos e correção visual. O modo automático de workers é o original.");
             row("Desativar todos os experimentos",()->{
-                prefs.edit().putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("mapped_fault_readbacks",false).putBoolean("cp_nop_fast",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
+                prefs.edit().putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("mapped_fault_readbacks",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
                     .putBoolean("prefetch_pipelines",false).putBoolean("parallel_pipelines",false)
                     .putString("prep_workers","auto").apply();
                 actions.changed();render();
