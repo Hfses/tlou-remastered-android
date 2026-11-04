@@ -24,17 +24,12 @@ final class PortSettings {
         String resolution=p.getString("resolution","original");
         env.put("TLOU_EXPECT_SCENE_SIZE",resolution.equals("540")?"960x540":
             resolution.equals("720")?"1280x720":resolution.equals("360")?"640x360":"1920x1080");
-        env.put("TLOU_MAPPED_FAULT_READBACKS",p.getBoolean("mapped_fault_readbacks",false)?"1":"0");
-        env.put("TLOU_SPLIT_CS64",p.getBoolean("split_cs64",false)?"1":"0");
-        env.put("TLOU_INLINE_SINGLE_COPY",p.getBoolean("inline_single_copy",false)?"1":"0");
-        env.put("TLOU_STACK_MAPPED_READBACK",p.getBoolean("stack_mapped_readback",false)?"1":"0");
-        env.put("GOW3_FETCH_NO_BLOCK",p.getBoolean("fetch_no_block",false)?"1":"0");
-        env.put("GOW3_LAND_ON_GUEST",p.getBoolean("land_on_guest",false)?"1":"0");
-        env.put("TLOU_SRT_DEP_BATCH",p.getBoolean("srt_dep_batch",false)?"1":"0");
-        // The normal value is 1024; reducing the threshold lets small truly
-        // immutable buffers reach the same tracked, write-guarded arena.
-        if(p.getBoolean("static_min_512",false)) env.put("GOW3_STATIC_MIN_BYTES","512");
-        else env.remove("GOW3_STATIC_MIN_BYTES");
+        // Remove unproven recent A/B experiments and any inherited settings.
+        for(String key:new String[]{"TLOU_MAPPED_FAULT_READBACKS","TLOU_SPLIT_CS64",
+                "TLOU_INLINE_SINGLE_COPY","TLOU_STACK_MAPPED_READBACK",
+                "GOW3_FETCH_NO_BLOCK","GOW3_LAND_ON_GUEST","TLOU_SRT_DEP_BATCH",
+                "GOW3_STATIC_MIN_BYTES"}) env.remove(key);
+        env.put("TLOU_FINE_GPU_TICKS",p.getBoolean("fine_gpu_ticks",false)?"1":"0");
         env.put("TLOU_MAPPED_READBACKS",p.getBoolean("mapped_readbacks",true)?"1":"0");
         // Profiling is separate from optimization and off during FPS comparisons.
         // Remove disabled keys: legacy renderer sites test presence, not their value.
@@ -67,7 +62,7 @@ final class PortSettings {
     static String experimentReport(Context context,Map<String,String> env) {
         StringBuilder result=new StringBuilder("TLOU A/B: resolution=")
             .append(prefs(context).getString("resolution","original"));
-        for(String key:new String[]{"TLOU_SRT_DEP_BATCH","GOW3_FETCH_NO_BLOCK","GOW3_LAND_ON_GUEST","GOW3_STATIC_MIN_BYTES","TLOU_STACK_MAPPED_READBACK","TLOU_INLINE_SINGLE_COPY","TLOU_SPLIT_CS64","TLOU_MAPPED_FAULT_READBACKS","TLOU_MAPPED_READBACKS","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
+        for(String key:new String[]{"TLOU_FINE_GPU_TICKS","TLOU_MAPPED_READBACKS","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
                 "GOW3_ASYNC_SHADERS","GOW3_PREP_POOL","GOW3_CPU_TRIMS",
                 "GOW3_PREFETCH_PIPELINES","GOW3_PARALLEL_PIPELINES",
                 "GOW3_PREP_WORKERS"})
