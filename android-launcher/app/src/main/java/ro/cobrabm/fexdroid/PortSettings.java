@@ -25,6 +25,7 @@ final class PortSettings {
         env.put("TLOU_EXPECT_SCENE_SIZE",resolution.equals("540")?"960x540":
             resolution.equals("720")?"1280x720":resolution.equals("360")?"640x360":"1920x1080");
         env.put("TLOU_MAPPED_FAULT_READBACKS",p.getBoolean("mapped_fault_readbacks",false)?"1":"0");
+        env.put("TLOU_SPLIT_CS64",p.getBoolean("split_cs64",false)?"1":"0");
         env.put("TLOU_MAPPED_READBACKS",p.getBoolean("mapped_readbacks",true)?"1":"0");
         // Profiling is separate from optimization and off during FPS comparisons.
         // Remove disabled keys: legacy renderer sites test presence, not their value.
@@ -55,7 +56,7 @@ final class PortSettings {
     static String experimentReport(Context context,Map<String,String> env) {
         StringBuilder result=new StringBuilder("TLOU A/B: resolution=")
             .append(prefs(context).getString("resolution","original"));
-        for(String key:new String[]{"TLOU_MAPPED_FAULT_READBACKS","TLOU_MAPPED_READBACKS","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
+        for(String key:new String[]{"TLOU_SPLIT_CS64","TLOU_MAPPED_FAULT_READBACKS","TLOU_MAPPED_READBACKS","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
                 "GOW3_ASYNC_SHADERS","GOW3_PREP_POOL","GOW3_CPU_TRIMS",
                 "GOW3_PREFETCH_PIPELINES","GOW3_PARALLEL_PIPELINES",
                 "GOW3_PREP_WORKERS"})
