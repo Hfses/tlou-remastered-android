@@ -24,6 +24,7 @@ final class PortSettings {
         String resolution=p.getString("resolution","original");
         env.put("TLOU_EXPECT_SCENE_SIZE",resolution.equals("540")?"960x540":
             resolution.equals("720")?"1280x720":resolution.equals("360")?"640x360":"1920x1080");
+        env.put("TLOU_BATCH_SRT_READBACKS",p.getBoolean("batch_srt_readbacks",false)?"1":"0");
         env.put("TLOU_MAPPED_READBACKS",p.getBoolean("mapped_readbacks",true)?"1":"0");
         env.put("TLOU_BATCH_DMA_UPLOADS",p.getBoolean("batch_dma_uploads",false)?"1":"0");
         env.put("TLOU_FAST_RENDER_CORES",p.getBoolean("fast_render_cores",false)?"1":"0");
@@ -56,7 +57,7 @@ final class PortSettings {
     static String experimentReport(Context context,Map<String,String> env) {
         StringBuilder result=new StringBuilder("TLOU A/B: resolution=")
             .append(prefs(context).getString("resolution","original"));
-        for(String key:new String[]{"TLOU_MAPPED_READBACKS","TLOU_BATCH_DMA_UPLOADS","TLOU_FAST_RENDER_CORES","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
+        for(String key:new String[]{"TLOU_BATCH_SRT_READBACKS","TLOU_MAPPED_READBACKS","TLOU_BATCH_DMA_UPLOADS","TLOU_FAST_RENDER_CORES","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
                 "GOW3_ASYNC_SHADERS","GOW3_PREP_POOL","GOW3_CPU_TRIMS",
                 "GOW3_PREFETCH_PIPELINES","GOW3_PARALLEL_PIPELINES",
                 "GOW3_PREP_WORKERS"})

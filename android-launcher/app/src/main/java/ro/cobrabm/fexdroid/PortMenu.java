@@ -92,7 +92,7 @@ final class PortMenu {
             row("Análise de desempenho",()->go("profiling"));
             action("Ver logs",actions::logs);if(!inGame)action("Exportar logs ZIP",actions::exportLogs);
             if(inGame)action("Voltar ao launcher",actions::exitGame);
-            note("TLOU Remastered  ·  Daedalus v0.14");
+            note("TLOU Remastered  ·  Daedalus v0.15");
         } else if(section.equals("video")) {
             heading("VÍDEO E DESEMPENHO");note("Aplicados ao iniciar o jogo. Compare as opções no mesmo cenário.");
             choice("resolution","Resolução interna (patch de eboot)",new String[]{"Original (referência)","1280 × 720 · experimental","960 × 540 · experimental","640 × 360 · experimental"},new String[]{"original","720","540","360"},"original");
@@ -114,6 +114,8 @@ final class PortMenu {
         } else if(section.equals("experiments")) {
             heading("OTIMIZAÇÕES EXPERIMENTAIS");
             note("Desligadas por padrão. Ative UMA por vez e compare FPS e falhas na mesma área. Requer reiniciar o jogo.");
+            toggle("batch_srt_readbacks","Agrupar leituras de tabelas GPU",false);
+            note("Combina tabelas independentes na mesma espera. Mantém a ordem entre pais e filhos; teste separadamente do readback direto.");
             toggle("prep_pool","Reutilizar buffers de preparação de draws",false);
             toggle("cpu_trims","Reduzir trabalho de CPU por draw",false);
             toggle("prefetch_pipelines","Pré-compilar pipelines antecipadamente",false);
@@ -123,7 +125,7 @@ final class PortMenu {
                 new String[]{"auto","0","2","4","6"},"auto");
             note("Prefetch e compilação paralela podem mudar travamentos e correção visual. O modo automático de workers é o original.");
             row("Desativar todos os experimentos",()->{
-                prefs.edit().putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
+                prefs.edit().putBoolean("batch_srt_readbacks",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
                     .putBoolean("prefetch_pipelines",false).putBoolean("parallel_pipelines",false)
                     .putString("prep_workers","auto").apply();
                 actions.changed();render();

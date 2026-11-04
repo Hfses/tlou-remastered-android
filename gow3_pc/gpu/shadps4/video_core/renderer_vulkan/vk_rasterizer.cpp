@@ -44,6 +44,7 @@
 #include "video_core/renderer_vulkan/vk_runtime.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_shader_hle.h"
+#include "video_core/renderer_vulkan/srt_readback_batch.h"
 #include "video_core/texture_cache/image_view.h"
 #include "video_core/texture_cache/texture_cache.h"
 
@@ -4126,10 +4127,55 @@ void Rasterizer::SyncSrtTables(const Shader::Info& info) {
             continue;
         }
         DrainDrawPipe();
-        const std::pair<VAddr, u64> range{table, node.extent};
-        buffer_cache.DownloadRanges(std::span{&range, 1});
+        static const bool batch_srt = [] {
+            const char* env = std::getenv("TLOU_BATCH_SRT_READBACKS");
+            return env && env[0] == '1';
+        }();
+        u64 downloaded_tables = 1;
+        if (batch_srt) {
+            // Parents have already been synchronized by the original walk. Only
+            // sibling addresses are resolved here; descendants retain their order.
+            const auto ranges = PlanSrtSiblingBatch(std::span{plan.nodes}, i, table,
+                node.parent < 0 ? VAddr{0} : address[node.parent], pending_copy_writes.empty(),
+                [&](size_t n) -> VAddr {
+                    const auto& sibling = plan.nodes[n];
+                    u64 value = 0;
+                    if (sibling.parent < 0) {
+                        if (u64(sibling.offset) + sizeof(value) > user_data.size()) return 0;
+                        std::memcpy(&value, user_data.data() + sibling.offset, sizeof(value));
+                    } else {
+                        const VAddr source = address[sibling.parent];
+                        if (!source || source > UINT64_MAX - sibling.offset - sizeof(value) ||
+                            !IsMapped(source + sibling.offset, sizeof(value))) return 0;
+                        std::memcpy(&value, reinterpret_cast<const void*>(source + sibling.offset), sizeof(value));
+                    }
+                    const VAddr target = value & 0xFFFFFFFFFFFFULL;
+                    return target && target <= UINT64_MAX - sibling.extent &&
+                        IsMapped(target, sibling.extent) ? target : 0;
+                }, [&](VAddr target, u64 bytes) {
+                    return buffer_cache.IsRangeGpuWrittenShared(target, bytes);
+                });
+            buffer_cache.DownloadRanges(ranges);
+            downloaded_tables = ranges.size();
+            struct BatchStats { u64 calls{}, tables{}, grouped{}; };
+            static BatchStats counts;
+            ++counts.calls;
+            counts.tables += downloaded_tables;
+            counts.grouped += downloaded_tables > 1;
+            static auto last = std::chrono::steady_clock::now();
+            const auto now = std::chrono::steady_clock::now();
+            if (now - last >= std::chrono::seconds(5)) {
+                std::printf("TLOU SRT batches (5 s): calls=%llu tables=%llu multi-table=%llu combined-requests=%llu\n",
+                    (unsigned long long)counts.calls, (unsigned long long)counts.tables,
+                    (unsigned long long)counts.grouped, (unsigned long long)(counts.tables - counts.calls));
+                counts = {}; last = now;
+            }
+        } else {
+            const std::pair<VAddr, u64> range{table, node.extent};
+            buffer_cache.DownloadRanges(std::span{&range, 1});
+        }
         trace_table(true);
-        ++srt_syncs;
+        srt_syncs += downloaded_tables;
         if (srt_sync_reports < 16) {
             ++srt_sync_reports;
             std::printf("SRT sync: shader %016llx table %#llx (+%u bytes, level %d) had "

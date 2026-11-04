@@ -29,3 +29,6 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_dma_upload_batch.cpp
 
 g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_mapped_readback.cpp -o "$test_dir/mapped-readback"
 "$test_dir/mapped-readback"
+
+g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_srt_readback_batch.cpp -o "$test_dir/srt-batch"
+"$test_dir/srt-batch"
