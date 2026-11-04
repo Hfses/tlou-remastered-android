@@ -11,6 +11,7 @@
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/texture_cache/blit_helper.h"
 #include "video_core/texture_cache/image.h"
+#include "video_core/texture_cache/general_epoch_plan.h"
 
 #include <vk_mem_alloc.h>
 #include <array>
@@ -29,6 +30,19 @@
 #include <vector>
 
 namespace VideoCore {
+
+// SotC PC fence-epoch scheme, adapted for whole-image transitions only.
+std::atomic<u64> g_tlou_general_fence_epoch{0};
+std::atomic<u64> g_tlou_general_candidates{0};
+std::atomic<u64> g_tlou_general_skipped{0};
+
+static bool TlouGeneralEpochSync() {
+    static const bool enabled = [] {
+        const char* env = std::getenv("TLOU_GENERAL_EPOCH_SYNC");
+        return env && env[0] == '1' && env[1] == '\0';
+    }();
+    return enabled;
+}
 // Diagnostics: which image or buffer occupies a VkDeviceMemory range, so a GPU fault address
 // next to a memory block names its owner (Vulkan::DescribeBoundAddress).
 struct GpuAllocationRecord {
@@ -761,6 +775,8 @@ void Image::GetBarriers(Barriers& barriers, vk::ImageLayout dst_layout, vk::Acce
     const bool partially_transited = !subresource_states.empty();
 
     if (needs_partial_transition || partially_transited) {
+        // Conservative difference from SotC: partial barriers are never elided.
+        backing->general_barrier_epoch = ~0ULL;
         if (!partially_transited) {
             subresource_states.resize(info.resources.levels * vk_layers);
             std::fill(subresource_states.begin(), subresource_states.end(), last_state);
@@ -826,6 +842,23 @@ void Image::GetBarriers(Barriers& barriers, vk::ImageLayout dst_layout, vk::Acce
                                      vk::AccessFlagBits2::eShaderWrite |
                                      vk::AccessFlagBits2::eMemoryWrite;
         const bool is_write = static_cast<bool>(last_state.access_mask & write_flags);
+        // From SotC PC GENERAL_SYNC, with stricter whole-image, same-stage guards.
+        // The first write barrier in each EOP/EOS/fence epoch is always retained.
+        const bool same_general = last_state.layout == vk::ImageLayout::eGeneral &&
+                                  dst_layout == vk::ImageLayout::eGeneral;
+        const bool candidate = TlouGeneralEpochSync() && same_general && is_write &&
+                               last_state.access_mask == dst_mask &&
+                               last_state.pl_stage == dst_stage;
+        if (candidate) g_tlou_general_candidates.fetch_add(1, std::memory_order_relaxed);
+        const bool skip = GeneralEpoch::ShouldSkip(
+            TlouGeneralEpochSync(), true, same_general,
+            last_state.access_mask == dst_mask, last_state.pl_stage == dst_stage,
+            is_write, g_tlou_general_fence_epoch.load(std::memory_order_relaxed),
+            backing->general_barrier_epoch);
+        if (skip) {
+            g_tlou_general_skipped.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
         if (last_state.layout == dst_layout && last_state.access_mask == dst_mask && !is_write) {
             return;
         }

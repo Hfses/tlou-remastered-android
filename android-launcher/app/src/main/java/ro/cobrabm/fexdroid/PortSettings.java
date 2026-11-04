@@ -54,6 +54,7 @@ final class PortSettings {
         // Independent opt-in knobs already implemented in the TLOU renderer.
         // All new experiments remain OFF by default.
         env.put("TLOU_DESCRIPTOR_BULK","0"); // v0.23 A/B showed no FPS gain; retired
+        env.put("TLOU_GENERAL_EPOCH_SYNC",p.getBoolean("general_epoch_sync",false)?"1":"0");
 
         env.put("GOW3_PREP_POOL",p.getBoolean("prep_pool",false)?"1":"0");
         env.put("GOW3_CPU_TRIMS",p.getBoolean("cpu_trims",false)?"1":"0");
@@ -70,7 +71,7 @@ final class PortSettings {
         StringBuilder result=new StringBuilder("TLOU A/B: resolution=")
             .append(prefs(context).getString("resolution","original"));
         for(String key:new String[]{"TLOU_SRT_DEP_BATCH","GOW3_FETCH_NO_BLOCK","GOW3_LAND_ON_GUEST","GOW3_STATIC_MIN_BYTES","TLOU_STACK_MAPPED_READBACK","TLOU_INLINE_SINGLE_COPY","TLOU_SPLIT_CS64","TLOU_MAPPED_FAULT_READBACKS","TLOU_MAPPED_READBACKS","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
-                "GOW3_ASYNC_SHADERS","TLOU_DESCRIPTOR_BULK","GOW3_PREP_POOL","GOW3_CPU_TRIMS",
+                "GOW3_ASYNC_SHADERS","TLOU_DESCRIPTOR_BULK","TLOU_GENERAL_EPOCH_SYNC","GOW3_PREP_POOL","GOW3_CPU_TRIMS",
                 "GOW3_PREFETCH_PIPELINES","GOW3_PARALLEL_PIPELINES",
                 "GOW3_PREP_WORKERS"})
             result.append(" ").append(key).append("=")
