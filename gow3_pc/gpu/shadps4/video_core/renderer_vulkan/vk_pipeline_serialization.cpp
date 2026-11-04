@@ -50,14 +50,8 @@ static std::string ShaderBinaryName(u64 pgm_hash, size_t perm_idx) {
     // ShaderMeta checks the SPIR-V digest before accepting a stored pipeline.
     const char* split = TlouComputeSplit::Enabled() && TlouComputeSplit::IsTarget(pgm_hash)
                             ? "_tlou64v1" : "";
-    // Relaxed-FP and precise-FP versions must not share shader binary,
-    // metadata, compute pipeline key or warmup identity.
-    const char* math = TlouComputeSplit::RelaxedFpFor(
-                           pgm_hash, TlouComputeSplit::RelaxedFpEnabled())
-                           ? "_tloufpv1" : "";
-    return fmt::format("{:#018x}_{}{}{}{}", pgm_hash, perm_idx,
-                       Shader::Optimization::MultiwaveLdsBarriers(pgm_hash) ? "_lds4" : "",
-                       split, math);
+    return fmt::format("{:#018x}_{}{}{}", pgm_hash, perm_idx,
+                       Shader::Optimization::MultiwaveLdsBarriers(pgm_hash) ? "_lds4" : "", split);
 }
 } // namespace Serialization
 
@@ -934,8 +928,7 @@ bool LoadShaderMeta(Serialization::Archive& ar, Shader::Info& info,
     if (info.hw_stage == Shader::HwStage::Compute &&
         !TlouComputeSplit::AcceptCachedMeta(
             info.pgm_hash, HashCombine(info.pgm_hash, u64(perm_idx)),
-            perm_hash_ar, TlouComputeSplit::Enabled(),
-            TlouComputeSplit::RelaxedFpEnabled())) {
+            perm_hash_ar, TlouComputeSplit::Enabled())) {
         return false;
     }
 

@@ -3,23 +3,11 @@
 
 #include "shader_recompiler/backend/spirv/emit_spirv_instructions.h"
 #include "shader_recompiler/backend/spirv/spirv_emit_context.h"
-#include "shader_recompiler/backend/spirv/tlou_split_compute.h"
 
 namespace Shader::Backend::SPIRV {
 
 Id Decorate(EmitContext& ctx, IR::Inst* inst, Id op) {
-    (void)inst;
-    // TLOU Android: exact two GPU-profiled hot compute kernels only.
-    // Their FP ops were all emitted NoContraction, which can prohibit
-    // driver arithmetic optimizations even across other FP instructions.
-    // Preserve original rounding constraints in every other shader.
-    // Opt-in only: results may differ by a few ULPs.
-    const bool relaxed = ctx.hw_stage == HwStage::Compute &&
-                         TlouComputeSplit::RelaxedFpFor(ctx.info.pgm_hash,
-                                                       TlouComputeSplit::RelaxedFpEnabled());
-    if (!relaxed) {
-        ctx.Decorate(op, spv::Decoration::NoContraction);
-    }
+    ctx.Decorate(op, spv::Decoration::NoContraction);
     return op;
 }
 
