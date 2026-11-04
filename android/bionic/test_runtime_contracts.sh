@@ -31,7 +31,12 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_compute_split.c
 
 g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_inline_copy_record.cpp -o "$test_dir/tlou-inline-copy"
 
-g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_precise_window.cpp -o "$test_dir/tlou-precise-window"
-"$test_dir/tlou-precise-window"
 "$test_dir/tlou-inline-copy"
 "$test_dir/tlou-compute-split"
+
+# TLOU must never restore graphics-breaking Readback 2 from a legacy preference.
+grep -Fq 'env.put("GOW3_READBACKS","1");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+if grep -Fq '"2 · Preciso' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortMenu.java; then
+    echo 'ERROR: TLOU Precise readback was reintroduced' >&2
+    exit 1
+fi

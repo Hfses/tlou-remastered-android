@@ -92,13 +92,12 @@ final class PortMenu {
             row("Análise de desempenho",()->go("profiling"));
             action("Ver logs",actions::logs);if(!inGame)action("Exportar logs ZIP",actions::exportLogs);
             if(inGame)action("Voltar ao launcher",actions::exitGame);
-            note("TLOU Remastered  ·  Daedalus v0.19");
+            note("TLOU Remastered  ·  Daedalus v0.20");
         } else if(section.equals("video")) {
             heading("VÍDEO E DESEMPENHO");note("Aplicados ao iniciar o jogo. Compare as opções no mesmo cenário.");
             choice("resolution","Resolução interna (patch de eboot)",new String[]{"Original (referência)","1280 × 720 · experimental","960 × 540 · experimental","640 × 360 · experimental"},new String[]{"original","720","540","360"},"original");
             note("540p/360p podem causar bugs e reduzir FPS: o patch altera dimensões internas, mas não garante que todos os buffers e passes sejam reduzidos. Volte para Original se houver regressão.");
-            choice("readback","Readback (independente da resolução)",new String[]{"1 · Relaxado (padrão)","2 · Preciso (mais sincronização)"},new String[]{"1","2"},"1");
-            note("Readback 2 NÃO é ativado automaticamente em 720/540/360p. Teste o mesmo cenário antes e depois.");
+            note("Readback: 1 · Relaxado (fixo). O Readback 2 foi removido porque causava bugs gráficos e perda de FPS.");
             toggle("mapped_readbacks","Readback direto de buffers",true);
             note("Lê a memória compartilhada após esperar os dados da GPU. Desligue para comparar a cópia intermediária anterior; requer reabrir o jogo.");
             row("Experimentos de desempenho",()->go("experiments"));
@@ -110,10 +109,12 @@ final class PortMenu {
         } else if(section.equals("experiments")) {
             heading("OTIMIZAÇÕES EXPERIMENTAIS");
             note("Desligadas por padrão. Ative UMA por vez e compare FPS e falhas na mesma área. Requer reiniciar o jogo.");
-            toggle("sotc_precise_narrow","SotC: readback preciso em janelas de 64 KiB",false);
-            note("Funciona somente com Readback 2 (Precise). Readback 1 mantém o caminho original. Requer reiniciar.");
             toggle("fetch_no_block","GoW III: espera de escrita fora da thread GPU",false);
             note("Movimenta para a thread CPU uma espera por escrita GPU já submetida; exige fila de cópia compatível. Até 3 tentativas, depois usa o caminho original.");
+            toggle("land_on_guest","GoW III: concluir readbacks na thread solicitante",false);
+            note("Quando uma página está protegida por um readback pendente, espera somente trabalho já submetido na thread solicitante; depois revalida ou usa o caminho original.");
+            toggle("static_min_512","Reutilizar buffers estáticos pequenos (mínimo 512 B)",false);
+            note("Do GoW III: promove à arena buffers de leitura que não mudaram por 3 submissões, com rastreamento de escritas. O mínimo normal é 1024 B.");
             toggle("stack_mapped_readback","Buffer na pilha para readbacks pequenos (até 512 B)",false);
             note("Evita alocação temporária para as leituras mapeadas pequenas; não muda esperas, dados nem mesclagem.");
             toggle("inline_single_copy","Registro leve de cópias GPU pequenas (até 64 KiB)",false);
@@ -131,7 +132,7 @@ final class PortMenu {
                 new String[]{"auto","0","2","4","6"},"auto");
             note("Prefetch e compilação paralela podem mudar travamentos e correção visual. O modo automático de workers é o original.");
             row("Desativar todos os experimentos",()->{
-                prefs.edit().putBoolean("sotc_precise_narrow",false).putBoolean("fetch_no_block",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("mapped_fault_readbacks",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
+                prefs.edit().putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("mapped_fault_readbacks",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
                     .putBoolean("prefetch_pipelines",false).putBoolean("parallel_pipelines",false)
                     .putString("prep_workers","auto").apply();
                 actions.changed();render();

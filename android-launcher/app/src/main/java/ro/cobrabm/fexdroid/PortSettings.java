@@ -28,8 +28,12 @@ final class PortSettings {
         env.put("TLOU_SPLIT_CS64",p.getBoolean("split_cs64",false)?"1":"0");
         env.put("TLOU_INLINE_SINGLE_COPY",p.getBoolean("inline_single_copy",false)?"1":"0");
         env.put("TLOU_STACK_MAPPED_READBACK",p.getBoolean("stack_mapped_readback",false)?"1":"0");
-        env.put("TLOU_SOTC_PRECISE_NARROW",p.getBoolean("sotc_precise_narrow",false)?"1":"0");
         env.put("GOW3_FETCH_NO_BLOCK",p.getBoolean("fetch_no_block",false)?"1":"0");
+        env.put("GOW3_LAND_ON_GUEST",p.getBoolean("land_on_guest",false)?"1":"0");
+        // The normal value is 1024; reducing the threshold lets small truly
+        // immutable buffers reach the same tracked, write-guarded arena.
+        if(p.getBoolean("static_min_512",false)) env.put("GOW3_STATIC_MIN_BYTES","512");
+        else env.remove("GOW3_STATIC_MIN_BYTES");
         env.put("TLOU_MAPPED_READBACKS",p.getBoolean("mapped_readbacks",true)?"1":"0");
         // Profiling is separate from optimization and off during FPS comparisons.
         // Remove disabled keys: legacy renderer sites test presence, not their value.
@@ -39,10 +43,12 @@ final class PortSettings {
         env.put("GOW3_VSYNC",p.getBoolean("vsync",true)?"1":"0");
         env.put("GOW3_FPS_LIMIT",p.getString("fps_limit","60"));
         env.put("GOW3_FRAMES_AHEAD",p.getString("frames_ahead","1"));
-        // Resolution must not silently switch synchronization strategies. 540p/360p
-        // can be slower and glitchy with precise readbacks; keep it an A/B choice.
-        String readback=p.getString("readback","1");
-        env.put("GOW3_READBACKS",readback.equals("2")?"2":"1");
+        // TLOU: precise readbacks caused graphical corruption and poorer FPS.
+        // Always force relaxed regardless of an old saved "readback=2" preference.
+        env.put("GOW3_READBACKS","1");
+        if(p.contains("readback") || p.contains("sotc_precise_narrow")) {
+            p.edit().remove("readback").remove("sotc_precise_narrow").apply();
+        }
         env.put("GOW3_ASYNC_SHADERS",p.getBoolean("async_shaders",true)?"1":"0");
         // Independent opt-in knobs already implemented in the TLOU renderer.
         // All new experiments remain OFF by default.
@@ -60,7 +66,7 @@ final class PortSettings {
     static String experimentReport(Context context,Map<String,String> env) {
         StringBuilder result=new StringBuilder("TLOU A/B: resolution=")
             .append(prefs(context).getString("resolution","original"));
-        for(String key:new String[]{"TLOU_SOTC_PRECISE_NARROW","GOW3_FETCH_NO_BLOCK","TLOU_STACK_MAPPED_READBACK","TLOU_INLINE_SINGLE_COPY","TLOU_SPLIT_CS64","TLOU_MAPPED_FAULT_READBACKS","TLOU_MAPPED_READBACKS","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
+        for(String key:new String[]{"GOW3_FETCH_NO_BLOCK","GOW3_LAND_ON_GUEST","GOW3_STATIC_MIN_BYTES","TLOU_STACK_MAPPED_READBACK","TLOU_INLINE_SINGLE_COPY","TLOU_SPLIT_CS64","TLOU_MAPPED_FAULT_READBACKS","TLOU_MAPPED_READBACKS","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
                 "GOW3_ASYNC_SHADERS","GOW3_PREP_POOL","GOW3_CPU_TRIMS",
                 "GOW3_PREFETCH_PIPELINES","GOW3_PARALLEL_PIPELINES",
                 "GOW3_PREP_WORKERS"})
