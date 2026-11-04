@@ -24,7 +24,7 @@ uses [skip ci]: it is a source correction, not a new performance release.
 | Source and location | Reproducible evidence reported by the author | TLOU applicability and gate |
 | --- | --- | --- |
 | Lucas-blip-png/ShadowOfTheColossus-PC README, 0.60.6-plus3 | FAST_BIND ~+8%, 43.5 to 47.1 FPS (later fixed races, black dots) | TLOU BindResources is more complex with helper texture tasks/prepared stages. Missing SotC generation/epoch guards; measure read-only duplicate binds and design invalidation *before* shortcutting. |
-| Same README, 0.60.6-plus4, buffer_cache.cpp GatherDownloads | SOTC_RB_HOT ~+14%, 34.6 to 43.3 FPS in one scenario, with protected late write checks | Unprotected speculative readback previously corrupted guest data after save reload, even heap metadata. TLOU has separate lazy page writes/aliases and already ~18k direct mapped readbacks per 5 seconds; NEVER copy blindly. Requires CPU dirty checks, writer stamps, no speculative guest overwrites, and matched safety tests. |
+| Same README, 0.60.6-plus4, buffer_cache.cpp GatherDownloads | SOTC_RB_HOT about +14% at the Shrine (no matched FPS pair in the cited release summary), with late checks and a 26-minute soak | Unprotected speculative readback previously corrupted guest data after save reload, even heap metadata. TLOU has separate lazy page writes/aliases and already ~18k direct mapped readbacks per 5 seconds; NEVER copy blindly. Requires CPU dirty checks, writer stamps, no speculative guest overwrites, and matched safety tests. |
 | Same README, 0.60.6-plus13 and 14, rasterizer.cpp DrawReplay | +8.6% on Shrine and ~+24% desert in A/B, PGO adds ~6-7%, fast-path verify 0 mismatches in >50M checks | Investigate TLOU's draw recording and prepared-stage generation reuse. CPU command thread busy in user's logs. Do not port game-specific data keys or unguarded DMA state. |
 | Same README, 0.60.6-plus5 | Storage-image barrier once per fence epoch: 53–54 to 59–61 FPS | TLOU already tracks barrier epochs and depth feedback. A corresponding Vulkan hazard/epoch proof is needed before eliding any barrier. |
 | erickmendes22/tlou-remastered-android README and gow3_pc/build.sh (Windows) | TLOU PC same heavy scene ~+10% with PGO+LTO | Windows PGO profile cannot be used for ARM64 Bionic/FEX; investigate ARM native renderer LTO and generate ARM-specific profile before expecting a similar gain. |
@@ -73,3 +73,52 @@ References:
 - https://github.com/erickmendes22/gow3_android_daedalus_fork
 - https://github.com/erickmendes22/uncharted-android
 - https://github.com/MaSieS4Fun/ARM_bloodborne_pc
+
+## Additional references checked and exclusions
+
+- **GoW III Android changelog (measured):** the host-cached stream buffer
+  optimization changed median FPS **34.6 -> 128.6 on NVIDIA**; the same
+  changelog says **neutral on AMD UMA/Steam Deck**. The phone's Adreno
+  shares system memory; do not transplant this setting using the NVIDIA
+  result as evidence. The separate `IT_SET_PREDICATION` no-drain change
+  is **already present** in TLOU's `liverpool.cpp`.
+- **inFAMOUS Second Son `MeWeGo/infamous-pc` benchmark:** 30.6 median
+  vs 16.6 in `iss_pc` in the same title scene, but its optimization is
+  a *bundle* (uploads, bind/cache, worker, readbacks). It is not a
+  single readback A/B. Its gameplay was not benchmarked in that table.
+- **Bloodborne ARM port:** the published major speedup involves
+  splitting command decode, draw recording, and other work across
+  threads. TLOU logs already show independent busy command, draw and
+  recorder threads; duplicating workers cannot be called equivalent.
+- **SotC validation caution:** TLOU log 11 has explicit
+  `Readback guard: kept 16 bytes ... game wrote after GPU`, proving
+  this workload contains CPU writes that must survive a GPU download.
+  A hot speculative readback must never replace that correctness rule.
+
+## Quantified TLOU v0.21 / v0.22 comparison
+
+- v0.21 last 4 stable windows: 37.3, 35.7, 36.6, 36.2
+  = **36.45 FPS mean**.
+- v0.22 last 4 stable windows: 35.7, 35.7, 35.0, 35.5
+  = **35.475 FPS mean**; approximately **-2.7%**.
+- v0.22 observed `coarse-overwait-pages=0` on the sampled scene;
+  there is no demonstrated wait saving from the 64 KiB tick hypothesis.
+- v0.22 log's CPU usage: GPU command ~76% of a core, draw
+  ~65%, recorder ~50%. Shader compilation = 0 in steady gameplay.
+- v0.21 had several additional toggles ON, so these numbers measure
+  **whole configurations**, not the independent effect of fine ticks.
+  An older build changed GPU allocations and readback paths together;
+  FPS changes alone cannot identify the responsible toggle.
+- For reference, GoW3's previously measured NVIDIA host-stream change
+  is vendor-dependent; TLOU PC's PGO+LTO measurement is on Windows.
+  Android's `android/bionic/build_gpu.sh` currently passes
+  `-DGOW3_LTO=OFF -DGOW3_PGO=off`. Enabling LTO alone has no
+  established Android FPS gain.
+
+Direct references:
+- https://github.com/Lucas-blip-png/ShadowOfTheColossus-PC/blob/main/README.md
+- https://github.com/AjncSystem/ShadowOfTheColossus-PC/blob/main/CHANGELOG.md
+- https://github.com/erickmendes22/gow3_android_daedalus_fork/blob/android/CHANGELOG.md
+- https://github.com/MeWeGo/infamous-pc#benchmarks
+- https://github.com/MaSieS4Fun/ARM_bloodborne_pc#readme
+- https://github.com/erickmendes22/tlou-remastered-android/blob/main/README.md
