@@ -525,6 +525,10 @@ private:
     /// and of the newest smaller one into each 4 KiB page: when the GPU data of a page is final.
     std::unordered_map<u64, u64> gpu_write_window_tick;
     std::unordered_map<u64, u64> gpu_write_page_tick;
+    // TLOU: precise producer ticks for 64 KiB blocks of medium GPU writes.
+    std::unordered_map<u64, u64> gpu_write_fine_tick;
+    // Writes >1 MiB still require a conservative tick for touched windows.
+    std::unordered_map<u64, u64> gpu_write_huge_window_tick;
     /// gow3: the page's GPU bytes are final and in mapped memory: copied to guest memory, page
     /// no longer GPU-written. False: not possible (in flight, unmapped, readbacks pending).
     bool ReadFinishedGpuPage(VAddr page);

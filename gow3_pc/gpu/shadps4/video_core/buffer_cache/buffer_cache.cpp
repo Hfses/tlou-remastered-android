@@ -29,6 +29,7 @@
 #include "video_core/buffer_cache/buffer_cache.h"
 #include "video_core/buffer_cache/memory_tracker.h"
 #include "video_core/buffer_cache/mapped_readback_plan.h"
+#include "video_core/buffer_cache/tlou_write_tick.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
@@ -55,6 +56,19 @@ namespace VideoCore {
 
 // Counts stack snapshots without expensive timing or logging per readback.
 static std::atomic<u64> tlou_stack_mapped_reads{0};
+
+// Keep the historic coarse wait as the fallback for oversized writes and
+// for every launch which has not opted into finer producer-time tracking.
+static bool TlouFineGpuTicksEnabled() {
+    static const bool enabled = [] {
+        const char* value = std::getenv("TLOU_FINE_GPU_TICKS");
+        return value && value[0] == '1' && value[1] == 0;
+    }();
+    return enabled;
+}
+static std::atomic<u64> tlou_fine_pages{0};
+static std::atomic<u64> tlou_fine_coarse_overestimated{0};
+static std::atomic<u64> tlou_fine_huge_fallback{0};
 
 // gow3 21 Oct 2026 (GPU worker): GOW3_GPU_PROFILE segments for the cache's own GPU copies
 // (uploads of CPU-written guest memory, readbacks); the interrupted segment continues after
@@ -1870,11 +1884,28 @@ u64 BufferCache::CopyMappedReadbackPieces(std::span<const DownloadPiece> pending
                     if (address < base || address >= end) return {};
                     return {it->mapped + it->offset + (address - base), end - address};
                 }, [this](u64 page) {
-                    u64 tick = 0;
-                    if (const auto w = gpu_write_window_tick.find(page >> 8); w != gpu_write_window_tick.end())
-                        tick = w->second;
-                    if (const auto p = gpu_write_page_tick.find(page); p != gpu_write_page_tick.end())
-                        tick = std::max(tick, p->second);
+                    const auto find_tick = [](const auto& map, u64 index) -> u64 {
+                        const auto it = map.find(index);
+                        return it == map.end() ? 0 : it->second;
+                    };
+                    const u64 page_tick = find_tick(gpu_write_page_tick, page);
+                    const u64 coarse_tick = find_tick(gpu_write_window_tick, page >> 8);
+                    if (!TlouFineGpuTicksEnabled()) {
+                        return std::max(page_tick, coarse_tick);
+                    }
+                    const u64 fine_tick = find_tick(gpu_write_fine_tick, page >> 4);
+                    const u64 huge_tick = find_tick(gpu_write_huge_window_tick, page >> 8);
+                    const u64 tick = TlouWriteTick::ReadTick(
+                        page_tick, coarse_tick, fine_tick, huge_tick, true);
+                    tlou_fine_pages.fetch_add(1, std::memory_order_relaxed);
+                    if (coarse_tick > tick) {
+                        // Safe reduction in a conservative dependency, not
+                        // proof that vkWaitSemaphores actually blocked.
+                        tlou_fine_coarse_overestimated.fetch_add(1, std::memory_order_relaxed);
+                    }
+                    if (huge_tick) {
+                        tlou_fine_huge_fallback.fetch_add(1, std::memory_order_relaxed);
+                    }
                     return tick;
                 }, max_bytes);
         }(); // release the cache history lock before Wait can submit callbacks
@@ -1953,10 +1984,13 @@ void BufferCache::DownloadRanges(std::span<const std::pair<VAddr, u64>> ranges) 
     const auto report = [] {
         const auto now = std::chrono::steady_clock::now();
         if (now - mapped_stats.at >= std::chrono::seconds(5)) {
-            std::printf("TLOU mapped readbacks (5 s): direct=%llu bytes=%llu no-extra-submit=%llu staging-fallback=%llu stack-small=%llu\n",
+            std::printf("TLOU mapped readbacks (5 s): direct=%llu bytes=%llu no-extra-submit=%llu staging-fallback=%llu stack-small=%llu fine-pages=%llu coarse-overwait-pages=%llu huge-fallback-pages=%llu\n",
                 (unsigned long long)mapped_stats.direct, (unsigned long long)mapped_stats.bytes,
                 (unsigned long long)mapped_stats.no_submit, (unsigned long long)mapped_stats.fallback,
-                static_cast<unsigned long long>(tlou_stack_mapped_reads.exchange(0, std::memory_order_relaxed)));
+                static_cast<unsigned long long>(tlou_stack_mapped_reads.exchange(0, std::memory_order_relaxed)),
+                static_cast<unsigned long long>(tlou_fine_pages.exchange(0, std::memory_order_relaxed)),
+                static_cast<unsigned long long>(tlou_fine_coarse_overestimated.exchange(0, std::memory_order_relaxed)),
+                static_cast<unsigned long long>(tlou_fine_huge_fallback.exchange(0, std::memory_order_relaxed)));
             mapped_stats = MappedStats{};
         }
     };
@@ -4380,6 +4414,19 @@ void BufferCache::SweepTracking() {
             return semaphore->IsFree(entry.second) &&
                    !gpu_modified_ranges.Intersects(entry.first << 12, 4096);
         });
+        if (TlouFineGpuTicksEnabled()) {
+            // Retain entries while they may still own GPU-written bytes.
+            // Finished regions are safe to remove only after their dirty
+            // tracking has been cleared by normal readback completion.
+            std::erase_if(gpu_write_fine_tick, [&](const auto& entry) {
+                return semaphore->IsFree(entry.second) &&
+                       !gpu_modified_ranges.Intersects(entry.first << 16, 64_KB);
+            });
+            std::erase_if(gpu_write_huge_window_tick, [&](const auto& entry) {
+                return semaphore->IsFree(entry.second) &&
+                       !gpu_modified_ranges.Intersects(entry.first << 20, 1_MB);
+            });
+        }
     }
     g_swept_pages += static_cast<u32>(std::erase_if(page_writes, [&](const auto& entry) {
         return std::ranges::all_of(entry.second, [&](const PageWrite& w) {
@@ -4730,6 +4777,20 @@ void BufferCache::NoteGpuWriteWindows(VAddr address, u64 size) {
     if (size > 64_KB) {
         for (u64 window = address >> 20; window <= (address + size - 1) >> 20; ++window) {
             gpu_write_window_tick[window] = tick;
+        }
+        if (TlouFineGpuTicksEnabled()) {
+            // A medium write covers only a few 64 KiB blocks. Index precisely
+            // where its output lives, rather than waiting for unrelated work
+            // anywhere in its 1 MiB window.
+            if (TlouWriteTick::FineIndexable(size)) {
+                TlouWriteTick::ForEachBlock(address, size, TlouWriteTick::FineBytes,
+                    [this, tick](u64 block) { gpu_write_fine_tick[block] = tick; });
+            } else {
+                // An oversized write is too expensive to index by 64 KiB,
+                // so every touched 1 MiB window keeps its mandatory tick.
+                TlouWriteTick::ForEachBlock(address, size, TlouWriteTick::WindowBytes,
+                    [this, tick](u64 window) { gpu_write_huge_window_tick[window] = tick; });
+            }
         }
         return;
     }
