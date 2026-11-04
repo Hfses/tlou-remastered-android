@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 shadPS4 Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <cstdlib>
 #include <span>
 
 #include "video_core/renderer_vulkan/vk_descriptor_record.h"
@@ -45,6 +46,42 @@ void Pipeline::BindResources(DescriptorWrites& set_writes, const Shader::PushDat
         if (!scheduler.IsRecordingDeferred()) {
             scheduler.Record([&](vk::CommandBuffer cmdbuf) {
                 cmdbuf.pushDescriptorSetKHR(bind_point, layout, 0, set_writes);
+            });
+            return;
+        }
+        // Optional TLOU optimization: keep the v0.21 per-write path by default.
+        static const bool bulk_descriptors = [] {
+            const char* value = std::getenv("TLOU_DESCRIPTOR_BULK");
+            return value && value[0] == '1';
+        }();
+        if (!bulk_descriptors) {
+            size_t bytes = set_writes.size() * sizeof(vk::WriteDescriptorSet) + 64;
+            for (const auto& write : set_writes) {
+                bytes += write.descriptorCount *
+                             (sizeof(vk::DescriptorBufferInfo) + sizeof(vk::DescriptorImageInfo) +
+                              sizeof(vk::BufferView)) + 32;
+            }
+            scheduler.ReserveRecordData(bytes);
+            const auto writes =
+                scheduler.RecordData(std::span<const vk::WriteDescriptorSet>{set_writes});
+            auto* patched = const_cast<vk::WriteDescriptorSet*>(writes.data());
+            for (size_t i = 0; i < writes.size(); ++i) {
+                auto& write = patched[i];
+                if (write.pBufferInfo) {
+                    write.pBufferInfo = scheduler.RecordData(
+                        std::span{write.pBufferInfo, write.descriptorCount}).data();
+                }
+                if (write.pImageInfo) {
+                    write.pImageInfo = scheduler.RecordData(
+                        std::span{write.pImageInfo, write.descriptorCount}).data();
+                }
+                if (write.pTexelBufferView) {
+                    write.pTexelBufferView = scheduler.RecordData(
+                        std::span{write.pTexelBufferView, write.descriptorCount}).data();
+                }
+            }
+            scheduler.Record([bind_point, layout, writes](vk::CommandBuffer cmdbuf) {
+                cmdbuf.pushDescriptorSetKHR(bind_point, layout, 0, writes);
             });
             return;
         }

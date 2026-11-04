@@ -1,6 +1,9 @@
 # TLOU Android v0.23 — contiguous descriptor snapshots (CPU recording)
 
 This change is isolated to Vulkan descriptor **recording**, not GPU readback.
+This is an optional switch in the SAME APK: `TLOU_DESCRIPTOR_BULK=1` enables
+bulk snapshots. Default OFF runs the original v0.21 per-write path.
+
 v0.21 remains the control. Readback 2 remains removed; SRT/fine-tick experiments
 remain reverted.
 
@@ -34,5 +37,5 @@ unrelated arrays, null pointers and misalignment.
 Native CI must compile and run before shipping. Compare this APK against the
 existing v0.21 capture in the same heavy scene, with identical configuration.
 Keep it only if stable median and 1% low FPS improve, and rendering stays
-identical after save/load and repeated frames. No new user-visible options.
+identical after save/load and repeated frames. All experiments are independently switchable in the launcher, default OFF.
 This commit does **not** claim an on-device measurement.
