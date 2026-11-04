@@ -15,12 +15,26 @@ inline constexpr std::uint32_t PhysicalSize = 64;
 inline constexpr std::uint32_t Factor = OriginalSize / PhysicalSize;
 
 constexpr bool IsTarget(std::uint64_t hash) { return hash == HashA || hash == HashB; }
+// The 64-thread SPIR-V has a separate *pipeline and metadata key*, not only
+// a different binary filename. Otherwise alternating OFF/ON overwrites
+// shader metadata and forces recompilation when returning to the other mode.
+inline constexpr std::uint64_t SplitVersionKey = 0xe4c8e23263da959bULL;
+constexpr std::uint64_t VariantPermutationKey(std::uint64_t shader_hash,
+                                               std::uint64_t original_key,
+                                               bool split_enabled) {
+    return split_enabled && IsTarget(shader_hash) ? original_key ^ SplitVersionKey
+                                                  : original_key;
+}
 inline bool Enabled() {
     static const bool enabled = [] {
         const char* env = std::getenv("TLOU_SPLIT_CS64");
         return env && env[0] == '1' && env[1] == 0;
     }();
     return enabled;
+}
+inline std::uint64_t PermutationKey(std::uint64_t shader_hash,
+                                    std::uint64_t original_key) {
+    return VariantPermutationKey(shader_hash, original_key, Enabled());
 }
 constexpr bool EligibleGeometry(std::uint64_t hash, std::array<std::uint32_t, 3> local,
                                 std::uint32_t shared_bytes, bool unsafe_group_ops) {

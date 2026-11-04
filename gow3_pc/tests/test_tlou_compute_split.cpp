@@ -9,6 +9,18 @@ int main() {
     assert(IsTarget(HashA) && IsTarget(HashB));
     assert(!IsTarget(NativeFallbackHash(HashA)));
     assert(!IsTarget(NativeFallbackHash(HashB)));
+    // The original 1024-thread meta and experimental 64-thread meta must
+    // never share the same cache identity across A/B sessions.
+    for (std::uint64_t base : {0ULL, 1ULL, 0xa15b4c93de120001ULL}) {
+        assert(VariantPermutationKey(HashA, base, false) == base);
+        assert(VariantPermutationKey(HashB, base, false) == base);
+        assert(VariantPermutationKey(HashA, base, true) != base);
+        assert(VariantPermutationKey(HashB, base, true) != base);
+        assert(VariantPermutationKey(0xdeadbeef, base, true) == base);
+        assert(VariantPermutationKey(NativeFallbackHash(HashA), base, true) == base);
+        assert(VariantPermutationKey(HashA, base, true) ==
+               VariantPermutationKey(HashA, base, true));
+    }
     assert(EligibleGeometry(HashA, {1024,1,1}, 0, false));
     assert(EligibleGeometry(HashB, {1024,1,1}, 0, false));
     assert(!EligibleGeometry(HashA, {64,1,1}, 0, false));

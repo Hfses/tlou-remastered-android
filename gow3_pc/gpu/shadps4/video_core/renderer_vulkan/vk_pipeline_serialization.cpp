@@ -779,7 +779,7 @@ u64 TakeBinaryHash(u64 perm_hash) {
 /// with. Metas of earlier builds have no hash (0): their files must have been written together.
 bool BinaryMatchesMeta(const std::vector<u32>& spv, u64 binary_hash, u64 pgm_hash,
                        size_t perm_idx) {
-    const auto meta_name = fmt::format("{:#018x}", HashCombine(pgm_hash, u64(perm_idx)));
+    const auto meta_name = fmt::format("{:#018x}", TlouComputeSplit::PermutationKey(pgm_hash, HashCombine(pgm_hash, u64(perm_idx))));
     const auto binary_name = Serialization::ShaderBinaryName(pgm_hash, perm_idx);
     auto& db = Storage::DataBase::Instance();
     const bool matches =
@@ -836,7 +836,7 @@ void FindCrowdedShaders() {
             if (std::sscanf(name.c_str(), "%llx_%zu", &pgm, &perm_idx) != 2) {
                 continue;
             }
-            const u64 perm_hash = HashCombine(pgm_hash, u64(perm_idx));
+            const u64 perm_hash = TlouComputeSplit::PermutationKey(pgm_hash, HashCombine(pgm_hash, u64(perm_idx)));
             db.Remove(Storage::BlobType::ShaderBinary, name);
             db.Remove(Storage::BlobType::ShaderMeta, fmt::format("{:#018x}", perm_hash));
             db.Remove(Storage::BlobType::PipelineKey, fmt::format("c_{:#018x}", perm_hash));
@@ -884,7 +884,7 @@ void RegisterShaderBinary(std::vector<u32>&& spv, u64 pgm_hash, size_t perm_idx)
 
     {
         std::scoped_lock lock{g_binary_hash_mutex};
-        g_binary_hashes[HashCombine(pgm_hash, u64(perm_idx))] =
+        g_binary_hashes[TlouComputeSplit::PermutationKey(pgm_hash, HashCombine(pgm_hash, u64(perm_idx)))] =
             XXH3_64bits(spv.data(), spv.size() * sizeof(u32));
     }
     Storage::DataBase::Instance().Save(Storage::BlobType::ShaderBinary,

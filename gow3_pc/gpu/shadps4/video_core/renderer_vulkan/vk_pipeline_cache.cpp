@@ -623,7 +623,7 @@ void PipelineCache::PublishShaders(bool wait) {
             }
             continue;
         }
-        const auto perm_hash = HashCombine(hash, build->permutation);
+        const auto perm_hash = TlouComputeSplit::PermutationKey(hash, HashCombine(hash, build->permutation));
         Vulkan::SetObjectName(instance.GetDevice(), build->module,
                              GetShaderName(build->info.hw_stage, hash, build->permutation));
         RegisterShaderBinary(std::move(build->binary), hash, build->permutation);
@@ -933,7 +933,7 @@ void PipelineCache::RunPrecompile(PrecompiledCompute& job) {
     job.spirv = std::move(spv);
     job.program->AddPermut(module, std::move(*job.spec));
     job.spec.reset();
-    job.key.value = HashCombine(job.hash, 0);
+    job.key.value = TlouComputeSplit::PermutationKey(job.hash, HashCombine(job.hash, 0));
     job.pipeline = std::make_unique<ComputePipeline>(
         instance, scheduler, desc_heap, profile, *worker_pipeline_caches[AsyncCompiler::WorkerIndex()],
         job.key, job.program->info, module, job.sdata, false);
@@ -974,7 +974,7 @@ void PipelineCache::Adopt(PrecompiledCompute& job) {
         return;
     }
     auto& program = job.program;
-    const u64 perm_hash = HashCombine(job.hash, 0);
+    const u64 perm_hash = TlouComputeSplit::PermutationKey(job.hash, HashCombine(job.hash, 0));
     RegisterShaderBinary(std::move(job.spirv), job.hash, 0);
     // user_data pointed into the job's registers: refreshed by the next lookup.
     program->info.user_data = {};
@@ -1967,7 +1967,7 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
             {program, params.hash, hw_stage, info.pgm_base, &info.flattened_ud_buf});
         // (copied while the programs lock is held: the GPU thread may add permutations)
         return std::make_tuple(&info, it->module, AssignFetch(fetch, it->spec.fetch_shader_data),
-                               HashCombine(params.hash, perm_idx));
+                               TlouComputeSplit::PermutationKey(params.hash, HashCombine(params.hash, perm_idx)));
     }
 
     auto it_pgm = program_cache.find(params.hash); // this thread is the only writer
@@ -2023,7 +2023,7 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
                         static_cast<unsigned long long>(params.hash));
         }
         auto spec = Shader::StageSpecialization(new_program->info, runtime_info, profile, start);
-        const auto perm_hash = HashCombine(params.hash, 0);
+        const auto perm_hash = TlouComputeSplit::PermutationKey(params.hash, HashCombine(params.hash, 0));
 
         RegisterShaderMeta(new_program->info, spec.fetch_shader_data, spec, perm_hash, 0);
         new_program->AddPermut(module, std::move(spec));
@@ -2058,7 +2058,7 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
     auto spec = Shader::StageSpecialization(info, runtime_info, profile, binding);
 
     size_t perm_idx = program->modules.size();
-    u64 perm_hash = HashCombine(params.hash, perm_idx);
+    u64 perm_hash = TlouComputeSplit::PermutationKey(params.hash, HashCombine(params.hash, perm_idx));
 
     vk::ShaderModule module{};
 
@@ -2090,7 +2090,7 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
         info.AddBindings(binding);
         module = it->module;
         perm_idx = std::distance(program->modules.begin(), it);
-        perm_hash = HashCombine(params.hash, perm_idx);
+        perm_hash = TlouComputeSplit::PermutationKey(params.hash, HashCombine(params.hash, perm_idx));
     }
     return std::make_tuple(&program->info, module,
                            AssignFetch(fetch, program->modules[perm_idx].spec.fetch_shader_data),
