@@ -240,10 +240,21 @@ void Runtime::CopyBuffer(const VideoCore::Buffer* src, const VideoCore::Buffer* 
                                  copies[i].size | u64(src->CpuAddr() + copies[i].srcOffset) << 24);
         }
     }
-    scheduler.Record([src_handle = src->Handle(), dst_handle = dst->Handle(),
-                      regions = scheduler.RecordData(copies)](vk::CommandBuffer cmdbuf) {
-        cmdbuf.copyBuffer(src_handle, dst_handle, regions.size(), regions.data());
-    });
+    // Record the same Vulkan copy with fewer CPU-side allocations for small
+    // single-region transfers. No upload, barrier, or semaphore is omitted.
+    const bool eligible_inline = InlineCopyRecord::Eligible(copies);
+    if (eligible_inline) {
+        tlou_inline_eligible.fetch_add(1, std::memory_order_relaxed);
+    }
+    if (eligible_inline && tlou_inline_enabled) {
+        tlou_inline_used.fetch_add(1, std::memory_order_relaxed);
+        scheduler.Record(InlineCopyRecord::Single(src->Handle(), dst->Handle(), copies.front()));
+    } else {
+        scheduler.Record([src_handle = src->Handle(), dst_handle = dst->Handle(),
+                          regions = scheduler.RecordData(copies)](vk::CommandBuffer cmdbuf) {
+            cmdbuf.copyBuffer(src_handle, dst_handle, regions.size(), regions.data());
+        });
+    }
 
     if (bounded) {
         AccessBuffer(src, src_min, src_max - src_min, vk::PipelineStageFlagBits2::eCopy,
