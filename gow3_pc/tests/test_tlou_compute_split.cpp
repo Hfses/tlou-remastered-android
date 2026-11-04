@@ -32,6 +32,29 @@ int main() {
         }
         assert(AcceptCachedMeta(0xdeadbeefULL, base, base, true));
         assert(AcceptCachedMeta(NativeFallbackHash(HashA), base, base, true));
+        // Fused-FP optimization must stay cache-isolated from original,
+        // split64, both-toggles and opposite-mode warmup metadata.
+        for (const auto target : {HashA, HashB}) {
+            const auto native = VariantPermutationKey(target, base, false, false);
+            const auto split = VariantPermutationKey(target, base, true, false);
+            const auto relaxed = VariantPermutationKey(target, base, false, true);
+            const auto both = VariantPermutationKey(target, base, true, true);
+            assert(native == base && split != base && relaxed != base);
+            assert(both != native && both != split && both != relaxed);
+            const std::uint64_t hashes[4] = {native, split, relaxed, both};
+            for (unsigned split_on = 0; split_on != 2; ++split_on) {
+                for (unsigned relaxed_on = 0; relaxed_on != 2; ++relaxed_on) {
+                    const unsigned selected = split_on + relaxed_on * 2;
+                    for (unsigned candidate = 0; candidate != 4; ++candidate)
+                        assert(AcceptCachedMeta(target, base, hashes[candidate],
+                            split_on, relaxed_on) == (candidate == selected));
+                }
+            }
+        }
+        assert(VariantPermutationKey(0xdeadbeef, base, true, true) == base);
+        assert(VariantPermutationKey(NativeFallbackHash(HashA), base, true, true) == base);
+        assert(RelaxedFpFor(HashA, true) && RelaxedFpFor(HashB, true));
+        assert(!RelaxedFpFor(HashA, false) && !RelaxedFpFor(0xdeadbeef, true));
     }
     assert(EligibleGeometry(HashA, {1024,1,1}, 0, false));
     assert(EligibleGeometry(HashB, {1024,1,1}, 0, false));

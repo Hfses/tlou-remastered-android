@@ -92,7 +92,7 @@ final class PortMenu {
             row("Análise de desempenho",()->go("profiling"));
             action("Ver logs",actions::logs);if(!inGame)action("Exportar logs ZIP",actions::exportLogs);
             if(inGame)action("Voltar ao launcher",actions::exitGame);
-            note("TLOU Remastered  ·  Daedalus v0.26");
+            note("TLOU Remastered  ·  Daedalus v0.27");
         } else if(section.equals("video")) {
             heading("VÍDEO E DESEMPENHO");note("Aplicados ao iniciar o jogo. Compare as opções no mesmo cenário.");
             choice("resolution","Resolução interna (patch de eboot)",new String[]{"Original (referência)","1280 × 720 · experimental","960 × 540 · experimental","640 × 360 · experimental"},new String[]{"original","720","540","360"},"original");
@@ -120,6 +120,8 @@ final class PortMenu {
             toggle("inline_single_copy","Registro leve de cópias GPU pequenas (até 64 KiB)",false);
             note("Evita uma reserva e uma cópia do descritor no gravador Vulkan. Mantém transferências e barreiras; desligado por padrão.");
             toggle("split_cs64","Compute de vértices: grupos de 64 (2 shaders)",false);
+            toggle("relaxed_skinning_fp","Shaders de skinning: permitir otimização FMA (2 kernels)",false);
+            note("Alvo: shaders compute 22e6e19e e 61d67259 (~14,5 ms/quadro no perfil anterior, com instrumentação). Remove NoContraction só nesses dois shaders para permitir otimizações aritméticas Vulkan. Pode alterar arredondamentos e causar glitches; desligado por padrão. Não exige ativar grupos de 64.");
             note("Experimento isolado, desligado por padrão: divide o grupo virtual de 1024 em 16 de 64, apenas nos dois shaders mais caros. Dispatch indireto permanece original. Reinicie e compare com o perfil GPU desligado.");
             toggle("mapped_fault_readbacks","Readback direto para acessos da CPU",false);
             note("Evita cópias intermediárias quando a CPU precisa ler dados da GPU. Compare separadamente; requer reabrir o jogo.");
@@ -132,7 +134,7 @@ final class PortMenu {
                 new String[]{"auto","0","2","4","6"},"auto");
             note("Prefetch e compilação paralela podem mudar travamentos e correção visual. O modo automático de workers é o original.");
             row("Desativar todos os experimentos",()->{
-                prefs.edit().putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("mapped_fault_readbacks",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
+                prefs.edit().putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("relaxed_skinning_fp",false).putBoolean("mapped_fault_readbacks",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
                     .putBoolean("prefetch_pipelines",false).putBoolean("parallel_pipelines",false)
                     .putString("prep_workers","auto").apply();
                 actions.changed();render();

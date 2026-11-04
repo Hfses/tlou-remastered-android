@@ -26,6 +26,7 @@ final class PortSettings {
             resolution.equals("720")?"1280x720":resolution.equals("360")?"640x360":"1920x1080");
         env.put("TLOU_MAPPED_FAULT_READBACKS",p.getBoolean("mapped_fault_readbacks",false)?"1":"0");
         env.put("TLOU_SPLIT_CS64",p.getBoolean("split_cs64",false)?"1":"0");
+        env.put("TLOU_RELAXED_SKINNING_FP",p.getBoolean("relaxed_skinning_fp",false)?"1":"0");
         env.put("TLOU_INLINE_SINGLE_COPY",p.getBoolean("inline_single_copy",false)?"1":"0");
         env.put("TLOU_STACK_MAPPED_READBACK",p.getBoolean("stack_mapped_readback",false)?"1":"0");
         env.put("GOW3_FETCH_NO_BLOCK",p.getBoolean("fetch_no_block",false)?"1":"0");
@@ -69,7 +70,7 @@ final class PortSettings {
     static String experimentReport(Context context,Map<String,String> env) {
         StringBuilder result=new StringBuilder("TLOU A/B: resolution=")
             .append(prefs(context).getString("resolution","original"));
-        for(String key:new String[]{"TLOU_SRT_DEP_BATCH","GOW3_FETCH_NO_BLOCK","GOW3_LAND_ON_GUEST","GOW3_STATIC_MIN_BYTES","TLOU_STACK_MAPPED_READBACK","TLOU_INLINE_SINGLE_COPY","TLOU_SPLIT_CS64","TLOU_MAPPED_FAULT_READBACKS","TLOU_MAPPED_READBACKS","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
+        for(String key:new String[]{"TLOU_SRT_DEP_BATCH","GOW3_FETCH_NO_BLOCK","GOW3_LAND_ON_GUEST","GOW3_STATIC_MIN_BYTES","TLOU_STACK_MAPPED_READBACK","TLOU_INLINE_SINGLE_COPY","TLOU_SPLIT_CS64","TLOU_RELAXED_SKINNING_FP","TLOU_MAPPED_FAULT_READBACKS","TLOU_MAPPED_READBACKS","GOW3_GPU_PROFILE","GOW3_READBACKS","GOW3_FRAMES_AHEAD",
                 "GOW3_ASYNC_SHADERS","TLOU_DESCRIPTOR_BULK","GOW3_PREP_POOL","GOW3_CPU_TRIMS",
                 "GOW3_PREFETCH_PIPELINES","GOW3_PARALLEL_PIPELINES",
                 "GOW3_PREP_WORKERS"})

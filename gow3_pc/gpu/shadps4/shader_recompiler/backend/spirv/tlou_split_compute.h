@@ -19,19 +19,37 @@ constexpr bool IsTarget(std::uint64_t hash) { return hash == HashA || hash == Ha
 // a different binary filename. Otherwise alternating OFF/ON overwrites
 // shader metadata and forces recompilation when returning to the other mode.
 inline constexpr std::uint64_t SplitVersionKey = 0xe4c8e23263da959bULL;
+// Separate native SPIR-V, metadata and pipeline identity for an FP32
+// arithmetic variant of the two measured hot compute kernels.
+inline constexpr std::uint64_t RelaxedFpVersionKey = 0x319e716c8df4a052ULL;
+constexpr bool RelaxedFpFor(std::uint64_t shader_hash, bool enabled) {
+    return enabled && IsTarget(shader_hash);
+}
+inline bool RelaxedFpEnabled() {
+    static const bool enabled = [] {
+        const char* env = std::getenv("TLOU_RELAXED_SKINNING_FP");
+        return env && env[0] == '1' && env[1] == 0;
+    }();
+    return enabled;
+}
+
 constexpr std::uint64_t VariantPermutationKey(std::uint64_t shader_hash,
                                                std::uint64_t original_key,
-                                               bool split_enabled) {
-    return split_enabled && IsTarget(shader_hash) ? original_key ^ SplitVersionKey
-                                                  : original_key;
+                                               bool split_enabled,
+                                               bool relaxed_fp_enabled = false) {
+    if (!IsTarget(shader_hash)) return original_key;
+    return original_key ^ (split_enabled ? SplitVersionKey : 0ULL) ^
+           (relaxed_fp_enabled ? RelaxedFpVersionKey : 0ULL);
 }
 // Warmup scans pipeline keys from both variants. Metadata for the other
 // variant is not corrupt: reject it before BinaryMatchesMeta can erase
 // the current variant's valid SPIR-V and metadata.
 constexpr bool AcceptCachedMeta(std::uint64_t shader_hash, std::uint64_t original_key,
-                                std::uint64_t stored_key, bool split_enabled) {
+                                std::uint64_t stored_key, bool split_enabled,
+                                bool relaxed_fp_enabled = false) {
     return !IsTarget(shader_hash) ||
-           VariantPermutationKey(shader_hash, original_key, split_enabled) == stored_key;
+           VariantPermutationKey(shader_hash, original_key, split_enabled,
+                                 relaxed_fp_enabled) == stored_key;
 }
 inline bool Enabled() {
     static const bool enabled = [] {
@@ -42,7 +60,7 @@ inline bool Enabled() {
 }
 inline std::uint64_t PermutationKey(std::uint64_t shader_hash,
                                     std::uint64_t original_key) {
-    return VariantPermutationKey(shader_hash, original_key, Enabled());
+    return VariantPermutationKey(shader_hash, original_key, Enabled(), RelaxedFpEnabled());
 }
 constexpr bool EligibleGeometry(std::uint64_t hash, std::array<std::uint32_t, 3> local,
                                 std::uint32_t shared_bytes, bool unsafe_group_ops) {
