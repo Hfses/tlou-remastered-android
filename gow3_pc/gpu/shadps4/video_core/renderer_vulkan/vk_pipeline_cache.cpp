@@ -33,6 +33,7 @@
 #include "video_core/renderer_vulkan/vk_draw_prep.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_pipeline_serialization.h"
+#include "shader_recompiler/backend/spirv/tlou_split_compute.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
 
@@ -1426,14 +1427,14 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
     return used(it->second->Failed() ? nullptr : it->second.get());
 }
 
-const ComputePipeline* PipelineCache::GetComputePipeline() {
+const ComputePipeline* PipelineCache::GetComputePipeline(bool allow_split64) {
     PublishShaders();
     PublishGraphics();
     DrainPrefetch();
     PumpWarmUp();
     NoteWarmupOrder();
     AdoptPrecompiled();
-    if (!RefreshComputeKey()) {
+    if (!RefreshComputeKey(allow_split64)) {
         return nullptr;
     }
     const auto [it, is_new] = compute_pipelines.try_emplace(compute_key);
@@ -1822,10 +1823,23 @@ bool PipelineCache::RefreshGraphicsStages(PipelineSelection& sel) {
     return true;
 }
 
-bool PipelineCache::RefreshComputeKey() {
+bool PipelineCache::RefreshComputeKey(bool allow_split64) {
     Shader::Backend::Bindings binding{};
     const auto& cs_pgm = liverpool->GetCsRegs();
-    const auto cs_params = AmdGpu::GetParams(cs_pgm);
+    auto cs_params = AmdGpu::GetParams(cs_pgm);
+    if (TlouComputeSplit::Enabled() && TlouComputeSplit::IsTarget(cs_params.hash)) {
+        const std::array<u32, 3> local{cs_pgm.num_thread_x.full,
+            cs_pgm.num_thread_y.full, cs_pgm.num_thread_z.full};
+        const auto max_x = instance.GetPhysicalDevice().getProperties().limits.maxComputeWorkGroupCount[0];
+        if (!allow_split64 ||
+            !TlouComputeSplit::EligibleGeometry(cs_params.hash, local, cs_pgm.SharedMemSize(), false) ||
+            !TlouComputeSplit::CanExpandX(cs_pgm.dim_x, max_x)) {
+            // A cached native LocalSize=1024 module must never be used by a
+            // direct split64 dispatch, or vice versa. The fallback also
+            // leaves indirect dispatch argument buffers unchanged.
+            cs_params.hash = TlouComputeSplit::NativeFallbackHash(cs_params.hash);
+        }
+    }
     bool has_fetch = false;
     std::tie(sel.infos[0], sel.modules[0], has_fetch, compute_key.value) =
         GetProgram(sel, HwStage::Compute, SwStage::Compute, cs_params, binding, sel.fetch_shader);

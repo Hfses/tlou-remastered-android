@@ -189,7 +189,7 @@ public:
     static const GraphicsPipeline* WaitPending(const void* build);
     void ReleasePendingBuilds();
 
-    const ComputePipeline* GetComputePipeline();
+    const ComputePipeline* GetComputePipeline(bool allow_split64 = true);
 
     /// gow3 18 Oct 2026: compiles the compute program of a dispatch seen ahead of the GPU thread
     /// (Liverpool's precompile scanner, at submit time) on a compiler worker: translation,
@@ -273,7 +273,7 @@ private:
     bool sync_compile = false;
     bool RefreshGraphicsKey(PipelineSelection& sel);
     bool RefreshGraphicsStages(PipelineSelection& sel);
-    bool RefreshComputeKey();
+    bool RefreshComputeKey(bool allow_split64);
 
     void DumpShader(std::span<const u32> code, u64 hash, Shader::HwStage stage, size_t perm_idx,
                     std::string_view ext);

@@ -21,6 +21,7 @@
 #include "common/serdes.h"
 #include "common/scope_exit.h"
 #include "video_core/renderer_vulkan/vk_pipeline_serialization.h"
+#include "shader_recompiler/backend/spirv/tlou_split_compute.h"
 #include "common/thread.h"
 #include "gow3_overlay.h"
 #include "shader_recompiler/ir/passes/ir_passes.h"
@@ -45,8 +46,12 @@ static constexpr u32 PipelineKeyVersion = 5u; // gow3: Info layout (ImageResourc
 /// gow3: the cache name of a shader's SPIR-V. Shaders that gained multi-wave LDS barriers get a
 /// new name, so binaries cached before the fix are not found and only those shaders recompile.
 static std::string ShaderBinaryName(u64 pgm_hash, size_t perm_idx) {
-    return fmt::format("{:#018x}_{}{}", pgm_hash, perm_idx,
-                       Shader::Optimization::MultiwaveLdsBarriers(pgm_hash) ? "_lds4" : "");
+    // Keep split64 SPIR-V separate from the original 1024-thread module.
+    // ShaderMeta checks the SPIR-V digest before accepting a stored pipeline.
+    const char* split = TlouComputeSplit::Enabled() && TlouComputeSplit::IsTarget(pgm_hash)
+                            ? "_tlou64v1" : "";
+    return fmt::format("{:#018x}_{}{}{}", pgm_hash, perm_idx,
+                       Shader::Optimization::MultiwaveLdsBarriers(pgm_hash) ? "_lds4" : "", split);
 }
 } // namespace Serialization
 
