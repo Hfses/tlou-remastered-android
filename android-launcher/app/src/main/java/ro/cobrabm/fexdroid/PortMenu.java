@@ -92,7 +92,7 @@ final class PortMenu {
             row("Análise de desempenho",()->go("profiling"));
             action("Ver logs",actions::logs);if(!inGame)action("Exportar logs ZIP",actions::exportLogs);
             if(inGame)action("Voltar ao launcher",actions::exitGame);
-            note("TLOU Remastered  ·  Daedalus v0.15");
+            note("TLOU Remastered  ·  Daedalus v0.16");
         } else if(section.equals("video")) {
             heading("VÍDEO E DESEMPENHO");note("Aplicados ao iniciar o jogo. Compare as opções no mesmo cenário.");
             choice("resolution","Resolução interna (patch de eboot)",new String[]{"Original (referência)","1280 × 720 · experimental","960 × 540 · experimental","640 × 360 · experimental"},new String[]{"original","720","540","360"},"original");
@@ -101,11 +101,7 @@ final class PortMenu {
             note("Readback 2 NÃO é ativado automaticamente em 720/540/360p. Teste o mesmo cenário antes e depois.");
             toggle("mapped_readbacks","Readback direto de buffers",true);
             note("Lê a memória compartilhada após esperar os dados da GPU. Desligue para comparar a cópia intermediária anterior; requer reabrir o jogo.");
-            toggle("batch_dma_uploads","Agrupar uploads de memória GPU",false);
-            note("Agrupa cópias de buffers por arena. Desligue para comparar o caminho anterior na mesma cena; requer reabrir o jogo.");
-            toggle("fast_render_cores","Threads nos núcleos rápidos (experimental)",false);
-            note("Requer reabrir o jogo. Usa apenas CPUs permitidas pelo Android; desligue para comparar com o agendamento do sistema.");
-            row("Experimentos de CPU / pipelines",()->go("experiments"));
+            row("Experimentos de desempenho",()->go("experiments"));
             choice("fps_limit","Limite de FPS",new String[]{"30 FPS","60 FPS","Sem limite de apresentação"},new String[]{"30","60","0"},"60");
             toggle("vsync","VSync",true);toggle("async_shaders","Compilação assíncrona de shaders",true);
             choice("frames_ahead","Fila de renderização",new String[]{"0 · Menor latência","1 · Padrão","2 · Maior fila / latência"},new String[]{"0","1","2"},"1");
@@ -114,8 +110,8 @@ final class PortMenu {
         } else if(section.equals("experiments")) {
             heading("OTIMIZAÇÕES EXPERIMENTAIS");
             note("Desligadas por padrão. Ative UMA por vez e compare FPS e falhas na mesma área. Requer reiniciar o jogo.");
-            toggle("batch_srt_readbacks","Agrupar leituras de tabelas GPU",false);
-            note("Combina tabelas independentes na mesma espera. Mantém a ordem entre pais e filhos; teste separadamente do readback direto.");
+            toggle("mapped_fault_readbacks","Readback direto para acessos da CPU",false);
+            note("Evita cópias intermediárias quando a CPU precisa ler dados da GPU. Compare separadamente; requer reabrir o jogo.");
             toggle("prep_pool","Reutilizar buffers de preparação de draws",false);
             toggle("cpu_trims","Reduzir trabalho de CPU por draw",false);
             toggle("prefetch_pipelines","Pré-compilar pipelines antecipadamente",false);
@@ -125,7 +121,7 @@ final class PortMenu {
                 new String[]{"auto","0","2","4","6"},"auto");
             note("Prefetch e compilação paralela podem mudar travamentos e correção visual. O modo automático de workers é o original.");
             row("Desativar todos os experimentos",()->{
-                prefs.edit().putBoolean("batch_srt_readbacks",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
+                prefs.edit().putBoolean("mapped_fault_readbacks",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
                     .putBoolean("prefetch_pipelines",false).putBoolean("parallel_pipelines",false)
                     .putString("prep_workers","auto").apply();
                 actions.changed();render();

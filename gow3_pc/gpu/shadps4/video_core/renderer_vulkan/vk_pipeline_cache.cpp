@@ -1890,6 +1890,30 @@ PipelineCache::Result PipelineCache::GetProgram(PipelineSelection& sel, HwStage 
                                                 const Shader::ShaderParams& params,
                                                 Shader::Backend::Bindings& binding,
                                                 std::optional<Shader::Gcn::FetchShaderData>& fetch) {
+    // Profile-only, bounded evidence for the two expensive compute programs.
+    // Capture before the cache lookup so an already cached program is included.
+    if (hw_stage == HwStage::Compute && (params.hash == 0x22e6e19e || params.hash == 0x61d67259)) {
+        static const bool capture = [] {
+            const char* env = std::getenv("GOW3_GPU_PROFILE");
+            return env && env[0] == '1';
+        }();
+        if (capture && !params.code.empty() && params.code.size_bytes() <= 256 * 1024) {
+            static std::atomic<bool> captured[2]{};
+            const unsigned slot = params.hash == 0x22e6e19e ? 0 : 1;
+            bool expected = false;
+            if (captured[slot].compare_exchange_strong(expected, true)) {
+                if (const char* dir = std::getenv("GOW3_GPU_USER_DIR")) {
+                    const auto path = fmt::format("{}/perf-cs-{:08x}.bin", dir, params.hash);
+                    if (auto* file = std::fopen(path.c_str(), "wb")) {
+                        const auto bytes = std::fwrite(params.code.data(), 1, params.code.size_bytes(), file);
+                        const bool ok = std::fclose(file) == 0 && bytes == params.code.size_bytes();
+                        std::printf("TLOU compute evidence: %08llx %zu bytes %s\n",
+                            (unsigned long long)params.hash, bytes, ok ? "saved" : "write failed");
+                    }
+                }
+            }
+        }
+    }
     auto runtime_info = BuildRuntimeInfo(sel, hw_stage, sw_stage);
     if (sel.worker) {
         // gow3: draw-preparation worker: look up only, with the worker's own Info copy.

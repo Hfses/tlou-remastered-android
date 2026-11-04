@@ -11,6 +11,7 @@
 
 namespace VideoCore {
 inline constexpr std::uint64_t MaxMappedReadbackBytes = 64 * 1024;
+inline constexpr std::uint64_t MaxMappedFaultReadbackBytes = 1024 * 1024;
 struct ReadbackMapping { const std::uint8_t* data{}; std::uint64_t size{}; };
 struct MappedReadbackPiece {
     const std::uint8_t* data;
@@ -26,8 +27,9 @@ struct MappedReadbackPlan {
 // supply only coherent host-visible memory. Call without cache locks held at wait.
 template <typename Range, std::size_t Extent, typename Lookup, typename PageTick>
 std::optional<MappedReadbackPlan> PlanMappedReadback(std::span<Range, Extent> ranges,
-        std::uint64_t bytes, std::uint64_t current_tick, Lookup&& lookup, PageTick&& page_tick) {
-    if (!bytes || bytes > MaxMappedReadbackBytes || !current_tick) return std::nullopt;
+        std::uint64_t bytes, std::uint64_t current_tick, Lookup&& lookup, PageTick&& page_tick,
+        std::uint64_t max_bytes = MaxMappedReadbackBytes) {
+    if (!bytes || bytes > max_bytes || max_bytes > MaxMappedFaultReadbackBytes || !current_tick) return std::nullopt;
     MappedReadbackPlan plan;
     plan.bytes = bytes;
     for (const auto& range : ranges) {

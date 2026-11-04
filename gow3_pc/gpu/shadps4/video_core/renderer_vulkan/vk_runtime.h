@@ -49,7 +49,7 @@ public:
     SceneTargets* scene_targets = nullptr;
 
     void CopyBuffer(const VideoCore::Buffer* src, const VideoCore::Buffer* dst,
-                    std::span<const vk::BufferCopy> copies, bool precise_ranges = false);
+                    std::span<const vk::BufferCopy> copies);
 
     void FillBuffer(const VideoCore::Buffer* dst, u64 offset, u64 size, u32 value);
 

@@ -68,6 +68,37 @@ int main() {
     assert(CopyMappedReadback(*split,joined,[](auto tick){assert(tick==2);}));
     assert((joined==std::array<std::uint8_t,4>{3,4,5,6}));
 
+    // Fault readbacks keep a separate 1 MiB bound; the old SRT limit stays 64 KiB.
+    constexpr std::size_t fault_bytes = 512 * 1024;
+    auto* fault_source = static_cast<std::uint8_t*>(mmap(nullptr,fault_bytes,PROT_NONE,
+        MAP_PRIVATE|MAP_ANONYMOUS,-1,0));
+    assert(fault_source != MAP_FAILED);
+    std::array fault_ranges{Range{Base, 131072, 0}, Range{Base+196608, 262144, 131072}};
+    auto fault_lookup = [&](std::uint64_t a)->ReadbackMapping {
+        if(a<Base || a>=Base+fault_bytes)return {};
+        const auto off=a-Base;
+        return {fault_source+off,4096-off%4096};
+    };
+    const auto fault_plan=PlanMappedReadback(std::span{fault_ranges},393216,12,
+        fault_lookup,[](auto){return 9u;},MaxMappedFaultReadbackBytes);
+    assert(fault_plan && fault_plan->tick==9);
+    assert(!PlanMappedReadback(std::span{fault_ranges},393216,12,fault_lookup,[](auto){return 9u;}));
+    std::vector<std::uint8_t> fault_result(393216);
+    unsigned fault_waits=0;
+    assert(CopyMappedReadback(*fault_plan,fault_result,[&](auto tick){
+        assert(tick==9);++fault_waits;
+        assert(!mprotect(fault_source,fault_bytes,PROT_READ|PROT_WRITE));
+        for(std::size_t i=0;i<fault_bytes;++i)fault_source[i]=static_cast<std::uint8_t>(i*13+7);
+    }));
+    assert(fault_waits==1);
+    for(const auto& range:fault_ranges)
+        assert(!std::memcmp(fault_result.data()+range.offset,fault_source+range.address-Base,range.size));
+    assert(!PlanMappedReadback(std::span{fault_ranges},MaxMappedFaultReadbackBytes+1,12,
+        fault_lookup,[](auto){return 9u;},MaxMappedFaultReadbackBytes));
+    assert(!PlanMappedReadback(std::span{fault_ranges},393216,12,fault_lookup,
+        [](auto){return 9u;},2*MaxMappedFaultReadbackBytes));
+    assert(!munmap(fault_source,fault_bytes));
+
     std::vector<std::uint8_t> arena(65536),expected_gpu(65536);
     std::mt19937 rng(20);
     unsigned avoided_unrelated_submits=0;

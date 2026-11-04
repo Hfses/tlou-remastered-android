@@ -1846,14 +1846,49 @@ void BufferCache::ReadMemory(VAddr device_addr, u64 size, bool is_write, bool as
     }
 }
 
+u64 BufferCache::CopyMappedReadbackPieces(std::span<const DownloadPiece> pending,
+                                               u64 total_size_bytes, u64 max_bytes) {
+    const auto coherent = vk::MemoryPropertyFlagBits::eHostCoherent;
+    if (arena_host_mapped && scheduler.host_read_barrier &&
+        (instance.GetMemoryProperties().memoryTypes[arena_memory_type_index].propertyFlags & coherent) &&
+        total_size_bytes <= max_bytes) {
+        const u64 current_tick = scheduler.CurrentTick();
+        const auto plan = [&]() -> std::optional<MappedReadbackPlan> {
+            std::shared_lock lock{gpu_ranges_mutex};
+            return PlanMappedReadback(pending, total_size_bytes, current_tick,
+                [this](u64 address) -> ReadbackMapping {
+                    const auto it = resident_ranges.Find(address >> block_shift);
+                    if (it == resident_ranges.end() || !it->mapped ||
+                        (it->offset & ((u64{1} << block_shift) - 1))) return {};
+                    const u64 base = it->start << block_shift;
+                    const u64 end = it->end << block_shift;
+                    if (address < base || address >= end) return {};
+                    return {it->mapped + it->offset + (address - base), end - address};
+                }, [this](u64 page) {
+                    u64 tick = 0;
+                    if (const auto w = gpu_write_window_tick.find(page >> 8); w != gpu_write_window_tick.end())
+                        tick = w->second;
+                    if (const auto p = gpu_write_page_tick.find(page); p != gpu_write_page_tick.end())
+                        tick = std::max(tick, p->second);
+                    return tick;
+                }, max_bytes);
+        }(); // release the cache history lock before Wait can submit callbacks
+        if (plan) {
+            std::vector<u8> snapshot(total_size_bytes);
+            if (CopyMappedReadback(*plan, std::span{snapshot}, [this](u64 tick) { scheduler.Wait(tick); })) {
+                // Same lazy-page / newer guest-byte merge as the staging path.
+                // Never publish the mapping by a raw guest memcpy.
+                for (const auto& p : pending)
+                    WriteBackGpuData(p.address, snapshot.data() + p.offset, p.size);
+                return plan->tick;
+            }
+        }
+    }
+    return 0;
+}
+
 void BufferCache::DownloadRanges(std::span<const std::pair<VAddr, u64>> ranges) {
-    struct Pending {
-        const Buffer* arena;
-        VAddr address;
-        u64 size;
-        u64 offset;
-    };
-    std::vector<Pending> pending;
+    std::vector<DownloadPiece> pending;
     u64 total_size_bytes = 0;
     // Older asynchronous readbacks of these bytes go first (theirs is older data).
     u64 readback_tick = 0;
@@ -1909,45 +1944,15 @@ void BufferCache::DownloadRanges(std::span<const std::pair<VAddr, u64>> ranges) 
             memory_tracker->UnmarkRegionAsGpuModified(address, size);
         }
     };
-    const auto coherent = vk::MemoryPropertyFlagBits::eHostCoherent;
-    if (mapped_reads && arena_host_mapped && scheduler.host_read_barrier &&
-        (instance.GetMemoryProperties().memoryTypes[arena_memory_type_index].propertyFlags & coherent) &&
-        total_size_bytes <= MaxMappedReadbackBytes) {
-        const u64 current_tick = scheduler.CurrentTick();
-        const auto plan = [&]() -> std::optional<MappedReadbackPlan> {
-            std::shared_lock lock{gpu_ranges_mutex};
-            return PlanMappedReadback(std::span{pending}, total_size_bytes, current_tick,
-                [this](u64 address) -> ReadbackMapping {
-                    const auto it = resident_ranges.Find(address >> block_shift);
-                    if (it == resident_ranges.end() || !it->mapped ||
-                        (it->offset & ((u64{1} << block_shift) - 1))) return {};
-                    const u64 base = it->start << block_shift;
-                    const u64 end = it->end << block_shift;
-                    if (address < base || address >= end) return {};
-                    return {it->mapped + it->offset + (address - base), end - address};
-                }, [this](u64 page) {
-                    u64 tick = 0;
-                    if (const auto w = gpu_write_window_tick.find(page >> 8); w != gpu_write_window_tick.end())
-                        tick = w->second;
-                    if (const auto p = gpu_write_page_tick.find(page); p != gpu_write_page_tick.end())
-                        tick = std::max(tick, p->second);
-                    return tick;
-                });
-        }(); // release the cache history lock before Wait can submit callbacks
-        if (plan) {
-            std::vector<u8> snapshot(total_size_bytes);
-            if (CopyMappedReadback(*plan, std::span{snapshot}, [this](u64 tick) { scheduler.Wait(tick); })) {
-                // Same lazy-page / newer guest-byte merge as the staging path.
-                // Never publish the mapping by a raw guest memcpy.
-                for (const auto& p : pending)
-                    WriteBackGpuData(p.address, snapshot.data() + p.offset, p.size);
-                finish_ranges();
-                ++mapped_stats.direct;
-                mapped_stats.bytes += total_size_bytes;
-                mapped_stats.no_submit += plan->tick < current_tick;
-                report();
-                return;
-            }
+    const u64 current_tick = scheduler.CurrentTick();
+    if (mapped_reads) {
+        if (const u64 tick = CopyMappedReadbackPieces(pending, total_size_bytes, MaxMappedReadbackBytes)) {
+            finish_ranges();
+            ++mapped_stats.direct;
+            mapped_stats.bytes += total_size_bytes;
+            mapped_stats.no_submit += tick < current_tick;
+            report();
+            return;
         }
     }
     if (mapped_reads) { ++mapped_stats.fallback; report(); }
@@ -2001,6 +2006,40 @@ void BufferCache::DownloadMemory(const Buffer* arena, VAddr device_addr, u64 siz
         return;
     }
     ++gow3_downloads;
+    static const bool mapped_faults = [] {
+        const char* env = std::getenv("TLOU_MAPPED_FAULT_READBACKS");
+        return env && env[0] == '1';
+    }();
+    if (mapped_faults) {
+        // Fault windows may span 512 KiB. Bound scratch memory to 1 MiB,
+        // including all padded islands; leave selection and cleanup unchanged.
+        std::vector<DownloadPiece> pieces;
+        pieces.reserve(copies.size());
+        for (const auto& copy : copies)
+            pieces.push_back({arena, arena_base + copy.srcOffset, copy.size, copy.dstOffset});
+        const u64 current_tick = scheduler.CurrentTick();
+        const u64 tick = CopyMappedReadbackPieces(pieces, total_size_bytes, MaxMappedFaultReadbackBytes);
+        struct FaultStats { u64 direct{}, bytes{}, no_submit{}, fallback{}; };
+        static FaultStats counts;
+        if (tick) {
+            ++counts.direct; counts.bytes += total_size_bytes;
+            counts.no_submit += tick < current_tick;
+        } else ++counts.fallback;
+        static auto last = std::chrono::steady_clock::now();
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last >= std::chrono::seconds(5)) {
+            std::printf("TLOU mapped fault readbacks (5 s): direct=%llu bytes=%llu no-extra-submit=%llu staging-fallback=%llu\n",
+                (unsigned long long)counts.direct, (unsigned long long)counts.bytes,
+                (unsigned long long)counts.no_submit, (unsigned long long)counts.fallback);
+            counts = {}; last = now;
+        }
+        if (tick) {
+            EraseLazyPages(device_addr, size);
+            memory_tracker->UnmarkRegionAsGpuModified(device_addr, size);
+            return;
+        }
+    }
+
     const auto download = staging_pool.Request(total_size_bytes, VideoCore::MemoryType::HostCached);
     for (auto& copy : copies) {
         copy.dstOffset += download.offset;
@@ -5496,27 +5535,16 @@ void BufferCache::ProcessFaultBuffer() {
 }
 
 void BufferCache::SynchronizeDmaBuffers() {
-    static const bool batch_uploads = [] {
-        const char* env = std::getenv("TLOU_BATCH_DMA_UPLOADS");
-        return env && env[0] == '1';
-    }();
-    DmaBatch batch;
     for (const auto& range : resident_ranges) {
         const u64 page = range.start >> (arena_page_bits - block_shift);
         const VAddr device_addr = range.start << block_shift;
         const u64 size = (range.end - range.start) << block_shift;
-        // Read-only synchronization retains the original dirty-page selection.
-        // Batch staging reservations/copy commands, not the resident address span.
         for (u64 offset = 0; offset < size;) {
             const u32 bytes = static_cast<u32>(std::min<u64>(size - offset, 1ULL << 30));
-            SynchronizeMemory(address_space[page], device_addr + offset, bytes, false, false,
-                              batch_uploads ? &batch : nullptr);
+            SynchronizeMemory(address_space[page], device_addr + offset, bytes, false, false);
             offset += bytes;
         }
     }
-    batch.Finish([this](const Buffer* arena, std::span<vk::BufferCopy> copies, u64 bytes) {
-        FlushDmaUpload(arena, copies, bytes);
-    });
 }
 
 void BufferCache::SynchronizeDmaRange(VAddr address, u64 size) {
@@ -5929,16 +5957,8 @@ void BufferCache::ReclaimArenaMemory() {
     }
 }
 
-void BufferCache::FlushDmaUpload(const Buffer* arena, std::span<vk::BufferCopy> copies, u64 bytes) {
-    if (const auto* source = UploadCopies(arena, copies, bytes)) {
-        const ProfileCopy mark{scheduler, 0xB0F7'0001ull, "buffer upload (CPU-written guest memory)"};
-        runtime.CopyBuffer(source, arena, copies, true);
-    }
-}
-
 bool BufferCache::SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 size,
-                                    bool is_written, bool is_texel_buffer, DmaBatch* dma_batch) {
-    ASSERT(!dma_batch || (!is_written && !is_texel_buffer));
+                                    bool is_written, bool is_texel_buffer) {
     boost::container::small_vector<vk::BufferCopy, 4> copies;
     size_t total_size_bytes{};
     const Buffer* src_buffer{};
@@ -5958,18 +5978,7 @@ bool BufferCache::SynchronizeMemory(const Buffer* arena, VAddr device_addr, u32 
                 }
             });
         },
-        [&] {
-            if (!dma_batch) {
-                src_buffer = UploadCopies(arena, copies, total_size_bytes);
-                return;
-            }
-            const auto flush = [this](const Buffer* target, std::span<vk::BufferCopy> batch, u64 bytes) {
-                FlushDmaUpload(target, batch, bytes);
-            };
-            for (const auto& copy : copies) {
-                dma_batch->Add(arena, copy.dstOffset, copy.size, flush);
-            }
-        });
+        [&] { src_buffer = UploadCopies(arena, copies, total_size_bytes); });
 
     if (src_buffer) {
         const ProfileCopy mark{scheduler, 0xB0F7'0001ull, "buffer upload (CPU-written guest memory)"};
