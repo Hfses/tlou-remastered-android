@@ -7484,28 +7484,6 @@ bool Rasterizer::ReadMemory(VAddr addr, u64 size, bool assume_locks) {
 
 void Rasterizer::ProcessDownloadImages() {
     DrainDrawPipe();
-    // Matches SotC PC's OnFence: guest-visible GPU labels re-arm the first
-    // GENERAL->GENERAL write barrier; this call already runs in draw-pipe order.
-    VideoCore::g_tlou_general_fence_epoch.fetch_add(1, std::memory_order_relaxed);
-    static const bool general_sync_report = [] {
-        const char* env = std::getenv("TLOU_GENERAL_EPOCH_SYNC");
-        return env && env[0] == '1' && env[1] == '\0';
-    }();
-    if (general_sync_report) {
-        static auto last = std::chrono::steady_clock::now();
-        if (const auto now = std::chrono::steady_clock::now();
-            now - last >= std::chrono::seconds(5)) {
-            last = now;
-            const u64 candidates = VideoCore::g_tlou_general_candidates.exchange(
-                0, std::memory_order_relaxed);
-            const u64 skipped = VideoCore::g_tlou_general_skipped.exchange(
-                0, std::memory_order_relaxed);
-            std::printf("TLOU GENERAL epoch (5 s): eligible=%llu skipped=%llu barriers-kept=%llu\n",
-                        (unsigned long long)candidates, (unsigned long long)skipped,
-                        (unsigned long long)(candidates - skipped));
-            std::fflush(stdout);
-        }
-    }
     texture_cache.ProcessDownloadImages();
     for (const auto& range : texture_cache.TakeTinyReadbacks()) {
         if (eop_soft_readbacks.size() < 64) {

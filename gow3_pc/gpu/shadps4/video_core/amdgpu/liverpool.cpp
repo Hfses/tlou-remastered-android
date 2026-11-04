@@ -35,6 +35,7 @@
 #include "core/memory.h"
 #include "core/platform.h"
 #include "video_core/amdgpu/liverpool.h"
+#include "video_core/amdgpu/tlou_cp_nop_fast.h"
 #include "gow3_write_log.h"
 #include "video_core/amdgpu/pm4_cmds.h"
 #include "video_core/renderdoc.h"
@@ -1827,7 +1828,51 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
         return !env || env[0] != '0';
     }();
     std::vector<u32> remainder;
+    // SotC PC CpFastPaths: consume inert type-3 NOPs without opcode dispatch.
+    // Unlike SotC, bound scanning to 64 packets so the CP still services
+    // deferred commands and guest submissions even in a long NOP run.
+    static const bool tlou_cp_fast = [] {
+        const char* v = std::getenv("TLOU_CP_NOP_FAST");
+        return v && v[0] == '1' && v[1] == 0;
+    }();
+    static std::atomic<u64> tlou_nop_skipped{0}, tlou_nop_batches{0};
+    if (tlou_cp_fast && seq != NoSeq) {
+        static auto last = std::chrono::steady_clock::now();
+        if (const auto now = std::chrono::steady_clock::now();
+            now - last >= std::chrono::seconds(5)) {
+            last = now;
+            std::printf("TLOU CP NOP fast (>=5 s): skipped=%llu batches=%llu\n",
+                (unsigned long long)tlou_nop_skipped.exchange(0, std::memory_order_relaxed),
+                (unsigned long long)tlou_nop_batches.exchange(0, std::memory_order_relaxed));
+            std::fflush(stdout);
+        }
+    }
     while (!dcb.empty()) {
+        if (tlou_cp_fast) {
+            u32 skipped = 0;
+            while (skipped < 64 && !dcb.empty()) {
+                const auto* packet = reinterpret_cast<const PM4Header*>(dcb.data());
+                if (packet->type != 3 || packet->type3.opcode != PM4ItOpcode::Nop)
+                    break;
+                const size_t packet_words = packet->type3.NumWords() + 1;
+                if (packet_words > dcb.size()) break;
+                const auto* nop = reinterpret_cast<const PM4CmdNop*>(packet);
+                const bool has_payload = nop->header.count.Value() != 0;
+                const bool patched_flip =
+                    has_payload && nop->data_block[0] == PM4CmdNop::PayloadType::PatchedFlip;
+                if (!TLOU::InertNop(true, guest_markers_enabled, has_payload, patched_flip))
+                    break;
+                dcb = NextPacket(dcb, packet_words);
+                ++skipped;
+            }
+            if (skipped) {
+                g_gfx_opcode.store(static_cast<u32>(PM4ItOpcode::Nop),
+                                   std::memory_order_relaxed);
+                tlou_nop_skipped.fetch_add(skipped, std::memory_order_relaxed);
+                tlou_nop_batches.fetch_add(1, std::memory_order_relaxed);
+                if (dcb.empty()) break;
+            }
+        }
         ProcessCommands();
 
         if (copy_on_signal && remainder.empty() && (dcb[0] >> 30) == 3) {

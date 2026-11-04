@@ -10,7 +10,6 @@
 #include "video_core/texture_cache/image_info.h"
 #include "video_core/texture_cache/image_view.h"
 
-#include <atomic>
 #include <deque>
 #include <optional>
 #include <boost/container/small_vector.hpp>
@@ -25,11 +24,6 @@ VK_DEFINE_HANDLE(VmaAllocation)
 VK_DEFINE_HANDLE(VmaAllocator)
 
 namespace VideoCore {
-
-// Bumped after a guest-visible EOP/EOS/ReleaseMem label, in draw-pipe order.
-extern std::atomic<u64> g_tlou_general_fence_epoch;
-extern std::atomic<u64> g_tlou_general_candidates;
-extern std::atomic<u64> g_tlou_general_skipped;
 
 enum ImageFlagBits : u32 {
     Empty = 0,
@@ -217,7 +211,6 @@ public:
         boost::container::small_vector<ImageViewInfo, 4> image_view_infos;
         boost::container::small_vector<ImageViewId, 4> image_view_ids;
         u32 last_view = 0; ///< gow3: index of the view FindView returned last
-        u64 general_barrier_epoch = ~0ULL; ///< last full-image GENERAL write barrier epoch
         u32 num_samples;
     };
     std::deque<BackingImage> backing_images;
