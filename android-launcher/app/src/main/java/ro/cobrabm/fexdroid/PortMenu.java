@@ -92,7 +92,7 @@ final class PortMenu {
             row("Análise de desempenho",()->go("profiling"));
             action("Ver logs",actions::logs);if(!inGame)action("Exportar logs ZIP",actions::exportLogs);
             if(inGame)action("Voltar ao launcher",actions::exitGame);
-            note("TLOU Remastered  ·  Daedalus v0.17.1");
+            note("TLOU Remastered  ·  Daedalus v0.17.2");
         } else if(section.equals("video")) {
             heading("VÍDEO E DESEMPENHO");note("Aplicados ao iniciar o jogo. Compare as opções no mesmo cenário.");
             choice("resolution","Resolução interna (patch de eboot)",new String[]{"Original (referência)","1280 × 720 · experimental","960 × 540 · experimental","640 × 360 · experimental"},new String[]{"original","720","540","360"},"original");

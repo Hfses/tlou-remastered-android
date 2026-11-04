@@ -921,6 +921,17 @@ bool LoadShaderMeta(Serialization::Archive& ar, Shader::Info& info,
     spec.Deserialize(ar);
     info.Deserialize(ar);
 
+    // Cache warm-up enumerates all stored compute pipelines, including the
+    // opposite TLOU split64 mode. Reject that metadata before loading its
+    // SPIR-V: treating a valid *other-mode* binary as damaged would delete
+    // the current mode's file and force recompiles on every mode switch.
+    if (info.hw_stage == Shader::HwStage::Compute &&
+        !TlouComputeSplit::AcceptCachedMeta(
+            info.pgm_hash, HashCombine(info.pgm_hash, u64(perm_idx)),
+            perm_hash_ar, TlouComputeSplit::Enabled())) {
+        return false;
+    }
+
     // Motion vertex shaders embed session-local buffer device addresses. They must be
     // recompiled for the current allocation, never loaded from a previous process.
     if (info.hw_stage == Shader::HwStage::Vertex && spec.runtime_info.hw.vs.motion_vectors) {

@@ -20,6 +20,18 @@ int main() {
         assert(VariantPermutationKey(NativeFallbackHash(HashA), base, true) == base);
         assert(VariantPermutationKey(HashA, base, true) ==
                VariantPermutationKey(HashA, base, true));
+        // A/B mode toggles must not cause old warmup entries to be
+        // misdiagnosed as corrupted SPIR-V and deleted.
+        for (const auto hash : {HashA, HashB}) {
+            const auto native = VariantPermutationKey(hash, base, false);
+            const auto split = VariantPermutationKey(hash, base, true);
+            assert(AcceptCachedMeta(hash, base, native, false));
+            assert(AcceptCachedMeta(hash, base, split, true));
+            assert(!AcceptCachedMeta(hash, base, native, true));
+            assert(!AcceptCachedMeta(hash, base, split, false));
+        }
+        assert(AcceptCachedMeta(0xdeadbeefULL, base, base, true));
+        assert(AcceptCachedMeta(NativeFallbackHash(HashA), base, base, true));
     }
     assert(EligibleGeometry(HashA, {1024,1,1}, 0, false));
     assert(EligibleGeometry(HashB, {1024,1,1}, 0, false));

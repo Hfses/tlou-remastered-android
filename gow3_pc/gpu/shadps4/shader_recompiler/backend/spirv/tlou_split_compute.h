@@ -25,6 +25,14 @@ constexpr std::uint64_t VariantPermutationKey(std::uint64_t shader_hash,
     return split_enabled && IsTarget(shader_hash) ? original_key ^ SplitVersionKey
                                                   : original_key;
 }
+// Warmup scans pipeline keys from both variants. Metadata for the other
+// variant is not corrupt: reject it before BinaryMatchesMeta can erase
+// the current variant's valid SPIR-V and metadata.
+constexpr bool AcceptCachedMeta(std::uint64_t shader_hash, std::uint64_t original_key,
+                                std::uint64_t stored_key, bool split_enabled) {
+    return !IsTarget(shader_hash) ||
+           VariantPermutationKey(shader_hash, original_key, split_enabled) == stored_key;
+}
 inline bool Enabled() {
     static const bool enabled = [] {
         const char* env = std::getenv("TLOU_SPLIT_CS64");
