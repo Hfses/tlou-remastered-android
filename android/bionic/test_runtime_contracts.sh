@@ -34,6 +34,10 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_inline_copy_rec
 "$test_dir/tlou-inline-copy"
 "$test_dir/tlou-compute-split"
 
+# Producer-tick and late CPU-write safety gates for temporal SRT downloads.
+g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_hot_srt_readback.cpp -o "$test_dir/tlou-hot-srt"
+"$test_dir/tlou-hot-srt"
+
 g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_srt_batch_plan.cpp -o "$test_dir/tlou-srt-batch"
 "$test_dir/tlou-srt-batch"
 

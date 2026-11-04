@@ -92,7 +92,7 @@ final class PortMenu {
             row("Análise de desempenho",()->go("profiling"));
             action("Ver logs",actions::logs);if(!inGame)action("Exportar logs ZIP",actions::exportLogs);
             if(inGame)action("Voltar ao launcher",actions::exitGame);
-            note("TLOU Remastered  ·  Daedalus v0.28");
+            note("TLOU Remastered  ·  Daedalus v0.29");
         } else if(section.equals("video")) {
             heading("VÍDEO E DESEMPENHO");note("Aplicados ao iniciar o jogo. Compare as opções no mesmo cenário.");
             choice("resolution","Resolução interna (patch de eboot)",new String[]{"Original (referência)","1280 × 720 · experimental","960 × 540 · experimental","640 × 360 · experimental"},new String[]{"original","720","540","360"},"original");
@@ -108,7 +108,9 @@ final class PortMenu {
             note("Preencher tela é aplicado na hora. O limite de apresentação não desbloqueia a lógica de FPS do jogo.");
         } else if(section.equals("experiments")) {
             heading("OTIMIZAÇÕES EXPERIMENTAIS");
-            note("Experimentos não validados de desempenho permanecem desligados; reinicie para aplicar alterações.");
+            note("O readback temporal SRT vem ligado; todas as outras experiências preservam as configurações já salvas. Reinicie para aplicar.");
+            toggle("srt_hot_readbacks","SRT: juntar leituras recentes na mesma espera GPU",true);
+            note("Aproveita um readback obrigatório para trazer pequenas tabelas recentes com produtor já registrado. Exclui páginas alteradas pela CPU ou com readbacks pendentes; desative se observar qualquer artefato ou travamento.");
             toggle("fetch_no_block","GoW III: espera de escrita fora da thread GPU",false);
             note("Movimenta para a thread CPU uma espera por escrita GPU já submetida; exige fila de cópia compatível. Até 3 tentativas, depois usa o caminho original.");
             toggle("land_on_guest","GoW III: concluir readbacks na thread solicitante",false);
@@ -132,7 +134,7 @@ final class PortMenu {
                 new String[]{"auto","0","2","4","6"},"auto");
             note("Prefetch e compilação paralela podem mudar travamentos e correção visual. O modo automático de workers é o original.");
             row("Desativar todos os experimentos",()->{
-                prefs.edit().putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).remove("compute_wait_fast").remove("relaxed_skinning_fp").putBoolean("mapped_fault_readbacks",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
+                prefs.edit().putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("srt_hot_readbacks",false).remove("compute_wait_fast").remove("relaxed_skinning_fp").putBoolean("mapped_fault_readbacks",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
                     .putBoolean("prefetch_pipelines",false).putBoolean("parallel_pipelines",false)
                     .putString("prep_workers","auto").apply();
                 actions.changed();render();

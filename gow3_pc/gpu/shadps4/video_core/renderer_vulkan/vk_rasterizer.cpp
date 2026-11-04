@@ -4041,7 +4041,8 @@ void Rasterizer::SyncSrtTables(const Shader::Info& info) {
         if (pending_srt_ranges.empty()) return;
         const u64 count = pending_srt_ranges.size();
         buffer_cache.DownloadRanges(
-            std::span<const std::pair<VAddr, u64>>{pending_srt_ranges.data(), pending_srt_ranges.size()});
+            std::span<const std::pair<VAddr, u64>>{pending_srt_ranges.data(), pending_srt_ranges.size()},
+            !FrameCapture::Active() && !TracedShader(info.pgm_hash));
         for (const u32 id : pending_srt_nodes) {
             ++srt_syncs;
             if (srt_sync_reports < 16) {
@@ -4239,7 +4240,10 @@ void Rasterizer::SyncSrtTables(const Shader::Info& info) {
         flush_srt();
         DrainDrawPipe();
         const std::pair<VAddr, u64> range{table, node.extent};
-        buffer_cache.DownloadRanges(std::span{&range, 1});
+        // The table's GPU producer is finished before the CPU walks it.
+        // Temporal SRT prefetch is allowed only here, after DrainDrawPipe.
+        buffer_cache.DownloadRanges(std::span{&range, 1},
+                                    !FrameCapture::Active() && !TracedShader(info.pgm_hash));
         trace_table(true);
         ++srt_syncs;
         if (srt_sync_reports < 16) {
