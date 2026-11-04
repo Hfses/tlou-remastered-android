@@ -53,6 +53,9 @@ extern "C" __declspec(dllimport) unsigned short __stdcall RtlCaptureStackBackTra
 
 namespace VideoCore {
 
+// Counts stack snapshots without expensive timing or logging per readback.
+static std::atomic<u64> tlou_stack_mapped_reads{0};
+
 // gow3 21 Oct 2026 (GPU worker): GOW3_GPU_PROFILE segments for the cache's own GPU copies
 // (uploads of CPU-written guest memory, readbacks); the interrupted segment continues after
 // them. Nothing is recorded without the profiler.
@@ -1874,13 +1877,29 @@ u64 BufferCache::CopyMappedReadbackPieces(std::span<const DownloadPiece> pending
                 }, max_bytes);
         }(); // release the cache history lock before Wait can submit callbacks
         if (plan) {
-            std::vector<u8> snapshot(total_size_bytes);
-            if (CopyMappedReadback(*plan, std::span{snapshot}, [this](u64 tick) { scheduler.Wait(tick); })) {
-                // Same lazy-page / newer guest-byte merge as the staging path.
-                // Never publish the mapping by a raw guest memcpy.
+            // Both paths wait for the exact same producer tick and call the same
+            // guest-byte merger. Only the temporary snapshot allocation differs.
+            const auto copy_and_publish = [&](std::span<u8> snapshot) -> bool {
+                if (!CopyMappedReadback(*plan, snapshot,
+                    [this](u64 tick) { scheduler.Wait(tick); })) return false;
                 for (const auto& p : pending)
                     WriteBackGpuData(p.address, snapshot.data() + p.offset, p.size);
-                return plan->tick;
+                return true;
+            };
+            static const bool stack_small = [] {
+                const char* env = std::getenv("TLOU_STACK_MAPPED_READBACK");
+                return env && env[0] == '1' && env[1] == 0;
+            }();
+            if (SmallMappedSnapshotEligible(total_size_bytes, stack_small)) {
+                std::array<u8, MaxStackMappedReadbackBytes> snapshot{};
+                if (copy_and_publish(std::span<u8>{snapshot}.first(total_size_bytes))) {
+                    tlou_stack_mapped_reads.fetch_add(1, std::memory_order_relaxed);
+                    return plan->tick;
+                }
+            } else {
+                std::vector<u8> snapshot(total_size_bytes);
+                if (copy_and_publish(std::span<u8>{snapshot}))
+                    return plan->tick;
             }
         }
     }
@@ -1932,9 +1951,10 @@ void BufferCache::DownloadRanges(std::span<const std::pair<VAddr, u64>> ranges) 
     const auto report = [] {
         const auto now = std::chrono::steady_clock::now();
         if (now - mapped_stats.at >= std::chrono::seconds(5)) {
-            std::printf("TLOU mapped readbacks (5 s): direct=%llu bytes=%llu no-extra-submit=%llu staging-fallback=%llu\n",
+            std::printf("TLOU mapped readbacks (5 s): direct=%llu bytes=%llu no-extra-submit=%llu staging-fallback=%llu stack-small=%llu\n",
                 (unsigned long long)mapped_stats.direct, (unsigned long long)mapped_stats.bytes,
-                (unsigned long long)mapped_stats.no_submit, (unsigned long long)mapped_stats.fallback);
+                (unsigned long long)mapped_stats.no_submit, (unsigned long long)mapped_stats.fallback,
+                static_cast<unsigned long long>(tlou_stack_mapped_reads.exchange(0, std::memory_order_relaxed)));
             mapped_stats = MappedStats{};
         }
     };
