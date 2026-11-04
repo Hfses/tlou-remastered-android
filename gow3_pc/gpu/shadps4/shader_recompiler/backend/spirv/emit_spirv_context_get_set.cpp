@@ -237,7 +237,7 @@ Id EmitGetAttributeU32(EmitContext& ctx, IR::Attribute attr, u32 comp) {
         const Id physical = ctx.OpCompositeExtract(ctx.U32[1],
             ctx.OpLoad(ctx.U32[3], ctx.workgroup_id), comp);
         return split64 && comp == 0
-            ? ctx.OpShiftRightLogical(ctx.U32[1], physical, ctx.ConstU32(4)) : physical;
+            ? ctx.OpShiftRightLogical(ctx.U32[1], physical, ctx.ConstU32(4u)) : physical;
     }
     case IR::Attribute::LocalInvocationId:
     case IR::Attribute::LocalInvocationIndex: {
@@ -249,9 +249,9 @@ Id EmitGetAttributeU32(EmitContext& ctx, IR::Attribute attr, u32 comp) {
             return physical;
         const Id group = ctx.OpCompositeExtract(ctx.U32[1],
             ctx.OpLoad(ctx.U32[3], ctx.workgroup_id), 0);
-        const Id slot = ctx.OpBitwiseAnd(ctx.U32[1], group, ctx.ConstU32(15));
+        const Id slot = ctx.OpBitwiseAnd(ctx.U32[1], group, ctx.ConstU32(15u));
         return ctx.OpIAdd(ctx.U32[1],
-            ctx.OpShiftLeftLogical(ctx.U32[1], slot, ctx.ConstU32(6)), physical);
+            ctx.OpShiftLeftLogical(ctx.U32[1], slot, ctx.ConstU32(6u)), physical);
     }
     case IR::Attribute::SampleIndex:
         return ctx.OpLoad(ctx.U32[1], ctx.sample_index);

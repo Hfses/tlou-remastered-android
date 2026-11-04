@@ -304,13 +304,13 @@ void EmitContext::DefineWorkgroupIndex() {
         TlouComputeSplit::Use(info.pgm_hash, cs.workgroup_size, cs.shared_memory_size,
             info.uses_group_quad || info.uses_group_shuffle || info.uses_group_ballot ||
             static_cast<u32>(info.shared_types) != 0);
-    const Id workgroup_x = split64 ? OpShiftRightLogical(U32[1], physical_x, ConstU32(4))
+    const Id workgroup_x = split64 ? OpShiftRightLogical(U32[1], physical_x, ConstU32(4u))
                                     : physical_x;
     const Id workgroup_y{OpCompositeExtract(U32[1], workgroup_id_val, 1)};
     const Id workgroup_z{OpCompositeExtract(U32[1], workgroup_id_val, 2)};
     const Id num_workgroups{OpLoad(U32[3], num_workgroups_id)};
     const Id physical_count_x{OpCompositeExtract(U32[1], num_workgroups, 0)};
-    const Id num_workgroups_x = split64 ? OpShiftRightLogical(U32[1], physical_count_x, ConstU32(4))
+    const Id num_workgroups_x = split64 ? OpShiftRightLogical(U32[1], physical_count_x, ConstU32(4u))
                                         : physical_count_x;
     const Id num_workgroups_y{OpCompositeExtract(U32[1], num_workgroups, 1)};
     workgroup_index_id =
@@ -495,7 +495,7 @@ void EmitContext::DefineInputs() {
         }
         break;
     }
-    case SwStage::Compute:
+    case SwStage::Compute: {
         const bool split64 = TlouComputeSplit::Use(info.pgm_hash,
             runtime_info.hw.cs.workgroup_size, runtime_info.hw.cs.shared_memory_size,
             info.uses_group_quad || info.uses_group_shuffle || info.uses_group_ballot ||
@@ -520,6 +520,7 @@ void EmitContext::DefineInputs() {
                                                     spv::StorageClass::Input);
         }
         break;
+    }
     case SwStage::Geometry: {
         primitive_id = DefineVariable(U32[1], spv::BuiltIn::PrimitiveId, spv::StorageClass::Input);
         const auto gl_per_vertex =
