@@ -39,6 +39,7 @@
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
+#include "video_core/renderer_vulkan/tlou_srt_batch_plan.h"
 #include "shader_recompiler/backend/spirv/tlou_split_compute.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "gow3_threads.h"
@@ -4007,10 +4008,77 @@ void Rasterizer::SyncSrtTables(const Shader::Info& info) {
     }
     const auto user_data = std::as_bytes(info.user_data);
     boost::container::small_vector<VAddr, 16> address(plan.nodes.size(), 0);
+
+    // The desktop/Android TLOU has many small GPU-written resource tables.
+    // Every DownloadRanges call waits for the newest producer tick, even
+    // though sibling tables have no pointer dependency. Coalesce only
+    // independent tables, preserving a flush before any child pointer load.
+    // The original path remains the default for driver/visual validation.
+    static const bool batch_requested = [] {
+        const char* env = std::getenv("TLOU_SRT_DEP_BATCH");
+        return env && env[0] == '1' && env[1] == 0;
+    }();
+    // Keep the old sequencing when HLE copies could modify SRT pointers in
+    // Stage B, or diagnostic trace needs to observe every intermediate state.
+    const bool batch_srt = batch_requested && plan.nodes.size() > 1 &&
+                           pending_copy_writes.empty() && !TracedShader(info.pgm_hash);
+    boost::container::small_vector<std::pair<VAddr, u64>, 8> pending_srt_ranges;
+    boost::container::small_vector<u32, 8> pending_srt_nodes;
+    u64 pending_srt_bytes = 0;
+    const auto flush_srt = [&] {
+        if (pending_srt_ranges.empty()) return;
+        const u64 count = pending_srt_ranges.size();
+        buffer_cache.DownloadRanges(
+            std::span<const std::pair<VAddr, u64>>{pending_srt_ranges.data(), pending_srt_ranges.size()});
+        for (const u32 id : pending_srt_nodes) {
+            ++srt_syncs;
+            if (srt_sync_reports < 16) {
+                ++srt_sync_reports;
+                const auto& n = plan.nodes[id];
+                std::printf("SRT sync: shader %016llx table %#llx (+%u bytes, level %d) had "
+                            "GPU-written data; downloaded in safe SRT group\n",
+                            static_cast<unsigned long long>(info.pgm_hash),
+                            static_cast<unsigned long long>(address[id]), n.extent,
+                            n.parent < 0 ? 1 : 2);
+                std::fflush(stdout);
+            }
+        }
+        // This is the *potential* number of separate synchronous readback
+        // calls removed; tick waits are measured separately in GPU statistics.
+        static u64 group_calls = 0, group_nodes = 0, candidate_savings = 0, flush_count = 0;
+        static auto last_report = std::chrono::steady_clock::now();
+        if (count >= 2) {
+            ++group_calls;
+            group_nodes += count;
+            candidate_savings += count - 1;
+        }
+        if ((++flush_count & 255) == 0) {
+            const auto now = std::chrono::steady_clock::now();
+            if (now - last_report >= std::chrono::seconds(5)) {
+                last_report = now;
+                std::printf("TLOU SRT dependency batch (5 s): groups=%llu tables=%llu "
+                            "candidate-calls-avoided=%llu\n",
+                            static_cast<unsigned long long>(group_calls),
+                            static_cast<unsigned long long>(group_nodes),
+                            static_cast<unsigned long long>(candidate_savings));
+                group_calls = group_nodes = candidate_savings = 0;
+            }
+        }
+        pending_srt_ranges.clear();
+        pending_srt_nodes.clear();
+        pending_srt_bytes = 0;
+    };
+
     for (size_t i = 0; i < plan.nodes.size(); ++i) {
         const auto& node = plan.nodes[i];
         if (node.dynamic) {
             continue;
+        }
+        // The parent table can contain the *pointer* to this child. Its GPU
+        // readback must land in guest memory before that pointer is copied.
+        if (batch_srt && TlouSrtBatch::ParentPending(
+                node.parent, std::span<const u32>{pending_srt_nodes.data(), pending_srt_nodes.size()})) {
+            flush_srt();
         }
         u64 value = 0;
         if (node.parent < 0) {
@@ -4141,6 +4209,22 @@ void Rasterizer::SyncSrtTables(const Shader::Info& info) {
             trace_table(false);
             continue;
         }
+        if (batch_srt && TlouSrtBatch::Fits(0, 0, node.extent)) {
+            if (!TlouSrtBatch::Fits(pending_srt_ranges.size(), pending_srt_bytes, node.extent)) {
+                flush_srt();
+            }
+            if (pending_srt_ranges.empty()) {
+                // Drain once at the start of each independent group, before
+                // any pointer or readback can race Stage B guest writes.
+                DrainDrawPipe();
+            }
+            pending_srt_ranges.emplace_back(table, node.extent);
+            pending_srt_nodes.push_back(static_cast<u32>(i));
+            pending_srt_bytes += node.extent;
+            continue;
+        }
+        // Non-batchable/large tables keep the *exact* original ordering.
+        flush_srt();
         DrainDrawPipe();
         const std::pair<VAddr, u64> range{table, node.extent};
         buffer_cache.DownloadRanges(std::span{&range, 1});
@@ -4156,6 +4240,7 @@ void Rasterizer::SyncSrtTables(const Shader::Info& info) {
             std::fflush(stdout);
         }
     }
+    flush_srt(); // last independent group, before the actual shader resource walk
     static const bool stats = std::getenv("GOW3_FRAME_STATS") != nullptr;
     // gow3 21 Oct 2026 (GOW3_CPU_TRIMS=1): the clock every 256 walks (once a table had synced it
     // was read on every walk: ~1% of the GPU command thread).
