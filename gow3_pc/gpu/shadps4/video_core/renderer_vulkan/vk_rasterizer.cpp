@@ -4135,8 +4135,14 @@ void Rasterizer::SyncSrtTables(const Shader::Info& info) {
         if (batch_srt) {
             // Parents have already been synchronized by the original walk. Only
             // sibling addresses are resolved here; descendants retain their order.
+            // The list can retain completed historical entries outside this table.
+            // Test completion, not list emptiness, after the existing pipe drain.
+            const bool copies_finished = std::all_of(pending_copy_writes.begin(), pending_copy_writes.end(),
+                [&](const PendingWrite& write) {
+                    return draw_pipe && write.position != PendingUncommitted && draw_pipe->Reached(write.position);
+                });
             const auto ranges = PlanSrtSiblingBatch(std::span{plan.nodes}, i, table,
-                node.parent < 0 ? VAddr{0} : address[node.parent], pending_copy_writes.empty(),
+                node.parent < 0 ? VAddr{0} : address[node.parent], copies_finished,
                 [&](size_t n) -> VAddr {
                     const auto& sibling = plan.nodes[n];
                     u64 value = 0;

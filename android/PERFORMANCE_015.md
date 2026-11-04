@@ -28,7 +28,9 @@ e faz a espera e a mesclagem de bytes existentes uma vez para o grupo.
 Limites conservadores: 16 intervalos, 64 KiB incluindo padding; sem ampliar
 buracos; sem tabelas dinâmicas; sem endereços inválidos/não mapeados;
 sem sobreposição entre os intervalos ou com a região de origem dos
-ponteiros no pai. Havendo cópias CPU/HLE pendentes, mantém um download
+ponteiros no pai. Entradas históricas da lista de cópias são verificadas pela conclusão no
+draw pipe, não apenas pela presença na lista. Havendo cópias CPU/HLE
+realmente pendentes, mantém um download
 individual. Uma tabela filha só tem o ponteiro lido depois de seu pai
 passar pela sincronização original. Nenhum fence é dispensado.
 
