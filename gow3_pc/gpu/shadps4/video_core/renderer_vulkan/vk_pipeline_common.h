@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <span>
+
 #include "shader_recompiler/profile.h"
 #include "shader_recompiler/runtime_info.h"
 #include "video_core/renderer_vulkan/vk_common.h"
@@ -61,7 +63,12 @@ public:
     mutable u64 last_use = 0;
 
     using DescriptorWrites = std::vector<vk::WriteDescriptorSet>;
-    void BindResources(DescriptorWrites& set_writes, const Shader::PushData& push_data) const;
+    // The spans own no data: caller holds both arrays until this call returns.
+    // Deferred recording snapshots each contiguous array once, not once per descriptor.
+    void BindResources(
+        DescriptorWrites& set_writes, const Shader::PushData& push_data,
+        std::span<const vk::DescriptorBufferInfo> source_buffers = {},
+        std::span<const vk::DescriptorImageInfo> source_images = {}) const;
 
 protected:
     [[nodiscard]] std::string GetDebugString() const;

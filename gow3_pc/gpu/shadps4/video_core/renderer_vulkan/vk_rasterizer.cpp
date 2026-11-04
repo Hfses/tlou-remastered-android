@@ -2601,7 +2601,10 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
             });
         }
     }
-    pipeline->BindResources(set_writes, push_data);
+    pipeline->BindResources(
+        set_writes, push_data,
+        std::span<const vk::DescriptorBufferInfo>{buffer_infos.data(), buffer_infos.size()},
+        std::span<const vk::DescriptorImageInfo>{image_infos.data(), image_infos.size()});
     // gow3: jitter geometry drawn with the scene depth, not full-screen passes (a shifted
     // full-screen quad leaves an edge column unwritten).
     draw_jitter = {};
@@ -2842,7 +2845,10 @@ void Rasterizer::DrawIndirectRecord(const GraphicsPipeline* pipeline, bool is_in
     push_data.xoffset *= target_scale[0];
     push_data.yscale *= target_scale[1];
     push_data.yoffset *= target_scale[1];
-    pipeline->BindResources(set_writes, push_data);
+    pipeline->BindResources(
+        set_writes, push_data,
+        std::span<const vk::DescriptorBufferInfo>{buffer_infos.data(), buffer_infos.size()},
+        std::span<const vk::DescriptorImageInfo>{image_infos.data(), image_infos.size()});
     draw_jitter = {};
     if (upscaler->Enabled() && db_desc.first && db_desc.first == camera_motion->Depth()) {
         draw_jitter = upscaler->Jitter();
@@ -3157,7 +3163,10 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
         return !(env && env[0] == '0');
     }();
     const u64 serial_before_bind = scheduler.RecordSerial();
-    pipeline->BindResources(set_writes, push_data);
+    pipeline->BindResources(
+        set_writes, push_data,
+        std::span<const vk::DescriptorBufferInfo>{buffer_infos.data(), buffer_infos.size()},
+        std::span<const vk::DescriptorImageInfo>{image_infos.data(), image_infos.size()});
     const u64 serial_after_bind = scheduler.RecordSerial();
 
     const vk::Pipeline handle = pipeline->Handle();
@@ -3265,7 +3274,10 @@ void Rasterizer::DispatchIndirectRecord(const ComputePipeline* pipeline, VAddr a
     }
 
     scheduler.EndRendering();
-    pipeline->BindResources(set_writes, push_data);
+    pipeline->BindResources(
+        set_writes, push_data,
+        std::span<const vk::DescriptorBufferInfo>{buffer_infos.data(), buffer_infos.size()},
+        std::span<const vk::DescriptorImageInfo>{image_infos.data(), image_infos.size()});
     if (FrameCapture::Active()) {
         const u32* args = reinterpret_cast<const u32*>(address + offset);
         FrameCapture::Dispatch(pipeline->GetStage(Shader::SwStage::Compute).pgm_hash, args[0],
