@@ -34,6 +34,7 @@
 #include "video_core/amdgpu/pm4_cmds.h"
 #include "video_core/buffer_cache/buffer.h"
 #include "video_core/buffer_cache/buffer_cache.h"
+#include "video_core/buffer_cache/region_definitions.h"
 #include "video_core/renderer_vulkan/liverpool_to_vk.h"
 #include "video_core/renderer_vulkan/vk_depth_stencil_state.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
@@ -4160,7 +4161,7 @@ void Rasterizer::SyncSrtTables(const Shader::Info& info) {
                         IsMapped(target, sibling.extent) ? target : 0;
                 }, [&](VAddr target, u64 bytes) {
                     return buffer_cache.IsRangeGpuWrittenShared(target, bytes);
-                });
+                }, VideoCore::TRACKER_BYTES_PER_PAGE);
             buffer_cache.DownloadRanges(ranges);
             downloaded_tables = ranges.size();
             struct BatchStats { u64 calls{}, tables{}, grouped{}; };

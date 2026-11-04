@@ -25,10 +25,12 @@ planejador não resolve descendentes nem muda a ordem da caminhada original.
 A chamada `DownloadRanges` recebe os intervalos exatos de tabelas irmãs,
 e faz a espera e a mesclagem de bytes existentes uma vez para o grupo.
 
-Limites conservadores: 16 intervalos, 64 KiB incluindo padding; sem ampliar
+Limites conservadores: 16 intervalos, 64 KiB de páginas solicitadas; sem ampliar
 buracos; sem tabelas dinâmicas; sem endereços inválidos/não mapeados;
-sem sobreposição entre os intervalos ou com a região de origem dos
-ponteiros no pai. Entradas históricas da lista de cópias são verificadas pela conclusão no
+sem sobreposição de páginas do tracker entre intervalos ou com a origem dos
+ponteiros no pai. A seleção usa o tamanho real de página do tracker
+(4 KiB), pois o download interno arredonda para essas páginas. Tabelas
+com bytes distintos na mesma página não contam como independentes. Entradas históricas da lista de cópias são verificadas pela conclusão no
 draw pipe, não apenas pela presença na lista. Havendo cópias CPU/HLE
 realmente pendentes, mantém um download
 individual. Uma tabela filha só tem o ponteiro lido depois de seu pai

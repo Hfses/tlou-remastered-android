@@ -80,11 +80,11 @@ int main() {
     assert(PlanSrtSiblingBatch(std::span{n},1,a[1],a[0],true,resolve,
         [](Address,auto){return false;}).size()==1);
     // A sibling aliases the pointer source: skip it, so resolving later pointers stays valid.
-    a[3]=a[0]+8;
+    a[3]=a[0]+2048; // disjoint bytes, same tracker page as the pointer source
     assert(PlanSrtSiblingBatch(std::span{n},1,a[1],a[0],true,resolve,dirty).size()==5);
     // The first table aliases that source: retain sequential behavior altogether.
     assert(PlanSrtSiblingBatch(std::span{n},1,a[0],a[0],true,resolve,dirty).size()==1);
-    a[3]=a[1]; a[6]=a[1]+32; // duplicate/overlap: never introduce a second copy
+    a[3]=a[1]; a[6]=a[1]+2048; // duplicate/overlap: never introduce a second copy
     auto overlap=PlanSrtSiblingBatch(std::span{n},1,a[1],a[0],true,resolve,dirty);
     assert(overlap.size()==4 && overlap.back().first==a[7]);
     a[2]=a[4]=a[1];

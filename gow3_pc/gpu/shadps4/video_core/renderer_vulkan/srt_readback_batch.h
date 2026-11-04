@@ -26,7 +26,7 @@ inline bool SrtRangesOverlap(SrtReadbackRange a, SrtReadbackRange b) {
 template <typename Node, std::size_t Extent, typename Resolve, typename Dirty>
 std::vector<SrtReadbackRange> PlanSrtSiblingBatch(std::span<Node, Extent> nodes,
         std::size_t first, std::uintptr_t table, std::uintptr_t parent_table,
-        bool no_pending_copies, Resolve&& resolve, Dirty&& dirty) {
+        bool no_pending_copies, Resolve&& resolve, Dirty&& dirty, std::uint64_t page_bytes = 4096) {
     std::vector<SrtReadbackRange> ranges;
     if (first >= nodes.size() || !table || !nodes[first].extent) return ranges;
     const auto valid = [](SrtReadbackRange r) {
@@ -36,6 +36,15 @@ std::vector<SrtReadbackRange> PlanSrtSiblingBatch(std::span<Node, Extent> nodes,
     ranges.push_back(initial); // unchanged single-table path is always the fallback
     if (!no_pending_copies || nodes[first].dynamic || !valid(initial) ||
         initial.second > SrtBatchBytes) return ranges;
+    if (!page_bytes || page_bytes > SrtBatchBytes || (page_bytes & (page_bytes - 1))) return ranges;
+    const auto tracked = [page_bytes](SrtReadbackRange r) -> SrtReadbackRange {
+        const auto mask = page_bytes - 1;
+        const auto begin = r.first & ~mask;
+        const auto last = (r.first + r.second - 1) & ~mask;
+        return {begin, last - begin + page_bytes};
+    };
+    const auto tracked_initial = tracked(initial);
+    if (tracked_initial.second > SrtBatchBytes) return ranges;
     const auto parent = nodes[first].parent;
     std::uint64_t parent_bytes = 0;
     if (parent >= 0) {
@@ -43,9 +52,9 @@ std::vector<SrtReadbackRange> PlanSrtSiblingBatch(std::span<Node, Extent> nodes,
         for (const auto& node : nodes) if (node.parent == parent && !node.dynamic)
             parent_bytes = std::max(parent_bytes, std::uint64_t(node.offset) + 8);
         const SrtReadbackRange source{parent_table, parent_bytes};
-        if (!valid(source) || SrtRangesOverlap(initial, source)) return ranges;
+        if (!valid(source) || SrtRangesOverlap(tracked_initial, tracked(source))) return ranges;
     }
-    std::uint64_t bytes = (initial.second + 63) & ~std::uint64_t{63};
+    std::uint64_t bytes = tracked_initial.second;
     for (std::size_t i = first + 1; i < nodes.size() && ranges.size() < SrtBatchRanges; ++i) {
         const auto& node = nodes[i];
         // A descendant/intervening branch could alias the parent pointer source.
@@ -53,15 +62,15 @@ std::vector<SrtReadbackRange> PlanSrtSiblingBatch(std::span<Node, Extent> nodes,
         if (parent >= 0 && node.parent != parent) break;
         if (node.dynamic || node.parent != parent || !node.extent ||
             node.extent > SrtBatchBytes) continue;
-        const std::uint64_t padded = (std::uint64_t(node.extent) + 63) & ~std::uint64_t{63};
-        if (padded > SrtBatchBytes - bytes) continue;
         const SrtReadbackRange candidate{resolve(i), node.extent};
-        if (!candidate.first || !valid(candidate) ||
-            (parent >= 0 && SrtRangesOverlap(candidate, {parent_table, parent_bytes})) ||
-            std::any_of(ranges.begin(), ranges.end(), [&](auto r) { return SrtRangesOverlap(r, candidate); }) ||
+        if (!candidate.first || !valid(candidate)) continue;
+        const auto tracked_candidate = tracked(candidate);
+        if (tracked_candidate.second > SrtBatchBytes - bytes ||
+            (parent >= 0 && SrtRangesOverlap(tracked_candidate, tracked({parent_table, parent_bytes}))) ||
+            std::any_of(ranges.begin(), ranges.end(), [&](auto r) { return SrtRangesOverlap(tracked(r), tracked_candidate); }) ||
             !dirty(candidate.first, candidate.second)) continue;
         ranges.push_back(candidate);
-        bytes += padded;
+        bytes += tracked_candidate.second;
     }
     return ranges;
 }
