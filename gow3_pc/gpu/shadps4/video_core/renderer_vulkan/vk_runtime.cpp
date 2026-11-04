@@ -31,6 +31,11 @@ const bool tlou_inline_enabled = [] {
     return value && value[0] == '1' && value[1] == 0;
 }();
 const bool tlou_inline_report = std::getenv("TLOU_INLINE_SINGLE_COPY") != nullptr;
+// Independent A/B: join adjacent buffer-copy commands only; default uses v0.23 path.
+const bool tlou_copy_batch_enabled = [] {
+    const char* value = std::getenv("TLOU_COPY_BATCH");
+    return value && value[0] == '1' && value[1] == 0;
+}();
 std::atomic<u64> tlou_inline_eligible{0};
 std::atomic<u64> tlou_inline_used{0};
 }
@@ -246,7 +251,13 @@ void Runtime::CopyBuffer(const VideoCore::Buffer* src, const VideoCore::Buffer* 
     if (eligible_inline) {
         tlou_inline_eligible.fetch_add(1, std::memory_order_relaxed);
     }
-    if (eligible_inline && tlou_inline_enabled) {
+    if (eligible_inline && tlou_copy_batch_enabled && scheduler.IsRecordingDeferred() &&
+        src->Handle() != dst->Handle()) {
+        // All resource hazard checks and barriers above still execute for every copy.
+        // Only directly adjacent commands to the SAME pair of buffers can be merged.
+        tlou_inline_used.fetch_add(1, std::memory_order_relaxed);
+        scheduler.RecordBufferCopy(src->Handle(), dst->Handle(), copies.front());
+    } else if (eligible_inline && tlou_inline_enabled) {
         tlou_inline_used.fetch_add(1, std::memory_order_relaxed);
         scheduler.Record(InlineCopyRecord::Single(src->Handle(), dst->Handle(), copies.front()));
     } else {

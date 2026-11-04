@@ -92,7 +92,7 @@ final class PortMenu {
             row("Análise de desempenho",()->go("profiling"));
             action("Ver logs",actions::logs);if(!inGame)action("Exportar logs ZIP",actions::exportLogs);
             if(inGame)action("Voltar ao launcher",actions::exitGame);
-            note("TLOU Remastered  ·  Daedalus v0.23");
+            note("TLOU Remastered  ·  Daedalus v0.24");
         } else if(section.equals("video")) {
             heading("VÍDEO E DESEMPENHO");note("Aplicados ao iniciar o jogo. Compare as opções no mesmo cenário.");
             choice("resolution","Resolução interna (patch de eboot)",new String[]{"Original (referência)","1280 × 720 · experimental","960 × 540 · experimental","640 × 360 · experimental"},new String[]{"original","720","540","360"},"original");
@@ -125,8 +125,8 @@ final class PortMenu {
             note("Experimento isolado, desligado por padrão: divide o grupo virtual de 1024 em 16 de 64, apenas nos dois shaders mais caros. Dispatch indireto permanece original. Reinicie e compare com o perfil GPU desligado.");
             toggle("mapped_fault_readbacks","Readback direto para acessos da CPU",false);
             note("Evita cópias intermediárias quando a CPU precisa ler dados da GPU. Compare separadamente; requer reabrir o jogo.");
-            toggle("descriptor_bulk","Descritores Vulkan em blocos (v0.23)",false);
-            note("Desligado = algoritmo original da v0.21; reinicie o jogo após alterar.");
+            toggle("copy_batch","Agrupar cópias Vulkan consecutivas (v0.24)",false);
+            note("Agrupa até quatro cópias consecutivas para os mesmos buffers, sem alterar barreiras ou dependências. Os logs registram o número de agrupamentos; reinicie o jogo.");
             toggle("prep_pool","Reutilizar buffers de preparação de draws",false);
             toggle("cpu_trims","Reduzir trabalho de CPU por draw",false);
             toggle("prefetch_pipelines","Pré-compilar pipelines antecipadamente",false);
@@ -136,7 +136,7 @@ final class PortMenu {
                 new String[]{"auto","0","2","4","6"},"auto");
             note("Prefetch e compilação paralela podem mudar travamentos e correção visual. O modo automático de workers é o original.");
             row("Desativar todos os experimentos",()->{
-                prefs.edit().putBoolean("srt_dep_batch",false).putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("mapped_fault_readbacks",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
+                prefs.edit().putBoolean("srt_dep_batch",false).putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("mapped_fault_readbacks",false).putBoolean("copy_batch",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
                     .putBoolean("prefetch_pipelines",false).putBoolean("parallel_pipelines",false)
                     .putString("prep_workers","auto").apply();
                 actions.changed();render();
