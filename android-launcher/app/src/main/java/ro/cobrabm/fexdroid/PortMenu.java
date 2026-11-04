@@ -110,6 +110,8 @@ final class PortMenu {
         } else if(section.equals("experiments")) {
             heading("OTIMIZAÇÕES EXPERIMENTAIS");
             note("Desligadas por padrão. Ative UMA por vez e compare FPS e falhas na mesma área. Requer reiniciar o jogo.");
+            toggle("stack_mapped_readback","Buffer na pilha para readbacks pequenos (até 512 B)",false);
+            note("Evita alocação temporária para as leituras mapeadas pequenas; não muda esperas, dados nem mesclagem.");
             toggle("inline_single_copy","Registro leve de cópias GPU pequenas (até 64 KiB)",false);
             note("Evita uma reserva e uma cópia do descritor no gravador Vulkan. Mantém transferências e barreiras; desligado por padrão.");
             toggle("split_cs64","Compute de vértices: grupos de 64 (2 shaders)",false);
@@ -125,7 +127,7 @@ final class PortMenu {
                 new String[]{"auto","0","2","4","6"},"auto");
             note("Prefetch e compilação paralela podem mudar travamentos e correção visual. O modo automático de workers é o original.");
             row("Desativar todos os experimentos",()->{
-                prefs.edit().putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("mapped_fault_readbacks",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
+                prefs.edit().putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("mapped_fault_readbacks",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
                     .putBoolean("prefetch_pipelines",false).putBoolean("parallel_pipelines",false)
                     .putString("prep_workers","auto").apply();
                 actions.changed();render();
