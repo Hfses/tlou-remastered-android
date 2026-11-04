@@ -12,6 +12,15 @@ using namespace VideoCore;
 constexpr std::uint64_t Base = 0x1000000000ull;
 
 int main() {
+    assert(!SmallMappedSnapshotEligible(0,false));
+    assert(!SmallMappedSnapshotEligible(0,true));
+    assert(!SmallMappedSnapshotEligible(512,false));
+    assert(SmallMappedSnapshotEligible(1,true));
+    assert(SmallMappedSnapshotEligible(512,true));
+    assert(!SmallMappedSnapshotEligible(513,true));
+    // A stack snapshot of the same size/offsets is already exercised below
+    // by CopyMappedReadback(*plan, result, callback), where result is std::array.
+
     const auto page_size = static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
     const auto allocation = std::max<std::size_t>(8192,page_size*2);
     auto* source = static_cast<std::uint8_t*>(mmap(nullptr,allocation,PROT_NONE,

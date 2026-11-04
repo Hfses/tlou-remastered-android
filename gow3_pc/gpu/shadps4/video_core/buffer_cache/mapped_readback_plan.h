@@ -12,6 +12,11 @@
 namespace VideoCore {
 inline constexpr std::uint64_t MaxMappedReadbackBytes = 64 * 1024;
 inline constexpr std::uint64_t MaxMappedFaultReadbackBytes = 1024 * 1024;
+inline constexpr std::uint64_t MaxStackMappedReadbackBytes = 512;
+// Exactly the same planned readback; only scratch allocation changes.
+constexpr bool SmallMappedSnapshotEligible(std::uint64_t bytes, bool enabled) {
+    return enabled && bytes > 0 && bytes <= MaxStackMappedReadbackBytes;
+}
 struct ReadbackMapping { const std::uint8_t* data{}; std::uint64_t size{}; };
 struct MappedReadbackPiece {
     const std::uint8_t* data;
