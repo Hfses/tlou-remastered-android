@@ -29,10 +29,13 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_mapped_readback.cpp 
 
 g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_compute_split.cpp -o "$test_dir/tlou-compute-split"
 
+g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_inline_copy_record.cpp -o "$test_dir/tlou-inline-copy"
+
+"$test_dir/tlou-inline-copy"
 "$test_dir/tlou-compute-split"
 
-g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_write_tick.cpp -o "$test_dir/tlou-write-tick"
-"$test_dir/tlou-write-tick"
+g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_srt_batch_plan.cpp -o "$test_dir/tlou-srt-batch"
+"$test_dir/tlou-srt-batch"
 
 # TLOU must never restore graphics-breaking Readback 2 from a legacy preference.
 grep -Fq 'env.put("GOW3_READBACKS","1");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
