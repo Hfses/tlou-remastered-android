@@ -39,6 +39,7 @@
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
+#include "shader_recompiler/backend/spirv/tlou_split_compute.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "gow3_threads.h"
 #include "video_core/renderer_vulkan/vk_runtime.h"
@@ -3160,6 +3161,21 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
 
     const vk::Pipeline handle = pipeline->Handle();
     const u32 dim_x = cs_program.dim_x, dim_y = cs_program.dim_y, dim_z = cs_program.dim_z;
+    const bool split64 = TlouComputeSplit::Use(cs.pgm_hash,
+        {cs_program.num_thread_x.full, cs_program.num_thread_y.full, cs_program.num_thread_z.full},
+        cs_program.SharedMemSize(),
+        cs.uses_group_quad || cs.uses_group_shuffle || cs.uses_group_ballot ||
+        static_cast<u32>(cs.shared_types) != 0);
+    // PipelineCache selected a distinct native variant if Vulkan's x-group
+    // limit was exceeded; only the split64 module retains the original hash.
+    const u32 dispatch_x = split64 ? TlouComputeSplit::PhysicalGroupsX(dim_x) : dim_x;
+    if (split64) {
+        static std::atomic<u32> observed{0};
+        if (observed.fetch_add(1, std::memory_order_relaxed) < 2) {
+            std::printf("TLOU split64: shader %08llx direct groups %u -> %u\n",
+                        static_cast<unsigned long long>(cs.pgm_hash), dim_x, dispatch_x);
+        }
+    }
     NoteTracedDispatch(cs.pgm_hash, dim_x, dim_y, dim_z);
     scheduler.Checkpoint("dispatch",cs.pgm_hash);
     if (FrameCapture::Active()) {
@@ -3183,7 +3199,7 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
         if (!bound) {
             cmdbuf.bindPipeline(vk::PipelineBindPoint::eCompute, handle);
         }
-        cmdbuf.dispatch(dim_x, dim_y, dim_z);
+        cmdbuf.dispatch(dispatch_x, dim_y, dim_z);
         if (full_barrier) {
             RecordFullBarrier(cmdbuf);
         }
@@ -3216,7 +3232,7 @@ void Rasterizer::DispatchIndirect(VAddr address, u32 offset, u32 size) {
     if (!pipelined) {
         DrainDrawPipe();
     }
-    const ComputePipeline* pipeline = pipeline_cache.GetComputePipeline();
+    const ComputePipeline* pipeline = pipeline_cache.GetComputePipeline(false);
     if (!pipeline) {
         return;
     }
