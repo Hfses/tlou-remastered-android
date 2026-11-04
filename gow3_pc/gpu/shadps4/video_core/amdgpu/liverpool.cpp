@@ -35,7 +35,6 @@
 #include "core/memory.h"
 #include "core/platform.h"
 #include "video_core/amdgpu/liverpool.h"
-#include "video_core/amdgpu/tlou_compute_drain.h"
 #include "gow3_write_log.h"
 #include "video_core/amdgpu/pm4_cmds.h"
 #include "video_core/renderdoc.h"
@@ -704,22 +703,6 @@ bool SkipIbDrain() {
         if (value) {
             std::printf("GPU: nested compute buffers do not drain the draw pipe "
                         "(GOW3_SKIP_IB_DRAIN=1)\n");
-        }
-        return value;
-    }();
-    return on;
-}
-
-// Android TLOU only. Reuse the existing compute-queue guarded wait handling
-// without enabling GOW3_FEWER_DRAINS for graphics: the latter has a documented
-// renderer/readback race. The launcher defaults this to ON; 0 restores the
-// prior compute implementation without affecting any graphics PM4 packet.
-bool TlouComputeWaitFast() {
-    static const bool on = [] {
-        const char* env = std::getenv("TLOU_COMPUTE_WAIT_FAST");
-        const bool value = env && env[0] == '1' && env[1] == 0;
-        if (value) {
-            std::printf("TLOU compute queue: guarded WaitRegMem and nested-buffer drain elimination ON\n");
         }
         return value;
     }();
@@ -2756,17 +2739,10 @@ Liverpool::Task Liverpool::ProcessCompute(std::span<const u32> acb, u32 vqid) {
         // queue): compute drains were up to 35% of the command thread on a Ryzen
         // laptop. Off by default (see the graphics WaitRegMem).
         // 21 Oct 2026 (GOW3_SKIP_IB_DRAIN=1): nested buffers alone.
-        // The known graphics-side FewerDrains race is not enabled by the Android
-        // switch. Only these two compute packets can bypass the up-front drain;
-        // WaitRegMem's deferred-fence and pending-write guards remain active.
         const bool pipelined_wait =
-            (opcode == PM4ItOpcode::IndirectBuffer || opcode == PM4ItOpcode::WaitRegMem) &&
-            TlouComputeDrain::SkipPreDrain(
-                opcode == PM4ItOpcode::IndirectBuffer
-                    ? TlouComputeDrain::PacketKind::NestedBuffer
-                    : TlouComputeDrain::PacketKind::MemoryWait,
-                TlouComputeWaitFast(), FewerDrains(),
-                opcode == PM4ItOpcode::IndirectBuffer && SkipIbDrain());
+            (FewerDrains() &&
+             (opcode == PM4ItOpcode::IndirectBuffer || opcode == PM4ItOpcode::WaitRegMem)) ||
+            (opcode == PM4ItOpcode::IndirectBuffer && SkipIbDrain());
         if (rasterizer && opcode != PM4ItOpcode::Nop && opcode != PM4ItOpcode::SetShReg &&
             opcode != PM4ItOpcode::SetQueueReg && opcode != PM4ItOpcode::DispatchDirect &&
             opcode != PM4ItOpcode::DispatchIndirect && opcode != PM4ItOpcode::ReleaseMem &&
@@ -2978,7 +2954,7 @@ Liverpool::Task Liverpool::ProcessCompute(std::span<const u32> acb, u32 vqid) {
         case PM4ItOpcode::WaitRegMem: {
             const auto* wait_reg_mem = reinterpret_cast<const PM4CmdWaitRegMem*>(header);
             ASSERT(wait_reg_mem->engine.Value() == PM4CmdWaitRegMem::Engine::Me);
-            if (TlouComputeDrain::UseGuardedWait(TlouComputeWaitFast(), FewerDrains())) {
+            if (FewerDrains()) {
                 // Not drained up front: as on the graphics queue, a fence handed to the draw
                 // recording thread counts as written, and an unmet wait lets it catch up first.
                 if (u32 value; wait_reg_mem->mem_space.Value() ==

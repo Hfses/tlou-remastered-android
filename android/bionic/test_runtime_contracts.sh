@@ -34,11 +34,6 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_inline_copy_rec
 "$test_dir/tlou-inline-copy"
 "$test_dir/tlou-compute-split"
 
-# The Android compute-only policy may skip only nested IB and guarded
-# WaitRegMem pre-drains; graphics opcode policy must remain unchanged.
-g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_compute_drain.cpp -o "$test_dir/tlou-compute-drain"
-"$test_dir/tlou-compute-drain"
-
 g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_srt_batch_plan.cpp -o "$test_dir/tlou-srt-batch"
 "$test_dir/tlou-srt-batch"
 

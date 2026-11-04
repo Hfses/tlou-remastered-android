@@ -108,9 +108,7 @@ final class PortMenu {
             note("Preencher tela é aplicado na hora. O limite de apresentação não desbloqueia a lógica de FPS do jogo.");
         } else if(section.equals("experiments")) {
             heading("OTIMIZAÇÕES EXPERIMENTAIS");
-            note("Fila compute otimizada por padrão nesta versão; demais experiências desligadas. Reinicie para aplicar. A opção OFF restaura as esperas antigas.");
-            toggle("compute_wait_fast","Fila compute: evitar esvaziamentos desnecessários (WaitRegMem + IB)",true);
-            note("Apenas filas compute: reutiliza verificações já existentes de fence pendente, escrita em andamento e label adiada. Não altera o caminho gráfico, que apresentou regressões com FewerDrains. Desligue caso veja falhas de renderização ou travamentos.");
+            note("Experimentos não validados de desempenho permanecem desligados; reinicie para aplicar alterações.");
             toggle("fetch_no_block","GoW III: espera de escrita fora da thread GPU",false);
             note("Movimenta para a thread CPU uma espera por escrita GPU já submetida; exige fila de cópia compatível. Até 3 tentativas, depois usa o caminho original.");
             toggle("land_on_guest","GoW III: concluir readbacks na thread solicitante",false);
@@ -134,7 +132,7 @@ final class PortMenu {
                 new String[]{"auto","0","2","4","6"},"auto");
             note("Prefetch e compilação paralela podem mudar travamentos e correção visual. O modo automático de workers é o original.");
             row("Desativar todos os experimentos",()->{
-                prefs.edit().putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("compute_wait_fast",false).remove("relaxed_skinning_fp").putBoolean("mapped_fault_readbacks",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
+                prefs.edit().putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).remove("compute_wait_fast").remove("relaxed_skinning_fp").putBoolean("mapped_fault_readbacks",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
                     .putBoolean("prefetch_pipelines",false).putBoolean("parallel_pipelines",false)
                     .putString("prep_workers","auto").apply();
                 actions.changed();render();
