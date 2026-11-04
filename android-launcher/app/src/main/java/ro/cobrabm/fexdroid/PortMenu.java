@@ -109,8 +109,6 @@ final class PortMenu {
         } else if(section.equals("experiments")) {
             heading("OTIMIZAÇÕES EXPERIMENTAIS");
             note("Desligadas por padrão. Ative UMA por vez e compare FPS e falhas na mesma área. Requer reiniciar o jogo.");
-            toggle("srt_dep_batch","Agrupar readbacks SRT independentes (até 8 tabelas)",false);
-            note("Readback 1: preserva a ordem pai/filho dos ponteiros e as mesmas esperas GPU. Agrupa somente tabelas independentes e informa quantos grupos foram utilizados.");
             toggle("fetch_no_block","GoW III: espera de escrita fora da thread GPU",false);
             note("Movimenta para a thread CPU uma espera por escrita GPU já submetida; exige fila de cópia compatível. Até 3 tentativas, depois usa o caminho original.");
             toggle("land_on_guest","GoW III: concluir readbacks na thread solicitante",false);
@@ -125,8 +123,6 @@ final class PortMenu {
             note("Experimento isolado, desligado por padrão: divide o grupo virtual de 1024 em 16 de 64, apenas nos dois shaders mais caros. Dispatch indireto permanece original. Reinicie e compare com o perfil GPU desligado.");
             toggle("mapped_fault_readbacks","Readback direto para acessos da CPU",false);
             note("Evita cópias intermediárias quando a CPU precisa ler dados da GPU. Compare separadamente; requer reabrir o jogo.");
-            toggle("copy_batch","Agrupar cópias Vulkan consecutivas (v0.24)",false);
-            note("Agrupa até quatro cópias consecutivas para os mesmos buffers, sem alterar barreiras ou dependências. Os logs registram o número de agrupamentos; reinicie o jogo.");
             toggle("prep_pool","Reutilizar buffers de preparação de draws",false);
             toggle("cpu_trims","Reduzir trabalho de CPU por draw",false);
             toggle("prefetch_pipelines","Pré-compilar pipelines antecipadamente",false);
@@ -136,7 +132,7 @@ final class PortMenu {
                 new String[]{"auto","0","2","4","6"},"auto");
             note("Prefetch e compilação paralela podem mudar travamentos e correção visual. O modo automático de workers é o original.");
             row("Desativar todos os experimentos",()->{
-                prefs.edit().putBoolean("srt_dep_batch",false).putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("mapped_fault_readbacks",false).putBoolean("copy_batch",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
+                prefs.edit().putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("mapped_fault_readbacks",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
                     .putBoolean("prefetch_pipelines",false).putBoolean("parallel_pipelines",false)
                     .putString("prep_workers","auto").apply();
                 actions.changed();render();

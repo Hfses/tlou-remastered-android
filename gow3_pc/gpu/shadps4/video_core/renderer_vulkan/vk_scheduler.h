@@ -4,8 +4,6 @@
 #pragma once
 
 #include <format>
-#include <array>
-#include <cstdio>
 #include <string>
 
 #include <atomic>
@@ -29,7 +27,6 @@
 #include "common/unique_function.h"
 #include "video_core/amdgpu/regs_color.h"
 #include "video_core/amdgpu/regs_primitive.h"
-#include "video_core/renderer_vulkan/vk_copy_batch.h"
 #include "video_core/renderer_vulkan/vk_resource_pool.h"
 #include "video_core/renderer_vulkan/vk_semaphore.h"
 
@@ -615,29 +612,6 @@ public:
         return true;
     }
 
-    // Merge only neighboring Vulkan copies with the same buffers and disjoint destinations.
-    // A barrier, draw, image operation or any other recorded command breaks the group.
-    bool PushCopy(vk::Buffer src, vk::Buffer dst, const vk::BufferCopy& region, bool& merged) {
-        merged = false;
-        if (last && last->kind == CommandBase::Kind::Copy) {
-            auto* command = static_cast<CopyCommand*>(last);
-            if (command->TryAppend(src, dst, region)) {
-                merged = true;
-                return true;
-            }
-        }
-        using Command = CopyCommand;
-        const size_t offset = (used + alignof(Command) - 1) & ~(alignof(Command) - 1);
-        if (offset + sizeof(Command) > Capacity) return false;
-        auto* command = new (storage + offset) Command(src, dst, region);
-        if (last) last->next = command;
-        else first = command;
-        last = command;
-        used = offset + sizeof(Command);
-        PrefetchAhead();
-        return true;
-    }
-
     /// Raw storage in the chunk for a command's variable-length data; null when full.
     void* Allocate(size_t bytes, size_t align) {
         const size_t offset = (used + align - 1) & ~(align - 1);
@@ -680,32 +654,9 @@ private:
     }
 
     struct CommandBase {
-        enum class Kind : u8 { Generic, Copy };
-        explicit CommandBase(Kind kind_ = Kind::Generic) : kind(kind_) {}
         virtual ~CommandBase() = default;
         virtual void Execute(vk::CommandBuffer cmdbuf) = 0;
         CommandBase* next{};
-        Kind kind;
-    };
-    // Four regions keep the hot single-copy command small; no GPU copy order changes.
-    struct CopyCommand final : CommandBase {
-        CopyCommand(vk::Buffer src_, vk::Buffer dst_, const vk::BufferCopy& region)
-            : CommandBase(Kind::Copy), src(src_), dst(dst_) { regions[0] = region; }
-        bool TryAppend(vk::Buffer next_src, vk::Buffer next_dst,
-                       const vk::BufferCopy& region) {
-            if (src != next_src || dst != next_dst || src == dst || count == regions.size())
-                return false;
-            if (!CopyBatch::DestinationsDisjoint(
-                    std::span<const vk::BufferCopy>{regions.data(), count}, region)) return false;
-            regions[count++] = region;
-            return true;
-        }
-        void Execute(vk::CommandBuffer cmdbuf) override {
-            cmdbuf.copyBuffer(src, dst, count, regions.data());
-        }
-        vk::Buffer src, dst;
-        std::array<vk::BufferCopy, 4> regions{};
-        u32 count{1};
     };
     template <typename Func>
     struct TypedCommand final : CommandBase {
@@ -825,39 +776,6 @@ public:
             record_chunk = AcquireChunk();
             const bool pushed = record_chunk->Push(std::forward<Func>(func));
             ASSERT(pushed);
-        }
-    }
-
-    // Optional TLOU A/B: combine consecutive one-region copies in the recorder chunk.
-    // The normal Record() path, including barriers and command order, remains unchanged.
-    void RecordBufferCopy(vk::Buffer src, vk::Buffer dst, const vk::BufferCopy& region) {
-        if (!IsRecordingDeferred()) {
-            Record([src, dst, region](vk::CommandBuffer c) {
-                c.copyBuffer(src, dst, 1u, &region);
-            });
-            return;
-        }
-        ++record_serial;
-        bool merged = false;
-        if (!record_chunk->PushCopy(src, dst, region, merged)) {
-            full_chunks.push_back(std::move(record_chunk));
-            record_chunk = AcquireChunk();
-            const bool pushed = record_chunk->PushCopy(src, dst, region, merged);
-            ASSERT(pushed);
-        }
-        ++copy_batch_calls;
-        copy_batch_merges += merged;
-        if ((copy_batch_calls & 8191u) == 0) {
-            const auto now = std::chrono::steady_clock::now();
-            if (now - copy_batch_window >= std::chrono::seconds(5)) {
-                std::printf("TLOU copy batch (>=5s): copies=%llu merged=%llu Vulkan-calls=%llu\n",
-                            (unsigned long long)copy_batch_calls,
-                            (unsigned long long)copy_batch_merges,
-                            (unsigned long long)(copy_batch_calls - copy_batch_merges));
-                std::fflush(stdout);
-                copy_batch_calls = copy_batch_merges = 0;
-                copy_batch_window = now;
-            }
         }
     }
 
@@ -1082,9 +1000,6 @@ private:
     // compares thread ids, which on Windows (libc++ over winpthreads) costs two system calls.
     bool recording_threaded{false};
     u64 record_serial = 0; ///< gow3: see RecordSerial()
-    u64 copy_batch_calls = 0;
-    u64 copy_batch_merges = 0;
-    std::chrono::steady_clock::time_point copy_batch_window = std::chrono::steady_clock::now();
     /// gow3 20 Oct 2026: the draw scheduler counts its waits for the submit lock (Gow3Stats).
     bool count_lock_waits{false};
     std::jthread recorder_thread;
