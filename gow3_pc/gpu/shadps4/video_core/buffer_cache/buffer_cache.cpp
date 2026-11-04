@@ -29,6 +29,7 @@
 #include "video_core/buffer_cache/buffer_cache.h"
 #include "video_core/buffer_cache/memory_tracker.h"
 #include "video_core/buffer_cache/mapped_readback_plan.h"
+#include "video_core/buffer_cache/tlou_precise_window.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
@@ -1783,12 +1784,24 @@ void BufferCache::ReadMemory(VAddr device_addr, u64 size, bool is_write, bool as
         }
         // GPU-modified ranges come as many small scattered islands,
         // so the download is widened to a window around the request
-        constexpr u64 WindowSize = 512_KB;
-        const VAddr arena_end = arena->cpu_addr + arena->size_bytes;
-        const VAddr window_start =
-            std::max<VAddr>(Common::AlignDown(device_addr, WindowSize), arena->cpu_addr);
-        const VAddr window_end = std::min<VAddr>(
-            std::max<VAddr>(window_start + WindowSize, device_addr + size), arena_end);
+        // SotC-derived narrow readback windows are only used in Precise mode:
+        // GPU-modified neighboring pages remain read-protected and fault on
+        // their own access. Relaxed mode keeps original 512 KiB coverage.
+        static const bool sotc_narrow = [] {
+            const char* env = std::getenv("TLOU_SOTC_PRECISE_NARROW");
+            return env && env[0] == '1' && env[1] == 0;
+        }();
+        const bool precise = EmulatorSettings.GetReadbacksMode() == GpuReadbacksMode::Precise;
+        const u64 width = TlouPreciseWindow::Width(sotc_narrow, precise);
+        const auto [window_start, window_end] = TlouPreciseWindow::Window(
+            device_addr, size, arena->cpu_addr, arena->size_bytes, width);
+        if (width == TlouPreciseWindow::NarrowBytes) {
+            static std::atomic<u32> logged{0};
+            if (logged.fetch_add(1, std::memory_order_relaxed) < 3) {
+                std::printf("TLOU SotC Precise: 64 KiB fault readback for %llu bytes\n",
+                            static_cast<unsigned long long>(size));
+            }
+        }
         DownloadMemory(arena, window_start, window_end - window_start);
         if (is_write) {
             memory_tracker->MarkRegionAsCpuModified(device_addr, size);
