@@ -54,6 +54,8 @@
 #include <android/surface_control.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 #include <jni.h>
 #include <pthread.h>
 #include <poll.h>
@@ -72,6 +74,40 @@
 #define TAG "Gow3Present"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
+
+/*
+ * Rootless Adreno Turbo: matches libadrenotools' KGSL_PROP_PWRCTRL path.
+ * 0 disables KGSL power scaling (maximum available clock, still thermal-limited);
+ * 1 restores the normal GPU power policy. No su/sysfs access is attempted.
+ * Return false when a device/Android release refuses the ioctl.
+ */
+typedef struct {
+    unsigned int type;
+    void* value;
+    size_t sizebytes;
+} TlouKgslProperty;
+
+JNIEXPORT jboolean JNICALL Java_ro_cobrabm_fexdroid_Gow3Present_nativeSetAdrenoTurbo(
+    JNIEnv* env, jclass clazz, jboolean enabled) {
+    (void)env; (void)clazz;
+    int fd = open("/dev/kgsl-3d0", O_RDWR | O_CLOEXEC);
+    if (fd < 0) {
+        LOGI("Adreno Turbo unavailable: KGSL open failed errno=%d", errno);
+        return JNI_FALSE;
+    }
+    uint32_t policy = enabled ? 0u : 1u;
+    TlouKgslProperty request = { .type = 0xEu, .value = &policy,
+                                 .sizebytes = sizeof(policy) };
+    int result = ioctl(fd, _IOW(0x09, 0x32, TlouKgslProperty), &request);
+    int saved_errno = errno;
+    close(fd);
+    if (result != 0) {
+        LOGI("Adreno Turbo rejected: enabled=%d errno=%d", (int)enabled, saved_errno);
+        return JNI_FALSE;
+    }
+    LOGI("Adreno Turbo KGSL policy applied: enabled=%d", (int)enabled);
+    return JNI_TRUE;
+}
 
 /* API 29 entry points, from libandroid.so. */
 static struct {
