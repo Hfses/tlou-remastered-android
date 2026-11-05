@@ -2046,7 +2046,11 @@ void BufferCache::DownloadRanges(std::span<const std::pair<VAddr, u64>> ranges, 
     // piece. Failed read-ahead always retries the exact original request.
     static const bool srt_page_ahead = [] {
         const char* env = std::getenv("TLOU_SRT_PAGE_AHEAD");
-        return !env || env[0] != '0';
+        // The synthetic replay reduces API calls, but not modeled blocking
+        // time, and adds work when fields are rewritten or never consumed.
+        // Keep this diagnostic candidate opt-in until actual CPU savings and
+        // device coverage justify enabling it. Do not override the launcher.
+        return env && env[0] == '1' && env[1] == 0;
     }();
     u64 page_candidates = 0;
     static struct SrtPageStats {

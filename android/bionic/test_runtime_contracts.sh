@@ -38,6 +38,12 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_inline_copy_rec
 g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_hot_srt_readback.cpp -o "$test_dir/tlou-hot-srt"
 "$test_dir/tlou-hot-srt"
 
+# Distinguish fewer wait API calls from actual modeled producer stalls.
+# Includes adverse locality, GPU rewrites, unused fields and late CPU writes.
+# Timing is informational; deterministic counters gate claims, not noisy speed.
+g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_srt_cost.cpp -o "$test_dir/tlou-srt-cost"
+"$test_dir/tlou-srt-cost"
+
 g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_srt_batch_plan.cpp -o "$test_dir/tlou-srt-batch"
 "$test_dir/tlou-srt-batch"
 
