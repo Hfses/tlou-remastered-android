@@ -273,13 +273,13 @@ final class PortMenu {
                 note("The Last of Us Remastered · Daedalus Android · v0.1");
                 note("Desenvolvimento: Erick Mendes / Daedalus Android.");
                 note("Repositório e referências: GitHub / erickmendes22/tlou-remastered-android");
-                note("Créditos: shadPS4, FEX-Emu, libadrenotools e colaboradores open source.");
+                note("Créditos: port de PC de ravencaio, FEX-Emu, libadrenotools e colaboradores open source.");
                 row("Código-fonte no GitHub",()->activity.startActivity(new Intent(
                     Intent.ACTION_VIEW,Uri.parse("https://github.com/erickmendes22/tlou-remastered-android"))));
                 row("FEX-Emu no GitHub",()->activity.startActivity(new Intent(
                     Intent.ACTION_VIEW,Uri.parse("https://github.com/FEX-Emu/FEX"))));
-                row("shadPS4 no GitHub",()->activity.startActivity(new Intent(
-                    Intent.ACTION_VIEW,Uri.parse("https://github.com/shadps4-emu/shadPS4"))));
+                row("Projeto de referência para PC",()->activity.startActivity(new Intent(
+                    Intent.ACTION_VIEW,Uri.parse("https://github.com/ravencaio/tlou-remastered-pc"))));
                 row("libadrenotools no GitHub",()->activity.startActivity(new Intent(
                     Intent.ACTION_VIEW,Uri.parse("https://github.com/bylaws/libadrenotools"))));
                 note("Perfil de desempenho do log 32. Patches e resoluções preservados.");
