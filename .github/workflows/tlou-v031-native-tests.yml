@@ -22,9 +22,7 @@ jobs:
           java-version: '17'
       - name: Save archive round-trip and running-game exclusion
         run: bash android/bionic/test_fps.sh
-      - name: Shader specialization prerequisites
-        run: sudo apt-get update -qq && sudo apt-get install -qq -y libboost-dev libspdlog-dev libfmt-dev libvulkan-dev
-      - name: Exact optional paths, memory safety and cross-thread copy completion
+      - name: Memory walks ON/OFF and sanitizers
         run: |
           set -euo pipefail
           mkdir -p out/v031
@@ -32,12 +30,31 @@ jobs:
           out/v031/memory --correctness-only
           cc -std=c11 -O1 -g -pthread -fsanitize=address,undefined -fno-omit-frame-pointer gow3_pc/tests/test_memory_walk_cost.c -o out/v031/memory-san
           out/v031/memory-san --correctness-only
+      - name: Ring bindings, host-copy helper and draw counters
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          mkdir -p out/v031
           for test in ring_binding_cursor tlou_host_copy_batch draw_pipe_busy_sample; do
             g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I gow3_pc/gpu/shim -I gow3_pc/gpu/shadps4 "gow3_pc/tests/test_${test}.cpp" -o "out/v031/$test"
             "out/v031/$test" --correctness-only
           done
+      - name: Actual RecordChunk order and completion between CPU cores
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          mkdir -p out/v031
           python3 gow3_pc/tests/extract_host_copy_chunks.py out/v031
           g++ -std=c++20 -O1 -g -pthread -fsanitize=address,undefined -fno-omit-frame-pointer -I out/v031 -I gow3_pc/gpu/shim -I gow3_pc/gpu/shadps4 gow3_pc/tests/test_tlou_threaded_record_chunk.cpp -o out/v031/chunks-san
           out/v031/chunks-san --correctness-only
+      - name: Shader specialization prerequisites
+        if: ${{ !cancelled() }}
+        timeout-minutes: 5
+        run: sudo apt-get update -qq && sudo apt-get install -qq -y libboost-dev libspdlog-dev libfmt-dev libvulkan-dev
+      - name: Exact compute memo against production specialization
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          mkdir -p out/v031
           g++ -std=c++20 -O2 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable -Wno-reorder -Wno-class-memaccess -pthread -I gow3_pc/tests/native-shim -I gow3_pc/gpu/shadps4 -I gow3_pc/gpu/shim gow3_pc/tests/test_tlou_compute_perm_memo.cpp -o out/v031/memo
           out/v031/memo --correctness-only
