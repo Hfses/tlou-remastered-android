@@ -132,7 +132,7 @@ public final class GameActivity extends Activity {
             return true;
         });
         menuButton=new Button(this);menuButton.setText("☰");menuButton.setTextSize(20);menuButton.setTextColor(0xffdfe8d1);
-        menuButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x88202c24));menuButton.setContentDescription("Menu do emulador");
+        menuButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x88202c24));menuButton.setContentDescription(TlouLanguage.t(this,"Menu do emulador"));
         FrameLayout.LayoutParams menuPos=pos(dp(44),dp(44),Gravity.TOP|Gravity.RIGHT);menuPos.topMargin=dp(8);menuPos.rightMargin=dp(8);
         menuButton.setOnClickListener(v->showMenu());layout.addView(menuButton,menuPos);
         setContentView(layout);
@@ -180,9 +180,9 @@ public final class GameActivity extends Activity {
 
     private void error(String message) {
         RunLog.write(this,"ERRO: "+message);
-        handler.post(()->{if(!isFinishing()&&!isDestroyed())new AlertDialog.Builder(this).setTitle("TLOU — erro de inicialização")
-            .setMessage(message).setNeutralButton("Ver logs",(d,w)->showLog())
-            .setPositiveButton("Voltar ao menu",(d,w)->stopAndExit()).show();});
+        handler.post(()->{if(!isFinishing()&&!isDestroyed())new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,"TLOU — erro de inicialização"))
+            .setMessage(message).setNeutralButton(TlouLanguage.t(this,"Ver logs"),(d,w)->showLog())
+            .setPositiveButton(TlouLanguage.t(this,"Voltar ao menu"),(d,w)->stopAndExit()).show();});
     }
 
     private void refreshFps() {
@@ -438,7 +438,7 @@ public final class GameActivity extends Activity {
     private void showLog() {
         android.widget.ScrollView scroll=new android.widget.ScrollView(this);
         TextView text=new TextView(this);text.setText(RunLog.summary(this));text.setTextIsSelectable(true);text.setTextSize(12);text.setPadding(24,16,24,16);scroll.addView(text);
-        new AlertDialog.Builder(this).setTitle("TLOU — logs").setView(scroll).setPositiveButton("Fechar",null).show();
+        new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,"TLOU — logs")).setView(scroll).setPositiveButton(TlouLanguage.t(this,"Fechar"),null).show();
     }
 
     private void stopAndExit() { stopAndExit(false); }
