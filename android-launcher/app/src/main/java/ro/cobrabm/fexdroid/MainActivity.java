@@ -75,9 +75,9 @@ public final class MainActivity extends Activity {
     private void showFirstRunSetup() {
         if(firstRunDialogShown || isFinishing())return;
         firstRunDialogShown=true;
-        new AlertDialog.Builder(this).setTitle("Configurar The Last of Us")
-            .setMessage("Selecione como deseja adicionar seu jogo. A instalação e a preparação são feitas automaticamente.")
-            .setItems(new String[]{"Instalar PKG","Selecionar pasta do jogo","Agora não"},
+        new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,"Configurar The Last of Us"))
+            .setMessage(TlouLanguage.t(this,"Selecione como deseja adicionar seu jogo. A instalação e a preparação são feitas automaticamente."))
+            .setItems(new String[]{TlouLanguage.t(this,"Instalar PKG"),TlouLanguage.t(this,"Selecionar pasta do jogo"),TlouLanguage.t(this,"Agora não")},
                 (dialog,selection)->{
                     prefs.edit().putBoolean("onboarding_seen",true).apply();
                     if(selection==0)pickFile(PICK_PKG);
@@ -384,7 +384,7 @@ public final class MainActivity extends Activity {
     }
     private void manualPath() {
         EditText input=new EditText(this); input.setSingleLine(true); input.setText(prefs.getString("game_path",""));input.setHint("/storage/emulated/0/Jogos/CUSA00552");
-        new AlertDialog.Builder(this).setTitle("Pasta do jogo").setView(input).setNegativeButton("Cancelar",null).setPositiveButton("Selecionar",(d,w)->withAccess(()->chooseGame(new File(input.getText().toString().trim())))).show();
+        new AlertDialog.Builder(this).setTitle("Pasta do jogo").setView(input).setNegativeButton(TlouLanguage.t(this,"Cancelar"),null).setPositiveButton("Selecionar",(d,w)->withAccess(()->chooseGame(new File(input.getText().toString().trim())))).show();
     }
     private void installPkg(File pkg,File parent) {
         task("Instalando PKG…",()->{
@@ -481,7 +481,7 @@ public final class MainActivity extends Activity {
             });}
             else if(code==PICK_GAME)chooseGame(local(uri,true));
             else if(code==PICK_DRIVER)importDriver(uri);
-            else if(code==PICK_PKG){pendingPkg=uri;new AlertDialog.Builder(this).setTitle("Destino do jogo").setMessage("Escolha onde criar a pasta CUSA00552. O PKG será extraído diretamente para ela; depois o app prepara o jogo automaticamente.").setPositiveButton("Escolher destino",(d,w)->pickFolder(PICK_DEST)).setNegativeButton("Cancelar",(d,w)->pendingPkg=null).show();}
+            else if(code==PICK_PKG){pendingPkg=uri;new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,"Destino do jogo")).setMessage(TlouLanguage.t(this,"Escolha onde criar a pasta CUSA00552. O PKG será extraído diretamente para ela; depois o app prepara o jogo automaticamente.")).setPositiveButton(TlouLanguage.t(this,"Escolher destino"),(d,w)->pickFolder(PICK_DEST)).setNegativeButton("Cancelar",(d,w)->pendingPkg=null).show();}
             else if(code==PICK_DEST&&pendingPkg!=null){Uri pkg=pendingPkg;pendingPkg=null;installPkg(local(pkg,false),local(uri,true));}
         }catch(Exception e){alert("Seleção",e.getMessage());}
     }
