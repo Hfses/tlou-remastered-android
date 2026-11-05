@@ -34,6 +34,7 @@ public final class MainActivity extends Activity {
     private final List<Button> buttons=new ArrayList<>();
     private final java.util.concurrent.ExecutorService worker=Executors.newSingleThreadExecutor();
     private boolean busy;
+    private String currentTab="home";
     private Runnable afterPermission;
     private Uri pendingPkg;
     private InstallTools tools;
@@ -41,6 +42,7 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         prefs=getSharedPreferences("tlou",MODE_PRIVATE);
+        PortSettings.retireTestPreferences(this);
         // Keep paths chosen in the first experimental APK.
         if (!prefs.contains("game_path")) prefs.edit().putString("game_path",getPreferences(0).getString("prepared_path","")).apply();
         if (saved!=null && saved.getString("pending_pkg")!=null) pendingPkg=Uri.parse(saved.getString("pending_pkg"));
@@ -48,32 +50,178 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(BACKGROUND);
         getWindow().setNavigationBarColor(BACKGROUND);
         buildHome();
+        // Optional packaged driver installation runs off the main/UI thread.
+        worker.execute(()->{
+            try { BuiltinDrivers.ensureDefault(this); }
+            catch(Exception e) { android.util.Log.w("TLOU", "Turnip R1 auto-select unavailable", e); }
+            runOnUiThread(()->{if(!isDestroyed())refresh();});
+        });
+    }
+    private void selectTab(String tab) {
+        if(busy)return;
+        currentTab=tab;buildHome();
+    }
+    private void addTab(LinearLayout tabs,String title,String tab) {
+        TextView label=text(title,12,currentTab.equals(tab)?0xffe9efd9:MUTED);
+        label.setGravity(Gravity.CENTER);label.setTypeface(null,
+            currentTab.equals(tab)?Typeface.BOLD:Typeface.NORMAL);
+        GradientDrawable shape=new GradientDrawable();
+        shape.setColor(currentTab.equals(tab)?0xff3e4e36:0xff1b2520);
+        shape.setCornerRadius(dp(8));label.setBackground(shape);
+        label.setOnClickListener(v->selectTab(tab));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(45),1);
+        lp.setMargins(dp(2),0,dp(2),0);tabs.addView(label,lp);
+    }
+    private void choice(LinearLayout parent,String key,String heading,
+                        String[] names,String[] values,String fallback) {
+        parent.addView(text(heading,13,ACCENT));
+        Spinner spinner=new Spinner(this,Spinner.MODE_DROPDOWN);
+        String[] translated=new String[names.length];
+        for(int i=0;i<names.length;i++)translated[i]=TlouLanguage.t(this,names[i]);
+        ArrayAdapter<String> adapter=new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item,translated);
+        spinner.setAdapter(adapter);
+        String value=prefs.getString(key,fallback);int initial=0;
+        for(int i=0;i<values.length;i++)if(values[i].equals(value))initial=i;
+        spinner.setSelection(initial);spinner.setTag(initial);
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+            public void onNothingSelected(AdapterView<?> parent){}
+            public void onItemSelected(AdapterView<?> parent,View view,int index,long id){
+                if((Integer)spinner.getTag()==index)return;
+                spinner.setTag(index);prefs.edit().putString(key,values[index]).apply();refresh();
+            }
+        });parent.addView(spinner,new LinearLayout.LayoutParams(-1,dp(46)));
+    }
+    private void toggleSetting(LinearLayout parent,String key,String label,boolean fallback) {
+        Switch sw=new Switch(this);sw.setText(TlouLanguage.t(this,label));sw.setTextSize(14);
+        sw.setTextColor(TEXT);sw.setPadding(0,dp(8),0,dp(8));
+        sw.setChecked(prefs.getBoolean(key,fallback));
+        sw.setOnCheckedChangeListener((v,checked)->prefs.edit().putBoolean(key,checked).apply());
+        parent.addView(sw);
+    }
+    private void languageChoice(LinearLayout parent) {
+        parent.addView(text("Idioma do aplicativo",13,ACCENT));
+        Spinner spinner=new Spinner(this,Spinner.MODE_DROPDOWN);
+        ArrayAdapter<String> adapter=new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item,TlouLanguage.NAMES);
+        spinner.setAdapter(adapter);
+        int initial=TlouLanguage.index(this);spinner.setSelection(initial);spinner.setTag(initial);
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+            public void onNothingSelected(AdapterView<?> parent){}
+            public void onItemSelected(AdapterView<?> parent,View view,int index,long id){
+                if((Integer)spinner.getTag()==index)return;
+                spinner.setTag(index);prefs.edit().putString("ui_language",TlouLanguage.CODES[index]).apply();
+                buildHome(); // app language is immediate and never changes guest/game language
+            }
+        });parent.addView(spinner,new LinearLayout.LayoutParams(-1,dp(48)));
+    }
+    private void screenChoice(LinearLayout parent) {
+        parent.addView(text("Tela",13,ACCENT));
+        Spinner spinner=new Spinner(this,Spinner.MODE_DROPDOWN);
+        String[] labels={
+            TlouLanguage.t(this,"Ajustar à tela (proporção original)"),
+            TlouLanguage.t(this,"Preencher tela (sem barras)")};
+        spinner.setAdapter(new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item,labels));
+        int initial=prefs.getBoolean("fullscreen",false)?1:0;
+        spinner.setSelection(initial);spinner.setTag(initial);
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+            public void onNothingSelected(AdapterView<?> parent){}
+            public void onItemSelected(AdapterView<?> parent,View view,int index,long id){
+                if((Integer)spinner.getTag()==index)return;
+                spinner.setTag(index);prefs.edit().putBoolean("fullscreen",index==1).apply();
+            }
+        });parent.addView(spinner,new LinearLayout.LayoutParams(-1,dp(46)));
     }
     private void buildHome() {
-        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(BACKGROUND);
-        LinearLayout root=column();root.setPadding(dp(22),dp(18),dp(22),dp(24));scroll.addView(root);
+        buttons.clear();
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
+        scroll.setBackgroundColor(BACKGROUND);
+        LinearLayout root=column();root.setPadding(dp(18),dp(18),dp(18),dp(22));
+        scroll.addView(root);
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);
         TextView brand=text("DAEDALUS  /  ANDROID",12,ACCENT);brand.setLetterSpacing(.14f);
         header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
-        Button menu=new Button(this);menu.setText("☰");menu.setTextSize(23);menu.setContentDescription("Menu do emulador");
-        menu.setOnClickListener(v->{if(!busy)openMenu("home");});header.addView(menu,new LinearLayout.LayoutParams(dp(48),dp(48)));buttons.add(menu);root.addView(header);
-        TextView title=text("THE LAST OF US",34,TEXT);title.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));root.addView(title);
-        TextView subtitle=text("R E M A S T E R E D",12,ACCENT);subtitle.setPadding(0,0,0,dp(18));root.addView(subtitle);
-        LinearLayout game=card(root,"SEU JOGO");gameInfo=text("",14,TEXT);gameInfo.setMaxLines(3);game.addView(gameInfo);
-        add(game,"JOGAR",true,()->withAccess(()->prepareSelected(true)));
-        TextView detail=text("PKG ou pasta extraída. Preparação automática no celular.",12,MUTED);game.addView(detail);
-        add(game,"Escolher pasta do jogo",false,()->withAccess(()->pickFolder(PICK_GAME)));
-        add(game,"Instalar por PKG",false,()->withAccess(()->pickFile(PICK_PKG)));
-        TextView manual=text("Informar caminho da pasta",12,ACCENT);manual.setOnClickListener(v->{if(!busy)manualPath();});game.addView(manual);
-        LinearLayout config=card(root,"CONFIGURAÇÃO");
-        driverInfo=text("",13,MUTED);config.addView(driverInfo);
-        add(config,"Vídeo e desempenho",false,()->openMenu("video"));
-        add(config,"Patches do jogo",false,()->openMenu("patches"));
-        add(config,"Saves · importar / exportar",false,()->openMenu("saves"));
-        progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setIndeterminate(true);progress.setVisibility(View.GONE);root.addView(progress);
-        status=text("Pronto para continuar. Abra o menu lateral para drivers, HUD e controles.",13,MUTED);root.addView(status);
-        permission=text("Permitir acesso aos arquivos",13,ACCENT);permission.setPadding(0,dp(12),0,dp(12));permission.setOnClickListener(v->withAccess(this::refresh));root.addView(permission);
-        root.addView(text("CUSA00552  ·  Daedalus v0.31 experimental",11,MUTED));setContentView(scroll);refresh();
+        Button menu=new Button(this);menu.setText("☰");menu.setTextSize(22);
+        menu.setContentDescription(TlouLanguage.t(this,"Menu"));
+        menu.setOnClickListener(v->{if(!busy)openMenu("home");});
+        header.addView(menu,new LinearLayout.LayoutParams(dp(46),dp(46)));
+        buttons.add(menu);root.addView(header);
+        TextView title=text("THE LAST OF US",34,TEXT);
+        title.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));root.addView(title);
+        TextView subtitle=text("R E M A S T E R E D",12,ACCENT);
+        subtitle.setPadding(0,0,0,dp(14));root.addView(subtitle);
+
+        LinearLayout tabs=new LinearLayout(this);
+        tabs.setOrientation(LinearLayout.HORIZONTAL);
+        addTab(tabs,"Início","home");addTab(tabs,"Patches","patches");
+        addTab(tabs,"Ajustes","settings");addTab(tabs,"Sobre","about");
+        LinearLayout.LayoutParams tabLP=new LinearLayout.LayoutParams(-1,dp(45));
+        tabLP.bottomMargin=dp(18);root.addView(tabs,tabLP);
+
+        if(currentTab.equals("home")) {
+            LinearLayout game=card(root,"SEU JOGO");
+            gameInfo=text("",13,TEXT);gameInfo.setMaxLines(3);game.addView(gameInfo);
+            add(game,"JOGAR",true,()->withAccess(()->prepareSelected(true)));
+            game.addView(text("PKG ou pasta extraída. Preparação automática no celular.",12,MUTED));
+            add(game,"Escolher pasta do jogo",false,()->withAccess(()->pickFolder(PICK_GAME)));
+            add(game,"Instalar por PKG",false,()->withAccess(()->pickFile(PICK_PKG)));
+            TextView manual=text("Informar caminho da pasta",12,ACCENT);
+            manual.setOnClickListener(v->{if(!busy)manualPath();});game.addView(manual);
+            LinearLayout drivers=card(root,"DRIVER VULKAN");
+            driverInfo=text("",12,MUTED);drivers.addView(driverInfo);
+            add(drivers,"Selecionar driver Vulkan",false,this::selectDriver);
+            add(drivers,"Importar driver ZIP ou SO",false,()->pickFile(PICK_DRIVER));
+        } else if(currentTab.equals("patches")) {
+            LinearLayout box=card(root,"PATCHES");
+            box.addView(text("Patches validados para o eboot reconhecido. Reinicie para aplicar.",12,MUTED));
+            choice(box,"resolution","Resolução interna",
+                new String[]{"Original (1080p)","1280 × 720","960 × 540","640 × 360"},
+                new String[]{"original","720","540","360"},"original");
+            toggleSetting(box,"ssao","Desativar SSAO",false);
+            toggleSetting(box,"motion_blur","Desativar desfoque de movimento",false);
+            toggleSetting(box,"depth_of_field","Desativar profundidade de campo",false);
+            toggleSetting(box,"bloom","Desativar bloom",false);
+            toggleSetting(box,"sunlight_shadows","Desativar sombras solares",false);
+            toggleSetting(box,"subsurface","Desativar subsurface",false);
+            add(box,"Restaurar patches e resolução",false,()->{
+                SharedPreferences.Editor edit=prefs.edit().putString("resolution","original");
+                for(String key:PortSettings.EFFECTS)edit.putBoolean(key,false);
+                edit.apply();buildHome();
+            });
+        } else if(currentTab.equals("settings")) {
+            LinearLayout video=card(root,"VÍDEO E TELA");
+            screenChoice(video);
+            choice(video,"fps_limit","Limite de FPS",
+                new String[]{"30 FPS","60 FPS","Sem limite"},
+                new String[]{"30","60","0"},"60");
+            toggleSetting(video,"vsync","VSync",true);
+            video.addView(text("Readback 1 (relaxado) e perfil do log 32 fixos.",12,MUTED));
+            LinearLayout app=card(root,"IDIOMA E INTERFACE");
+            languageChoice(app);
+            app.addView(text("O idioma do jogo é escolhido no próprio The Last of Us.",12,MUTED));
+            add(app,"Controles e HUD",false,()->openMenu("hud"));
+            LinearLayout data=card(root,"SAVES");
+            add(data,"Exportar saves ZIP",false,this::exportSaves);
+            add(data,"Importar saves ZIP",false,()->pickFile(IMPORT_SAVES));
+        } else {
+            LinearLayout about=card(root,"SOBRE");
+            about.addView(text("The Last of Us Remastered · Daedalus Android",17,TEXT));
+            about.addView(text("CUSA00552 1.00",12,ACCENT));
+            about.addView(text("Perfil de desempenho do log 32. Patches e resoluções preservados.",13,MUTED));
+            about.addView(text("O idioma da interface não altera a linguagem do jogo.",13,MUTED));
+            add(about,"Ver logs",false,this::showLog);
+            add(about,"Exportar logs ZIP",false,this::exportLogs);
+        }
+
+        progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+        progress.setIndeterminate(true);progress.setVisibility(View.GONE);root.addView(progress);
+        status=text("Pronto para continuar.",12,MUTED);root.addView(status);
+        permission=text("Permitir acesso aos arquivos",12,ACCENT);
+        permission.setPadding(0,dp(10),0,dp(10));
+        permission.setOnClickListener(v->withAccess(this::refresh));root.addView(permission);
+        root.addView(text("Daedalus Android · Perfil do log 32",11,MUTED));
+        setContentView(scroll);refresh();
     }
     private void exportLogs() {
         Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/zip");save.addCategory(Intent.CATEGORY_OPENABLE);
@@ -100,7 +248,7 @@ public final class MainActivity extends Activity {
     private int dp(int value) { return Math.round(value*getResources().getDisplayMetrics().density); }
     private LinearLayout column() { LinearLayout l=new LinearLayout(this); l.setOrientation(LinearLayout.VERTICAL); return l; }
     private TextView text(String message,int size,int color) {
-        TextView t=new TextView(this); t.setText(message); t.setTextSize(size); t.setTextColor(color); t.setPadding(0,dp(5),0,dp(7)); return t;
+        TextView t=new TextView(this); t.setText(TlouLanguage.t(this,message)); t.setTextSize(size); t.setTextColor(color); t.setPadding(0,dp(5),0,dp(7)); return t;
     }
     private GradientDrawable background(int color) { GradientDrawable d=new GradientDrawable(); d.setColor(color); d.setCornerRadius(dp(12)); return d; }
     private LinearLayout card(LinearLayout root,String title) {
@@ -109,11 +257,11 @@ public final class MainActivity extends Activity {
         TextView heading=text(title,11,ACCENT); heading.setLetterSpacing(0.12f); c.addView(heading); return c;
     }
     private void add(LinearLayout parent,String label,boolean primary,Runnable action) {
-        Button b=new Button(this); b.setText(label); b.setTextSize(14); b.setAllCaps(false); b.setMinHeight(dp(48));
+        Button b=new Button(this); b.setText(TlouLanguage.t(this,label)); b.setTextSize(14); b.setAllCaps(false); b.setMinHeight(dp(48));
         b.setTextColor(primary?BACKGROUND:TEXT); b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(primary?ACCENT:0xff303c33));
         b.setOnClickListener(v->{if(!busy)action.run();}); LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(50)); p.topMargin=dp(8); parent.addView(b,p); buttons.add(b);
     }
-    private void alert(String title,String message) { if(!isFinishing()&&!isDestroyed())new AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("OK",null).show(); }
+    private void alert(String title,String message) { if(!isFinishing()&&!isDestroyed())new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,title)).setMessage(TlouLanguage.t(this,message)).setPositiveButton("OK",null).show(); }
     private void update(String message) { runOnUiThread(()->{if(!isDestroyed())status.setText(message);}); }
     private boolean access() { return Build.VERSION.SDK_INT<30 || Environment.isExternalStorageManager(); }
     private void withAccess(Runnable action) {
@@ -127,8 +275,8 @@ public final class MainActivity extends Activity {
     private void refresh() {
         if(gameInfo==null)return;
         String folder=prefs.getString("game_path","");
-        gameInfo.setText(folder.isEmpty()?"Nenhum jogo selecionado":folder);
-        driverInfo.setText(PortSettings.summary(this)+"\n"+prefs.getString("driver_name","Driver do sistema"));
+        gameInfo.setText(folder.isEmpty()?TlouLanguage.t(this,"Nenhum jogo selecionado"):folder);
+        driverInfo.setText(PortSettings.summary(this)+"\n"+prefs.getString("driver_name",TlouLanguage.t(this,"Driver do sistema")));
         permission.setVisibility(access()?View.GONE:View.VISIBLE);
     }
     private void task(String message, Work work) {
