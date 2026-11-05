@@ -40,7 +40,10 @@ void Pipeline::RefreshTextureHelperEligibility() {
         }
         has_images |= !stage->images.empty();
         for (const auto& image : stage->images) {
-            if (image.mip_fallback_mode != Shader::MipStorageFallbackMode::None) {
+            // TexturesBindableOnHelper would reject a storage-image write
+            // before doing any actual image binding; avoid the fork entirely.
+            if (image.is_written ||
+                image.mip_fallback_mode != Shader::MipStorageFallbackMode::None) {
                 return;
             }
         }
