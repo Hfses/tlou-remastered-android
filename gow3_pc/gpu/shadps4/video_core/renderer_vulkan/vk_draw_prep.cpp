@@ -273,8 +273,8 @@ DrawPreparation::DrawPreparation(PipelineCache& pipeline_cache_)
     for (u32 i = 0; i < worker_count; ++i) {
         workers.emplace_back([this, i](std::stop_token stop) { WorkerLoop(stop, i); });
     }
-    std::printf("GPU: draw preparation workers: %u (+1 scanner, %u hardware threads)\n",
-                worker_count, Gow3Threads::Available());
+    std::printf("GPU: draw preparation workers: %u (%u scanner, %u hardware threads)\n",
+                worker_count, scanner.joinable() ? 1u : 0u, Gow3Threads::Available());
 }
 
 DrawPreparation::~DrawPreparation() {

@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 test_dir=$(mktemp -d)
 trap 'rm -rf "$test_dir"' EXIT
+python3 gow3_pc/tests/test_draw_workers.py
 # Exercise real AppContent dispatch, including regional nonzero service labels.
 cc -std=c11 -D_GNU_SOURCE -O2 -Wall -Wextra -Werror -I gow3_pc -I gow3_pc/src \
   gow3_pc/tests/test_content.c gow3_pc/src/runtime_content.c -o "$test_dir/content"
