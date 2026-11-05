@@ -48,7 +48,7 @@ final class HudTelemetry {
 
     /** Android libcore does not expose java.lang.Process.pid() in all SDKs.
      * Prefer public reflection when present, otherwise inspect ONLY this app's
-     * /proc/self/task/*/children and validate the child executable name.
+     * each /proc/self/task/TID/children file and validate the child executable name.
      * Missing procfs access simply hides CPU/RAM rather than misreporting them.
      */
     int runtimePid(Process process) {
