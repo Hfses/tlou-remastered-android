@@ -40,6 +40,7 @@
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
 #include "video_core/renderer_vulkan/tlou_srt_batch_plan.h"
+#include "video_core/renderer_vulkan/tlou_cpu_phase_sample.h"
 #include "shader_recompiler/backend/spirv/tlou_split_compute.h"
 #include "video_core/renderer_vulkan/vk_gpu_profiler.h"
 #include "gow3_threads.h"
@@ -50,6 +51,43 @@
 #include "video_core/texture_cache/texture_cache.h"
 
 namespace Vulkan {
+
+namespace {
+bool CpuPhaseSamplingEnabled() {
+    static const bool on=[] {
+        if(const char* env=std::getenv("TLOU_CPU_PHASE_SAMPLES"))return env[0]=='1';
+#ifdef __ANDROID__
+        return true;
+#else
+        return false;
+#endif
+    }();
+    return on;
+}
+template<std::size_t N>
+void ReportCpuPhases(const char* role,const std::array<const char*,N>& names,
+                     const typename Detail::CpuPhaseSampler<N>::Stats& stats,u64 wall_ns) {
+    std::string line=fmt::format("TLOU CPU phases {} ({:.2f} s): calls={} samples={} dropped={} "
+                "cpu-clock-reads={} sampled-mean-us",role,double(wall_ns)/1e9,
+                stats.calls,stats.samples,stats.dropped,stats.cpu_reads);
+    for(std::size_t p=0;p<N;++p)
+        line+=fmt::format(" {}={:.3f}",names[p],
+            stats.samples?double(stats.cpu_ns[p])/stats.samples/1000.0:0.0);
+    std::printf("%s (thread CPU only; sampled, excludes waits)\n",line.c_str());
+}
+using ResourceCpuSample=Detail::CpuPhaseSampler<6>::Sample;
+thread_local ResourceCpuSample* resource_cpu_sample=nullptr;
+void ResourceCpuPhase(unsigned phase) {
+    if(resource_cpu_sample)resource_cpu_sample->Phase(phase);
+}
+struct ResourceCpuScope {
+    ResourceCpuSample* previous;
+    explicit ResourceCpuScope(ResourceCpuSample& sample):previous(resource_cpu_sample) {
+        resource_cpu_sample=sample.Active()?&sample:nullptr;
+    }
+    ~ResourceCpuScope(){resource_cpu_sample=previous;}
+};
+} // namespace
 
 static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {
     // TODO(roamic): Add support for multiple viewports and geometry shaders when ViewportIndex
@@ -2147,6 +2185,11 @@ bool Rasterizer::FilterDrawPasses() const {
 
 void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* prepared) {
     RENDERER_TRACE;
+    static thread_local Detail::CpuPhaseSampler<3> cpu_sampler{CpuPhaseSamplingEnabled()};
+    auto cpu_sample=cpu_sampler.Begin([](const auto& stats,u64 wall_ns) {
+        constexpr std::array<const char*,3> names{"entry","pipeline","draw-packet"};
+        ReportCpuPhases<3>("command-draw",names,stats,wall_ns);
+    });
     Gow3Stats::draws.fetch_add(1, std::memory_order_relaxed);
 
     // gow3: with the draw pipeline this thread only selects the pipeline and hands the draw
@@ -2166,6 +2209,7 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* pre
         }
     }
     // GOW3_PARALLEL_PIPELINES: a draw for the recording thread may carry a pipeline build.
+    cpu_sample.Phase(1);
     pipeline_cache.SetPendingAllowed(pipelined && FilterDrawPasses());
     const GraphicsPipeline* pipeline = pipeline_cache.GetGraphicsPipeline({}, prepared);
     pipeline_cache.SetPendingAllowed(false);
@@ -2205,6 +2249,7 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* pre
         return;
     }
     if (pipelined && FilterDrawPasses()) {
+        cpu_sample.Phase(2);
         PostDraw(pipeline, used_prepared, is_indexed, index_offset, nullptr, nullptr, pending);
         return;
     }
@@ -2289,6 +2334,13 @@ static bool JitterFullScreenPass(u64 hash) {
 
 void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw* used_prepared,
                             bool is_indexed, u32 index_offset) {
+    static thread_local Detail::CpuPhaseSampler<6> cpu_sampler{CpuPhaseSamplingEnabled()};
+    auto cpu_sample=cpu_sampler.Begin([](const auto& stats,u64 wall_ns) {
+        constexpr std::array<const char*,6> names{
+            "entry","render-state","resource-setup","buffers","textures","draw-commands"};
+        ReportCpuPhases<6>("draw-record",names,stats,wall_ns);
+    });
+    ResourceCpuScope resource_cpu_scope{cpu_sample};
     const auto* fragment=pipeline->GetStages()[u32(Shader::SwStage::Fragment)];
     if (SkippedShader(pipeline->GetStage(Shader::SwStage::Vertex).pgm_hash,
                       fragment ? fragment->pgm_hash : 0,
@@ -2430,6 +2482,7 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     motion_draw = pipeline->GetGraphicsKey().motion_vectors;
     motion_geometry = 0;
 
+    cpu_sample.Phase(1);
     PrepareRenderState(pipeline);
     if (upscaler->CompositeFrames() && fragment &&
         upscaler->OnComposite(fragment->pgm_hash, cb_descs[0].first)) {
@@ -2447,7 +2500,9 @@ void Rasterizer::DrawRecord(const GraphicsPipeline* pipeline, const PreparedDraw
     // gow3: vertex and index buffers are resolved while the helper binds textures (their
     // commands are recorded after BeginRendering, as before).
     draw_inputs = {pipeline, draw_prepared, index_offset, is_indexed, true, false};
+    cpu_sample.Phase(2);
     const bool bound = BindResources(pipeline);
+    cpu_sample.Phase(5);
     bind_prepared = nullptr; // indirect draws and dispatches bind without prepared sharps
     const bool inputs_resolved = draw_inputs.resolved;
     draw_inputs.pending = false;
@@ -3021,17 +3076,24 @@ void Rasterizer::NoteTracedDispatch(u64 hash, u32 x, u32 y, u32 z) {
 
 void Rasterizer::DispatchDirect() {
     RENDERER_TRACE;
+    static thread_local Detail::CpuPhaseSampler<3> cpu_sampler{CpuPhaseSamplingEnabled()};
+    auto cpu_sample=cpu_sampler.Begin([](const auto& stats,u64 wall_ns) {
+        constexpr std::array<const char*,3> names{"entry","pipeline","dispatch-packet"};
+        ReportCpuPhases<3>("command-dispatch",names,stats,wall_ns);
+    });
     Gow3Stats::dispatches.fetch_add(1, std::memory_order_relaxed);
     // gow3: like draws, handed to the draw recording thread after the pipeline selection.
     const bool pipelined = UseDrawPipe() && !Gow3Toggle::Disabled(Gow3Toggle::PipelinedDispatch);
     if (!pipelined) {
         DrainDrawPipe();
     }
+    cpu_sample.Phase(1);
     const ComputePipeline* pipeline = pipeline_cache.GetComputePipeline();
     if (!pipeline) {
         return;
     }
     if (pipelined) {
+        cpu_sample.Phase(2);
         PostDraw(pipeline, nullptr, false, 0, &CsRegs());
         return;
     }
@@ -3039,6 +3101,13 @@ void Rasterizer::DispatchDirect() {
 }
 
 void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
+    static thread_local Detail::CpuPhaseSampler<6> cpu_sampler{CpuPhaseSamplingEnabled()};
+    auto cpu_sample=cpu_sampler.Begin([](const auto& stats,u64 wall_ns) {
+        constexpr std::array<const char*,6> names{
+            "entry-hle","reserved","resource-setup","buffers","textures","dispatch-commands"};
+        ReportCpuPhases<6>("dispatch-record",names,stats,wall_ns);
+    });
+    ResourceCpuScope resource_cpu_scope{cpu_sample};
     if (BarrierStatsEnabled()) {
         g_barrier_stats_shader = pipeline->GetStage(Shader::SwStage::Compute).pgm_hash;
     }
@@ -3138,9 +3207,11 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
             runtime.FlushBarriers();
         }
     }
+    cpu_sample.Phase(2);
     if (!BindResources(pipeline)) {
         return;
     }
+    cpu_sample.Phase(5);
 
     if (needs_barrier) {
         runtime.FlushBarriers();
@@ -4533,8 +4604,11 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
                               stage->samplers.size());
             stage->PushUd(binding, push_data);
             const PreparedStage* prepared = FindPreparedStage(*stage);
+            ResourceCpuPhase(3);
             BindBuffers(*stage, prepared, binding, push_data, set_write_index);
+            ResourceCpuPhase(4);
             BindTextures(*stage, prepared, binding, set_write_index, needs_barrier);
+            ResourceCpuPhase(2);
             uses_dma |= stage->uses_dma;
             if (stage->uses_dma) {
                 dma_stage = stage;
@@ -4581,6 +4655,7 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
             }
         }
         bind_helper.Fork(&RunTextureTask, this);
+        ResourceCpuPhase(3);
         for (u32 i = 0; i < task.count; ++i) {
             auto& stage = buffer_stages[i];
             BindBuffers(*stage.info, stage.prepared, stage.binding, push_data, stage.write_index);
@@ -4592,6 +4667,7 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
             }
             draw_inputs.resolved = true;
         }
+        ResourceCpuPhase(4);
         bind_helper.Join();
         needs_barrier |= task.barrier;
         ++(task.completed == task.count ? helper_full
@@ -4605,6 +4681,7 @@ bool Rasterizer::BindResources(const Pipeline* pipeline) {
     }
 
     if (uses_dma) {
+        ResourceCpuPhase(2);
         SyncDmaMemory(dma_stage);
         fault_process_pending = true;
     }

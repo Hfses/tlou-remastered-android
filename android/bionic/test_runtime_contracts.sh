@@ -44,6 +44,9 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_hot_srt_readbac
 g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_srt_cost.cpp -o "$test_dir/tlou-srt-cost"
 "$test_dir/tlou-srt-cost"
 
+g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_cpu_phase_sample.cpp -o "$test_dir/cpu-phase-sample"
+"$test_dir/cpu-phase-sample" --correctness-only
+
 g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_srt_batch_plan.cpp -o "$test_dir/tlou-srt-batch"
 "$test_dir/tlou-srt-batch"
 
