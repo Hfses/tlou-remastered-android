@@ -57,7 +57,7 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
             raise ValueError(f'Incorrect driver digest: {name}')
     ui_rows = apk.read('assets/ui-translations.tsv').decode('utf-8').splitlines()
     ui_rows = [line for line in ui_rows if line and not line.startswith('#')]
-    if not ui_rows or any(len(line.split('\\t')) != 10 for line in ui_rows):
+    if not ui_rows or any(len(line.split(chr(9))) != 10 for line in ui_rows):
         raise ValueError('Missing or malformed 10-language launcher translation table')
     arm64(apk.read('lib/arm64-v8a/libpython3.13.so'), 'libpython')
     with zipfile.ZipFile(io.BytesIO(apk.read('assets/tools.zip'))) as tools:
