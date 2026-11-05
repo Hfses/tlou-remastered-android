@@ -16,12 +16,12 @@ Nova execução v0.29 (`launch.log`): `TLOU_SRT_HOT_READBACKS=1`, `TLOU_INLINE_S
 | CPU command, % de um núcleo | 75,75 | 76,55 |
 | CPU draw, % de um núcleo | 65,50 | 64,60 |
 | Espera acumulada `gpu-ticks` ms/5s | 1073,88 | 1060,45 |
-| Lotes de upload, por 5s | 24580,25 | 24843,50 |
+| Lotes de upload, por 5s | 24595,00 | 24843,50 |
 | Compilações nas quatro janelas | 0 | 0 |
 
 As execuções **não** são A/B exclusivamente da v0.29, pois as opções de cópia inline e espera de compute mudaram entre os launches. A diferença de ~0,35 FPS não prova regressão do prefetch; tampouco existe ganho demonstrado.
 
-Mecanismo realmente ativado: nas quatro janelas de gameplay após a transição, as linhas `TLOU SRT temporal readbacks` mostram `candidate-bytes=648416/821840/842144/888656` e `published-bytes` iguais, com `late-skipped-bytes=0`. Os readbacks mapeados diretos caem para ~12-13,5 mil/5s, contra ~17-18 mil/5s anteriores. Não houve fallback para staging nas janelas, mas a espera de GPU permaneceu perto de 1,06s/5s e o comando ainda consome ~76% de núcleo. Portanto, o prefetch executa o que foi programado, **sem liberar o caminho crítico do frame**.
+Mecanismo realmente ativado: nas quatro janelas com atividade de gameplay (a primeira ainda na transição), as linhas `TLOU SRT temporal readbacks` mostram `candidate-bytes=648416/821840/842144/888656` e `published-bytes` iguais, com `late-skipped-bytes=0`. Os readbacks mapeados diretos caem para ~12-13,5 mil/5s, contra ~17-18 mil/5s anteriores. Não houve fallback para staging nas janelas, mas a espera de GPU permaneceu perto de 1,06s/5s e o comando ainda consome ~76% de núcleo. Portanto, o prefetch executa o que foi programado, **sem liberar o caminho crítico do frame**.
 
 Não gerar APK alegando ganho. Deixar a experiência OFF por padrão no código-fonte, preservando a possibilidade de reativação de quem já tiver a preferência salva (ou quiser investigação controlada). Não modificar o caminho de Readback 1; Readback 2 excluído por bugs e FPS. Não recomparar apenas ON/OFF se a linha de base já está no ZIP.
 
