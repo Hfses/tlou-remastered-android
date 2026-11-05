@@ -18,8 +18,7 @@ final class HudTelemetry {
     private long previousTicks=-1L, previousAt;
     private double cpuPercent=Double.NaN;
     private double memoryGiB=Double.NaN, deviceGiB=Double.NaN;
-    private String gpuName="";
-    private long lastGpuPollAt;
+    private volatile String gpuName="";
 
     HudTelemetry(Context context) {
         long hz=100;
@@ -30,6 +29,18 @@ final class HudTelemetry {
             ActivityManager.MemoryInfo info=new ActivityManager.MemoryInfo();
             if(activity!=null) {activity.getMemoryInfo(info);deviceGiB=info.totalMem/(1024.0*1024.0*1024.0);}
         }catch(Throwable ignored){}
+        // EGL context creation can block: never do it in the 500ms HUD/UI poll.
+        Thread detector=new Thread(()->{
+            try {
+                String renderer=BuiltinDrivers.renderer();
+                if(renderer!=null && renderer.toLowerCase(Locale.ROOT).contains("adreno")) {
+                    java.util.regex.Matcher m=java.util.regex.Pattern.compile(
+                        "(?i)adreno[^0-9]*([0-9]{3})").matcher(renderer);
+                    gpuName=m.find()?"Adreno "+m.group(1):"Adreno";
+                }
+            }catch(Throwable ignored){}
+        },"tlou-hud-gpu-name");
+        detector.setDaemon(true);detector.start();
     }
 
     private static long processTicks(int pid) throws Exception {
@@ -60,16 +71,6 @@ final class HudTelemetry {
                 break;
             }
         }catch(Exception e){memoryGiB=Double.NaN;}
-        if(gpuName.isEmpty() && nowNanos-lastGpuPollAt>5_000_000_000L) {
-            lastGpuPollAt=nowNanos;
-            try {
-                String renderer=BuiltinDrivers.renderer();
-                if(renderer!=null && renderer.toLowerCase(Locale.ROOT).contains("adreno")) {
-                    java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?i)adreno[^0-9]*([0-9]{3})").matcher(renderer);
-                    gpuName=m.find()?"Adreno "+m.group(1):"Adreno";
-                }
-            } catch(Throwable ignored){}
-        }
     }
     double cpuPercent(){return cpuPercent;}
     double ramGiB(){return memoryGiB;}
