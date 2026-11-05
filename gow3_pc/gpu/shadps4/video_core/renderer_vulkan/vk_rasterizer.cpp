@@ -76,17 +76,10 @@ void ReportCpuPhases(const char* role,const std::array<const char*,N>& names,
     std::printf("%s (thread CPU only; sampled, excludes waits)\n",line.c_str());
 }
 using ResourceCpuSample=Detail::CpuPhaseSampler<6>::Sample;
-thread_local ResourceCpuSample* resource_cpu_sample=nullptr;
+using ResourceCpuScope=Detail::CpuSampleBinding<ResourceCpuSample>;
 void ResourceCpuPhase(unsigned phase) {
-    if(resource_cpu_sample)resource_cpu_sample->Phase(phase);
+    ResourceCpuScope::Phase(phase);
 }
-struct ResourceCpuScope {
-    ResourceCpuSample* previous;
-    explicit ResourceCpuScope(ResourceCpuSample& sample):previous(resource_cpu_sample) {
-        resource_cpu_sample=sample.Active()?&sample:nullptr;
-    }
-    ~ResourceCpuScope(){resource_cpu_sample=previous;}
-};
 } // namespace
 
 static Shader::PushData MakeUserData(const AmdGpu::Regs& regs) {

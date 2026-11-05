@@ -98,8 +98,11 @@ public:
             report(stats,now-report_at);stats={};stats.calls=1;report_at=now;
         }
         if(!budget_at || now-budget_at>=1000000000ull){budget_at=now;budget=0;}
-        if(budget>=MaxSamplesPerWindow)return {};
+        // Spread opportunities across the second; do not spend the entire
+        // budget in its first few frames when calls arrive in a burst.
+        if(budget>=MaxSamplesPerWindow || now<next_sample_at)return {};
         ++budget;
+        next_sample_at=now+125000000ull;
         return Sample{&stats};
     }
     const Stats& Current()const noexcept{return stats;}
@@ -107,7 +110,24 @@ private:
     bool enabled;
     unsigned base_interval,interval_mask,countdown=1,budget=0;
     std::uint32_t random=0x6d2b79f5;
-    std::uint64_t report_at=0,budget_at=0;
+    std::uint64_t report_at=0,budget_at=0,next_sample_at=0;
     Stats stats{};
+};
+
+// Binding is thread-local: a helper thread must never charge CPU time to its
+// caller's sample. Restore the previous binding on nested/early-return scopes.
+template<class Sample>
+class CpuSampleBinding {
+public:
+    explicit CpuSampleBinding(Sample& sample):previous(current) {
+        current=sample.Active()?&sample:nullptr;
+    }
+    CpuSampleBinding(const CpuSampleBinding&)=delete;
+    CpuSampleBinding& operator=(const CpuSampleBinding&)=delete;
+    ~CpuSampleBinding(){current=previous;}
+    static void Phase(unsigned phase)noexcept{if(current)current->Phase(phase);}
+private:
+    static inline thread_local Sample* current=nullptr;
+    Sample* previous;
 };
 } // namespace Vulkan::Detail

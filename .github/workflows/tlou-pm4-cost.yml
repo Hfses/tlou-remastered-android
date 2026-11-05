@@ -36,7 +36,7 @@ jobs:
             gow3_pc/tests/test_pm4_checksum_cost.cpp -lxxhash -o out/pm4-cost/checksum
           out/pm4-cost/checksum | tee out/pm4-cost/result.txt
           out/pm4-cost/checksum | tee out/pm4-cost/repeat.txt
-          g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread \
             gow3_pc/tests/test_cpu_phase_sample.cpp -o out/pm4-cost/sampler
           out/pm4-cost/sampler | tee out/pm4-cost/sampler.txt
           out/pm4-cost/sampler | tee out/pm4-cost/sampler-repeat.txt
@@ -47,7 +47,7 @@ jobs:
             -fsanitize=address,undefined -fno-omit-frame-pointer \
             gow3_pc/tests/test_pm4_checksum_cost.cpp -lxxhash -o out/pm4-cost/checksum-asan
           out/pm4-cost/checksum-asan --correctness-only
-          g++ -std=c++20 -O1 -g -Wall -Wextra -Werror \
+          g++ -std=c++20 -O1 -g -Wall -Wextra -Werror -pthread \
             -fsanitize=address,undefined -fno-omit-frame-pointer \
             gow3_pc/tests/test_cpu_phase_sample.cpp -o out/pm4-cost/sampler-asan
           out/pm4-cost/sampler-asan --correctness-only

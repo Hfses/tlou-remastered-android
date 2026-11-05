@@ -25,6 +25,8 @@ There are four independent thread-local roles:
 Each role attempts at most **8 samples in a one-second budget window**.
 Sampling opportunities have a reproducible varying interval of 128–383
 calls, reducing the fixed-period aliasing of selecting every Nth draw.
+Accepted samples are also at least 125 ms apart, spreading them through
+the second instead of consuming the budget in the first few frames.
 No timestamp or GPU query runs on ordinary unsampled draws. The selected
 sample uses `CLOCK_THREAD_CPUTIME_ID`; descheduling and waits are excluded.
 At most 32 phase markers and 34 CPU-clock reads per sample are allowed.
@@ -61,9 +63,13 @@ statistical guarantee of representative per-shader coverage.
 clock, the 8-sample limit over 100,000 opportunities, per-sample clock-read
 bounds, report/reset, failed clocks, excessive markers, moved/finished
 sample ownership, and zero clock calls when disabled. The real-clock
-benchmark compares OFF/ON with 16 markers and a dependent work stream,
+benchmark compares a bare loop, OFF and ON with the production thread-local
+binding, 16 markers and a dependent work stream,
 using warmup, alternating order and nine median samples. A near-zero or
 negative measured difference is noise, not a claim of free/negative cost.
+An additional budget case executes 34 real CPU-clock reads per selected
+scope using synthetic wall progression, to measure the selected path's cost
+without sleeping or hiding its clock density in a fast unsampled loop.
 Native ARM64 and x86 CI run repeat benchmarks and ASan/UBSan checks.
 
 This build contains the accepted PM4 optimization and information needed
