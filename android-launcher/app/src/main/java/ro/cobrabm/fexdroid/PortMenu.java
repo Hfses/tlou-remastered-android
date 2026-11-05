@@ -126,15 +126,15 @@ final class PortMenu {
         heading("Idioma do aplicativo");
         Spinner spinner=new Spinner(activity,Spinner.MODE_DROPDOWN);
         ArrayAdapter<String> adapter=new ArrayAdapter<>(activity,
-            android.R.layout.simple_spinner_dropdown_item,TlouLanguage.NAMES);
+            android.R.layout.simple_spinner_dropdown_item,TlouLanguage.options(activity));
         spinner.setAdapter(adapter);
-        int index=TlouLanguage.index(activity);spinner.setSelection(index);spinner.setTag(index);
+        int index=TlouLanguage.selectedOption(activity);spinner.setSelection(index);spinner.setTag(index);
         spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
             public void onNothingSelected(AdapterView<?> parent){}
             public void onItemSelected(AdapterView<?> parent,View view,int selected,long id) {
                 if((Integer)spinner.getTag()==selected)return;
                 spinner.setTag(selected);
-                prefs.edit().putString("ui_language",TlouLanguage.CODES[selected]).apply();
+                prefs.edit().putString("ui_language",TlouLanguage.selectedCode(selected)).apply();
                 actions.changed();render(); // apply to menu immediately, even in-game
             }
         });
