@@ -138,14 +138,14 @@ public final class MainActivity extends Activity {
         parent.addView(text("Idioma do aplicativo",13,ACCENT));
         Spinner spinner=new Spinner(this,Spinner.MODE_DROPDOWN);
         ArrayAdapter<String> adapter=new ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_dropdown_item,TlouLanguage.NAMES);
+            android.R.layout.simple_spinner_dropdown_item,TlouLanguage.options(this));
         spinner.setAdapter(adapter);
-        int initial=TlouLanguage.index(this);spinner.setSelection(initial);spinner.setTag(initial);
+        int initial=TlouLanguage.selectedOption(this);spinner.setSelection(initial);spinner.setTag(initial);
         spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
             public void onNothingSelected(AdapterView<?> parent){}
             public void onItemSelected(AdapterView<?> parent,View view,int index,long id){
                 if((Integer)spinner.getTag()==index)return;
-                spinner.setTag(index);prefs.edit().putString("ui_language",TlouLanguage.CODES[index]).apply();
+                spinner.setTag(index);prefs.edit().putString("ui_language",TlouLanguage.selectedCode(index)).apply();
                 buildHome(); // app language is immediate and never changes guest/game language
             }
         });parent.addView(spinner,new LinearLayout.LayoutParams(-1,dp(48)));
