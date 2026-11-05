@@ -2,6 +2,8 @@ package ro.cobrabm.fexdroid;
 
 import android.app.Activity;
 import android.app.Dialog;
+import android.content.Intent;
+import android.net.Uri;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Typeface;
@@ -272,6 +274,14 @@ final class PortMenu {
                 note("Desenvolvimento: Erick Mendes / Daedalus Android.");
                 note("Repositório e referências: GitHub / erickmendes22/tlou-remastered-android");
                 note("Créditos: shadPS4, FEX-Emu, libadrenotools e colaboradores open source.");
+                row("Código-fonte no GitHub",()->activity.startActivity(new Intent(
+                    Intent.ACTION_VIEW,Uri.parse("https://github.com/erickmendes22/tlou-remastered-android"))));
+                row("FEX-Emu no GitHub",()->activity.startActivity(new Intent(
+                    Intent.ACTION_VIEW,Uri.parse("https://github.com/FEX-Emu/FEX"))));
+                row("shadPS4 no GitHub",()->activity.startActivity(new Intent(
+                    Intent.ACTION_VIEW,Uri.parse("https://github.com/shadps4-emu/shadPS4"))));
+                row("libadrenotools no GitHub",()->activity.startActivity(new Intent(
+                    Intent.ACTION_VIEW,Uri.parse("https://github.com/bylaws/libadrenotools"))));
                 note("Perfil de desempenho do log 32. Patches e resoluções preservados.");
                 note("O idioma da interface não altera a linguagem do jogo.");
                 action("Ver logs",actions::logs);
