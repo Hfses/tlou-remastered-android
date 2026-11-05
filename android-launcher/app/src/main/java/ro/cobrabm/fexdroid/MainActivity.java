@@ -68,7 +68,7 @@ public final class MainActivity extends Activity {
         // Optional packaged driver installation runs off the main/UI thread.
         worker.execute(()->{
             try { BuiltinDrivers.ensureDefault(this); }
-            catch(Exception e) { android.util.Log.w("TLOU", "Turnip R1 auto-select unavailable", e); }
+            catch(Exception e) { android.util.Log.w("TLOU", "Bundled Turnip auto-select unavailable", e); }
             runOnUiThread(()->{if(!isDestroyed())refresh();});
         });
     }
@@ -435,7 +435,8 @@ public final class MainActivity extends Activity {
         ScrollView scroll=new ScrollView(this);TextView text=new TextView(this);text.setText(RunLog.summary(this));text.setTextSize(12);text.setTextIsSelectable(true);text.setPadding(dp(16),dp(12),dp(16),dp(12));scroll.addView(text);
         new AlertDialog.Builder(this).setTitle("TLOU — logs").setView(scroll).setPositiveButton("Fechar",null).show();
     }
-    @Override protected void onResume(){super.onResume();refresh();if(afterPermission!=null){Runnable action=afterPermission;afterPermission=null;if(access())action.run();}}
+    @Override protected void onResume(){super.onResume();refresh();if(afterPermission!=null){Runnable action=afterPermission;afterPermission=null;if(access())action.run();}
+        else if(access()&&!prefs.getBoolean("onboarding_seen",false)&&!firstRunDialogShown)showFirstRunSetup();}
     @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);if(pendingPkg!=null)state.putString("pending_pkg",pendingPkg.toString());}
     @Override protected void onActivityResult(int code,int result,Intent data){
         super.onActivityResult(code,result,data);if(result!=RESULT_OK||data==null||data.getData()==null){if(code==PICK_DEST)pendingPkg=null;return;}Uri uri=data.getData();
