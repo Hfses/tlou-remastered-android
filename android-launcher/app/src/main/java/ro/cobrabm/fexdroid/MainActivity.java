@@ -306,6 +306,10 @@ public final class MainActivity extends Activity {
         if(launch){RunLog.begin(this);RunLog.write(this,"Jogo selecionado: "+prefs.getString("game_path","")+" • driver="+prefs.getString("driver_name","Sistema"));}
         if(prefs.getString("game_path","").isEmpty()){alert("Selecione o jogo","Instale um PKG ou escolha a pasta do jogo.");return;}
         task("Verificando e preparando jogo…",()->{
+            // Finish first-run Adreno 6xx/7xx driver setup before the game
+            // captures its launch environment, without overriding user choice.
+            try { BuiltinDrivers.ensureDefault(this); }
+            catch(Exception e) { android.util.Log.w("TLOU", "Default Turnip unavailable", e); }
             File folder=selected(); File prepared;
             if(InstallTools.prepared(folder)){prepared=folder;tools.applyPatches(prepared,this::update);}
             else prepared=tools.prepare(folder,this::update);
