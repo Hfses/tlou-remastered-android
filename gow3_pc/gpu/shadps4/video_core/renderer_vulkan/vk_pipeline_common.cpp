@@ -25,6 +25,33 @@ Pipeline::Pipeline(const Instance& instance_, Scheduler& scheduler_, DescriptorH
 
 Pipeline::~Pipeline() = default;
 
+// The stage layout never changes for a compiled graphics pipeline. Rechecking
+// every image mip mode and every buffer write flag for each draw repeats work
+// that was already known at pipeline construction/publication.
+void Pipeline::RefreshTextureHelperEligibility() {
+    texture_helper_compatible = false;
+    if (is_compute) {
+        return;
+    }
+    bool has_images = false;
+    for (const Shader::Info* stage : GetStages()) {
+        if (!stage) {
+            continue;
+        }
+        has_images |= !stage->images.empty();
+        for (const auto& image : stage->images) {
+            if (image.mip_fallback_mode != Shader::MipStorageFallbackMode::None) {
+                return;
+            }
+        }
+        for (const auto& buffer : stage->buffers) {
+            if (!buffer.IsSpecial() && buffer.is_written) {
+                return;
+            }
+        }
+    }
+    texture_helper_compatible = has_images;
+}
 
 void Pipeline::BindResources(DescriptorWrites& set_writes, const Shader::PushData& push_data,
                              std::span<const vk::DescriptorBufferInfo> source_buffers,

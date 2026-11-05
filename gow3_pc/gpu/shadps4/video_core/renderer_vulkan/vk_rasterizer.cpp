@@ -4406,29 +4406,10 @@ bool Rasterizer::HelperEligible(const Pipeline* pipeline) const {
         Gow3Toggle::Disabled(Gow3Toggle::UpdateImageFastPath)) {
         return false;
     }
-    bool has_images = false;
-    for (const auto* stage : pipeline->GetStages()) {
-        if (!stage) {
-            continue;
-        }
-        has_images |= !stage->images.empty();
-        // Mip arrays make the descriptor layout depend on the T#s.
-        for (const auto& image : stage->images) {
-            if (image.mip_fallback_mode != Shader::MipStorageFallbackMode::None) {
-                return false;
-            }
-        }
-        // Storage writes invalidate cached images from the buffer side.
-        for (const auto& buffer : stage->buffers) {
-            if (!buffer.IsSpecial() && buffer.is_written) {
-                return false;
-            }
-        }
-    }
-    // No texture image work: a helper fork/join is pure cross-thread overhead.
-    // Sampler-only draws keep their existing serial BindSamplers path; buffers,
-    // descriptor order and GPU hazards are unchanged.
-    return has_images;
+    // All static checks (mip fallback modes, storage-buffer writes and
+    // presence of actual image work) are derived from immutable shader info
+    // at pipeline creation/publication, not repeated for every draw.
+    return pipeline->CanBindTexturesOnHelper();
 }
 
 bool Rasterizer::TexturesBindableOnHelper(const Shader::Info& stage,

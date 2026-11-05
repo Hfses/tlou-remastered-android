@@ -59,6 +59,12 @@ public:
         return is_compute;
     }
 
+    // Immutable shader-layout predicate cached once per graphics pipeline.
+    // The draw path still validates every dynamic image and every GPU hazard.
+    bool CanBindTexturesOnHelper() const noexcept {
+        return texture_helper_compatible;
+    }
+
     /// gow3: scheduler tick of the last draw or dispatch that took it (the warm-up order).
     mutable u64 last_use = 0;
 
@@ -72,6 +78,7 @@ public:
 
 protected:
     [[nodiscard]] std::string GetDebugString() const;
+    void RefreshTextureHelperEligibility();
 
     const Instance& instance;
     Scheduler& scheduler;
@@ -82,6 +89,7 @@ protected:
     vk::UniqueDescriptorSetLayout desc_layout;
     std::array<const Shader::Info*, Shader::MaxStageTypes> stages{};
     bool uses_push_descriptors{};
+    bool texture_helper_compatible = false;
     bool is_compute;
 };
 
