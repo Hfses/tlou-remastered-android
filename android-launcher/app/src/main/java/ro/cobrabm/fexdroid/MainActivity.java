@@ -169,6 +169,7 @@ public final class MainActivity extends Activity {
         });parent.addView(spinner,new LinearLayout.LayoutParams(-1,dp(46)));
     }
     private void buildHome() {
+        gameInfo=null;driverInfo=null;permission=null;
         buttons.clear();
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
         scroll.setBackgroundColor(BACKGROUND);
@@ -261,6 +262,12 @@ public final class MainActivity extends Activity {
             about.addView(text("CUSA00552 1.00",12,ACCENT));
             about.addView(text("Perfil de desempenho do log 32. Patches e resoluções preservados.",13,MUTED));
             about.addView(text("O idioma da interface não altera a linguagem do jogo.",13,MUTED));
+            about.addView(text("Desenvolvimento: Erick Mendes / Daedalus Android",12,MUTED));
+            about.addView(text("Créditos: shadPS4, FEX-Emu, libadrenotools e colaboradores de código aberto.",12,MUTED));
+            add(about,"Código-fonte no GitHub",false,()->openReference("https://github.com/erickmendes22/tlou-remastered-android"));
+            add(about,"FEX-Emu no GitHub",false,()->openReference("https://github.com/FEX-Emu/FEX"));
+            add(about,"shadPS4 no GitHub",false,()->openReference("https://github.com/shadps4-emu/shadPS4"));
+            add(about,"libadrenotools no GitHub",false,()->openReference("https://github.com/bylaws/libadrenotools"));
             add(about,"Ver logs",false,this::showLog);
             add(about,"Exportar logs ZIP",false,this::exportLogs);
         }
@@ -284,17 +291,8 @@ public final class MainActivity extends Activity {
         save.putExtra(Intent.EXTRA_TITLE,"TLOU-Saves-"+new java.text.SimpleDateFormat("yyyyMMdd-HHmmss",java.util.Locale.ROOT).format(new Date())+".zip");
         startActivityForResult(save,EXPORT_SAVES);
     }
-    private void openMenu(String section) {
-        new PortMenu(this,false,new PortMenu.Actions(){
-            public void logs(){showLog();} public void exportLogs(){MainActivity.this.exportLogs();}
-            public void chooseGame(){withAccess(()->pickFolder(PICK_GAME));}
-            public void installPkg(){withAccess(()->pickFile(PICK_PKG));}
-            public void importDriver(){pickFile(PICK_DRIVER);}public void selectDriver(){MainActivity.this.selectDriver();}
-            public void editControls(){}public void resetControls(){}public void exitGame(){}
-            public void importSaves(){pickFile(IMPORT_SAVES);}
-            public void exportSaves(){MainActivity.this.exportSaves();}
-            public void changed(){if(!isDestroyed())buildHome();}
-        }).open(section);
+    private void openReference(String url) {
+        startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));
     }
     private int dp(int value) { return Math.round(value*getResources().getDisplayMetrics().density); }
     private LinearLayout column() { LinearLayout l=new LinearLayout(this); l.setOrientation(LinearLayout.VERTICAL); return l; }
@@ -327,7 +325,7 @@ public final class MainActivity extends Activity {
     private void pickFile(int code) { Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT); i.setType("*/*"); i.addCategory(Intent.CATEGORY_OPENABLE); i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION); startActivityForResult(i,code); }
     private void pickFolder(int code) { Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE); i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION); startActivityForResult(i,code); }
     private void refresh() {
-        if(gameInfo==null && driverInfo==null)return;
+        if(gameInfo==null && driverInfo==null && permission==null)return;
         String folder=prefs.getString("game_path","");
         if(gameInfo!=null)gameInfo.setText(folder.isEmpty()?TlouLanguage.t(this,"Nenhum jogo selecionado"):folder);
         if(driverInfo!=null)driverInfo.setText(PortSettings.summary(this)+"\\n"+prefs.getString("driver_name",TlouLanguage.t(this,"Driver do sistema")));
