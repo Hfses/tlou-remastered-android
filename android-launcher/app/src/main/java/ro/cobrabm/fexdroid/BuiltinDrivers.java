@@ -26,7 +26,7 @@ final class BuiltinDrivers {
 
     // Query an actual EGL renderer. Build.MODEL and Snapdragon model strings
     // cannot reliably distinguish Adreno 7xx from 8xx; do not guess.
-    private static String renderer() {
+    static String renderer() {
         EGLDisplay display=EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);
         if(display==EGL14.EGL_NO_DISPLAY)return "";
         int[] version=new int[2];
