@@ -242,7 +242,7 @@ public final class MainActivity extends Activity {
             public void editControls(){}public void resetControls(){}public void exitGame(){}
             public void importSaves(){pickFile(IMPORT_SAVES);}
             public void exportSaves(){MainActivity.this.exportSaves();}
-            public void changed(){refresh();}
+            public void changed(){if(!isDestroyed())buildHome();}
         }).open(section);
     }
     private int dp(int value) { return Math.round(value*getResources().getDisplayMetrics().density); }
@@ -262,7 +262,10 @@ public final class MainActivity extends Activity {
         b.setOnClickListener(v->{if(!busy)action.run();}); LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(50)); p.topMargin=dp(8); parent.addView(b,p); buttons.add(b);
     }
     private void alert(String title,String message) { if(!isFinishing()&&!isDestroyed())new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,title)).setMessage(TlouLanguage.t(this,message)).setPositiveButton("OK",null).show(); }
-    private void update(String message) { runOnUiThread(()->{if(!isDestroyed())status.setText(message);}); }
+    private void update(String message) {
+        runOnUiThread(()->{if(!isDestroyed() && status!=null)
+            status.setText(TlouLanguage.t(this,message));});
+    }
     private boolean access() { return Build.VERSION.SDK_INT<30 || Environment.isExternalStorageManager(); }
     private void withAccess(Runnable action) {
         if(access()){action.run();return;}
