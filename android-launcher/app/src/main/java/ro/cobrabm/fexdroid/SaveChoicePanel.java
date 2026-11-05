@@ -104,10 +104,10 @@ final class SaveChoicePanel extends Dialog {
     }
     private void showSaveDetails(GameChoiceProtocol.Entry entry){
         StringBuilder details=new StringBuilder();
-        if(!entry.title.isEmpty())details.append(entry.title).append('\\n');
-        if(!entry.subtitle.isEmpty() && !entry.subtitle.equals(entry.title))details.append(entry.subtitle).append('\\n');
-        if(!entry.detail.isEmpty())details.append(entry.detail).append('\\n');
-        if(!entry.directory.isEmpty())details.append(tr("Slot")).append(": ").append(entry.directory).append('\\n');
+        if(!entry.title.isEmpty())details.append(entry.title).append('\n');
+        if(!entry.subtitle.isEmpty() && !entry.subtitle.equals(entry.title))details.append(entry.subtitle).append('\n');
+        if(!entry.detail.isEmpty())details.append(entry.detail).append('\n');
+        if(!entry.directory.isEmpty())details.append(tr("Slot")).append(": ").append(entry.directory).append('\n');
         if(!entry.isNew && entry.timestamp>0)details.append(date(entry.timestamp));
         new android.app.AlertDialog.Builder(activity)
                 .setTitle(entry.heading()).setMessage(details.toString().trim())
