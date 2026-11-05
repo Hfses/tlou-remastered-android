@@ -5,6 +5,7 @@ import android.content.Context;
 import android.system.Os;
 import android.system.OsConstants;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileReader;
 import java.util.Locale;
 
@@ -41,6 +42,47 @@ final class HudTelemetry {
             }catch(Throwable ignored){}
         },"tlou-hud-gpu-name");
         detector.setDaemon(true);detector.start();
+    }
+
+    private int runtimePid=-1;
+
+    /** Android libcore does not expose java.lang.Process.pid() in all SDKs.
+     * Prefer public reflection when present, otherwise inspect ONLY this app's
+     * /proc/self/task/*/children and validate the child executable name.
+     * Missing procfs access simply hides CPU/RAM rather than misreporting them.
+     */
+    int runtimePid(Process process) {
+        if(process==null || !process.isAlive())return -1;
+        if(runtimePid>0 && new File("/proc/"+runtimePid+"/stat").canRead())return runtimePid;
+        try {
+            java.lang.reflect.Method m=process.getClass().getMethod("pid");
+            Object value=m.invoke(process);
+            if(value instanceof Number && ((Number)value).intValue()>0) {
+                runtimePid=((Number)value).intValue();
+                return runtimePid;
+            }
+        }catch(Exception ignored){}
+        File[] tasks=new File("/proc/self/task").listFiles();
+        if(tasks==null)return -1;
+        for(File task:tasks) {
+            try(BufferedReader children=new BufferedReader(new FileReader(new File(task,"children")))) {
+                String line=children.readLine();
+                if(line==null)continue;
+                for(String token:line.trim().split("\\s+")) {
+                    if(token.isEmpty())continue;
+                    int candidate=Integer.parseInt(token);
+                    if(candidate<=0)continue;
+                    try(BufferedReader name=new BufferedReader(new FileReader(
+                        "/proc/"+candidate+"/cmdline"))) {
+                        char[] buf=new char[2048];int count=name.read(buf);
+                        if(count>0 && new String(buf,0,count).contains("gow3-probe")) {
+                            runtimePid=candidate;return runtimePid;
+                        }
+                    }catch(Exception ignored){}
+                }
+            }catch(Exception ignored){}
+        }
+        return -1;
     }
 
     private static long processTicks(int pid) throws Exception {
