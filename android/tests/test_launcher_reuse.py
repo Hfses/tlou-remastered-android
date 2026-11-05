@@ -11,7 +11,7 @@ class LauncherReuseTests(unittest.TestCase):
     def test_only_packaging_changes_allow_reuse(self):
         with patch.object(reuse.subprocess,"check_output",return_value="android/bionic/reuse_apk.py\n"):
             self.assertTrue(reuse.unchanged())
-        for change in ("gow3_pc/gpu/shim.cpp", "android/device_prepare.py", "ci/environment.yml", ".gitmodules"):
+        for change in ("gow3_pc/gpu/shim.cpp", "android/device_prepare.py", "ci/environment.yml", ".gitmodules", "android-launcher/app/src/main/java/ro/cobrabm/fexdroid/Gow3Present.java"):
             with patch.object(reuse.subprocess,"check_output",return_value=change+"\n"):
                 self.assertFalse(reuse.unchanged(),change)
     def test_current_ui_is_never_replaced_by_old_apk(self):

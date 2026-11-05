@@ -15,7 +15,8 @@ PACKAGING_ONLY = {"android/bionic/reuse_apk.py", "android/tests/test_launcher_re
 def unchanged():
     paths = subprocess.check_output([
         "git", "diff", "--name-only", BASE, "HEAD", "--", "gow3_pc", "ci",
-        "android", "tools", ".gitmodules"], cwd=ROOT, text=True).splitlines()
+        "android", "tools", ".gitmodules",
+        "android-launcher/app/src/main/java/ro/cobrabm/fexdroid/Gow3Present.java"], cwd=ROOT, text=True).splitlines()
     return not (set(paths) - PACKAGING_ONLY)
 
 
