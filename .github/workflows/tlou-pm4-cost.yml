@@ -2,7 +2,11 @@ name: TLOU PM4 checksum correctness and CPU cost
 
 on:
   push:
-    branches: ['perf/pm4-checksum-validation']
+    branches: ['perf/pm4-checksum-validation', 'android-bionic-stage1']
+    paths:
+      - 'gow3_pc/gpu/shadps4/video_core/amdgpu/pm4_packet_checksum.h'
+      - 'gow3_pc/tests/test_pm4_checksum_cost.cpp'
+      - '.github/workflows/tlou-pm4-cost.yml'
   workflow_dispatch:
 
 permissions:

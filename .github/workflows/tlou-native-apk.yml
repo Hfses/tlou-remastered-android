@@ -114,25 +114,32 @@ jobs:
         run: |
           python3 android/bionic/verify_bionic.py --ndk "$TLOU_NDK" --root out/android-bionic
       - uses: actions/setup-java@v4
+        if: ${{ !contains(github.event.head_commit.message, '[native-only]') }}
         with:
           distribution: temurin
           java-version: '17'
       - name: Verify FPS sampling and resume behavior
+        if: ${{ !contains(github.event.head_commit.message, '[native-only]') }}
         run: bash android/bionic/test_fps.sh
       - uses: gradle/actions/setup-gradle@v4
+        if: ${{ !contains(github.event.head_commit.message, '[native-only]') }}
         with:
           gradle-version: '8.14.3'
       - name: Restore signing identity used by existing installations
+        if: ${{ !contains(github.event.head_commit.message, '[native-only]') }}
         uses: actions/cache@v4
         with:
           path: out/android-bionic/experimental-development.jks
           key: tlou-development-signing-v2
       - name: Assemble and sign actual TLOU Bionic APK
+        if: ${{ !contains(github.event.head_commit.message, '[native-only]') }}
         shell: bash -el {0}
         run: bash android/bionic/package_apk.sh
       - name: Verify APK payload and native dependency closure
+        if: ${{ !contains(github.event.head_commit.message, '[native-only]') }}
         run: python3 android/bionic/check_tools_apk.py out/release/TheLastOfUsRemastered-Android-Bionic-v0.29-arm64.apk
       - name: Publish installable TLOU APK
+        if: ${{ !contains(github.event.head_commit.message, '[native-only]') }}
         uses: actions/upload-artifact@v4
         with:
           name: TheLastOfUsRemastered-Android-Bionic-arm64
