@@ -179,16 +179,18 @@ final class TouchControllerOverlay extends View {
         publish(); return true;
     }
 
-    private int themeColor() {
+    private int themedColor=0xffb3c88f;
+    private void refreshTheme() {
         String value=PortSettings.prefs(getContext()).getString("control_color","olive");
         switch(value) {
-            case "amber": return 0xffe0c783;
-            case "white": return 0xffe4e9dc;
-            case "red": return 0xffd28b7e;
-            case "blue": return 0xff92b5cf;
-            default: return 0xffb3c88f; // The Last of Us weathered olive
+            case "amber": themedColor=0xffe0c783; break;
+            case "white": themedColor=0xffe4e9dc; break;
+            case "red": themedColor=0xffd28b7e; break;
+            case "blue": themedColor=0xff92b5cf; break;
+            default: themedColor=0xffb3c88f; // The Last of Us weathered olive
         }
     }
+    private int themeColor(){return themedColor;}
     private int overlayFill(boolean selected,boolean down) {
         int rgb=themeColor()&0x00ffffff;
         return ((selected?0xdd:down?0x99:0x55)<<24)|rgb;
@@ -245,7 +247,7 @@ final class TouchControllerOverlay extends View {
                    knobY-(paint.ascent()+paint.descent())/2,paint);
     }
     @Override protected void onDraw(Canvas c) {
-        super.onDraw(c); c.save(); c.translate(offsetX(),offsetY()); c.scale(scale(),scale());
+        super.onDraw(c); refreshTheme(); c.save(); c.translate(offsetX(),offsetY()); c.scale(scale(),scale());
         rectangle(c,"l2",108,"L2"); rectangle(c,"l1",108,"L1");
         rectangle(c,"r1",108,"R1"); rectangle(c,"r2",108,"R2");
         rectangle(c,"touchpad",126,"TOUCH"); rectangle(c,"options",108,"OPTIONS");
