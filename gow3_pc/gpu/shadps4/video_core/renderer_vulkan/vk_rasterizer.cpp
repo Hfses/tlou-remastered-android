@@ -39,6 +39,7 @@
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
+#include "video_core/renderer_vulkan/tlou_physics_readback.h"
 #include "video_core/renderer_vulkan/ring_binding_cursor.h"
 #include "video_core/renderer_vulkan/tlou_srt_batch_plan.h"
 #include "video_core/renderer_vulkan/tlou_cpu_phase_sample.h"
@@ -936,6 +937,23 @@ static bool TlouEopReadbackBinding(u64 hash, u32 slot) {
 static bool TlouResultShader(u64 hash) {
     return std::ranges::any_of(TlouEopReadbackList(),
                                [hash](const auto& b) { return b.first == hash; });
+}
+
+// Android game revisions can use a different GCN program hash for the same
+// physics output. Accept ONLY the two observed 48-byte-record result shapes.
+// This is not Precise/Readback 2: the normal EOP path queues a range-limited
+// asynchronous readback, and its watched pages wait only for their producer.
+// When disabled or on desktop, hashes remain the sole recognition method.
+static bool TlouAndroidPhysicsShape(u32 slot, u32 stride, u32 records, u64 bytes) {
+#ifdef __ANDROID__
+    static const bool enabled = [] {
+        const char* env = std::getenv("TLOU_PHYSICS_SHAPE_READBACK");
+        return !env || env[0] != '0';
+    }();
+    return enabled && TlouPhysicsReadback::Shape(slot, stride, records, bytes);
+#else
+    return false;
+#endif
 }
 
 static const std::vector<std::pair<u64, u32>>& TlouEopReadbackList() {
@@ -5809,18 +5827,32 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                     bound_buffers.emplace_back(buffer, offset, tracked_size, desc.is_written);
                 }
                 if (desc.is_written) {
+                    const bool physics_shape_fallback =
+                        compute_stage && EopReadbackMode() != 0 &&
+                        !TlouEopReadbackBinding(stage.pgm_hash, binding.buffer) &&
+                        TlouAndroidPhysicsShape(binding.buffer, vsharp.stride,
+                                                vsharp.num_records, size);
+                    if (physics_shape_fallback) {
+                        static std::atomic<u32> samples{0};
+                        if (samples.fetch_add(1, std::memory_order_relaxed) < 8) {
+                            std::printf("TLOU Android physics-shaped EOP result: shader %#llx slot %u size %llu stride %u records %u\\n",
+                                        static_cast<unsigned long long>(stage.pgm_hash),
+                                        binding.buffer, static_cast<unsigned long long>(size),
+                                        vsharp.stride, vsharp.num_records);
+                        }
+                    }
                     Gow3WatchRange::Note("storage", stage.pgm_hash, binding.buffer,
                                          vsharp.base_address, size);
                     VideoCore::NoteGpuWriter(vsharp.base_address, size, stage.pgm_hash);
                     VideoCore::NoteRecentGpuWrite(vsharp.base_address, size,
                                                   (u64(stage.pgm_hash) << 8) | (binding.buffer & 0xff));
                     if (VideoCore::BufferCache::ShareUnfinishedWrites() &&
-                        TlouResultShader(stage.pgm_hash)) {
+                        (TlouResultShader(stage.pgm_hash) || physics_shape_fallback)) {
                         buffer_cache.NoteResultPages(vsharp.base_address, size);
                     }
                     // gow3 24 Oct 2026 diagnostics: The Last of Us's result bindings left without
                     // a readback (too large, or past the 256 ranges an event holds), every 5 s.
-                    if (TlouEopReadbackBinding(stage.pgm_hash, binding.buffer)) {
+                    if (TlouEopReadbackBinding(stage.pgm_hash, binding.buffer) || physics_shape_fallback) {
                         static std::atomic<u32> results{0}, too_large{0}, over_cap{0};
                         static std::atomic<s64> last_report{0};
                         ++results;
@@ -5841,7 +5873,8 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                             std::fflush(stdout);
                         }
                     }
-                    if (IsEopReadbackBinding(stage.pgm_hash, binding.buffer, size) &&
+                    if ((IsEopReadbackBinding(stage.pgm_hash, binding.buffer, size) ||
+                         physics_shape_fallback) &&
                         eop_readbacks.size() + eop_open_readbacks.size() < 256) {
                         // The whole bound buffer counts as GPU-written (up to 9 MiB for
                         // 6a6422a9); read back only what this dispatch writes: dword i for
