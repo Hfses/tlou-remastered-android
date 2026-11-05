@@ -1,0 +1,93 @@
+package ro.cobrabm.fexdroid;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.os.Build;
+import android.opengl.EGL14;
+import android.opengl.EGLConfig;
+import android.opengl.EGLContext;
+import android.opengl.EGLDisplay;
+import android.opengl.EGLSurface;
+import android.opengl.GLES20;
+import org.json.JSONObject;
+import java.io.File;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.util.Locale;
+
+/** Install the pinned official Turnip 27.0.0-R1 only on detected Adreno 6xx/7xx. */
+final class BuiltinDrivers {
+    private static final String ASSET="drivers/turnip-v27-r1-a6xx-a7xx.zip";
+    private static final String SHA="07938ef843a73dd47ebb88ba9c2d3bca011667bd2b657e3b4a75d9ba8ed591a0";
+
+    private BuiltinDrivers() {}
+
+    // Query an actual EGL renderer. Build.MODEL and Snapdragon model strings
+    // cannot reliably distinguish Adreno 7xx from 8xx; do not guess.
+    private static String renderer() {
+        EGLDisplay display=EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);
+        if(display==EGL14.EGL_NO_DISPLAY)return "";
+        int[] version=new int[2];
+        if(!EGL14.eglInitialize(display,version,0,version,1))return "";
+        EGLContext context=EGL14.EGL_NO_CONTEXT;
+        EGLSurface surface=EGL14.EGL_NO_SURFACE;
+        try {
+            int[] attributes={
+                EGL14.EGL_RENDERABLE_TYPE,EGL14.EGL_OPENGL_ES2_BIT,
+                EGL14.EGL_SURFACE_TYPE,EGL14.EGL_PBUFFER_BIT,
+                EGL14.EGL_RED_SIZE,8,EGL14.EGL_GREEN_SIZE,8,EGL14.EGL_BLUE_SIZE,8,
+                EGL14.EGL_NONE
+            };
+            EGLConfig[] config=new EGLConfig[1];
+            int[] count={0};
+            if(!EGL14.eglChooseConfig(display,attributes,0,config,0,1,count,0) ||
+               count[0]<1)return "";
+            context=EGL14.eglCreateContext(display,config[0],EGL14.EGL_NO_CONTEXT,
+                new int[]{EGL14.EGL_CONTEXT_CLIENT_VERSION,2,EGL14.EGL_NONE},0);
+            if(context==EGL14.EGL_NO_CONTEXT)return "";
+            surface=EGL14.eglCreatePbufferSurface(display,config[0],
+                new int[]{EGL14.EGL_WIDTH,1,EGL14.EGL_HEIGHT,1,EGL14.EGL_NONE},0);
+            if(surface==EGL14.EGL_NO_SURFACE)return "";
+            if(!EGL14.eglMakeCurrent(display,surface,surface,context))return "";
+            String gpu=GLES20.glGetString(GLES20.GL_RENDERER);
+            return gpu==null?"":gpu;
+        } finally {
+            EGL14.eglMakeCurrent(display,EGL14.EGL_NO_SURFACE,
+                EGL14.EGL_NO_SURFACE,EGL14.EGL_NO_CONTEXT);
+            if(surface!=EGL14.EGL_NO_SURFACE)EGL14.eglDestroySurface(display,surface);
+            if(context!=EGL14.EGL_NO_CONTEXT)EGL14.eglDestroyContext(display,context);
+            EGL14.eglTerminate(display);
+        }
+    }
+
+    static synchronized void ensureDefault(Context context) throws Exception {
+        SharedPreferences p=PortSettings.prefs(context);
+        // Even an explicit "system driver" choice (empty path) must win.
+        if(p.contains("driver_path"))return;
+        final String gpu;
+        try { gpu=renderer(); }
+        catch(Throwable e) { return; } // unknown GPU: keep system default
+        String name=gpu.toLowerCase(Locale.ROOT);
+        if(!name.contains("adreno") || !name.matches(".*\\b[67][0-9]{2}\\b.*"))
+            return; // 8xx, Mali, unknown: never install an incompatible Turnip.
+        File drivers=new File(context.getFilesDir(),"drivers");
+        try(InputStream archive=context.getAssets().open(ASSET)){
+            DriverArchive.Installed installed=DriverArchive.install(
+                drivers,archive,Build.VERSION.SDK_INT,file->{
+                    JSONObject meta=new JSONObject(new String(Files.readAllBytes(file.toPath()),
+                        java.nio.charset.StandardCharsets.UTF_8));
+                    return new DriverArchive.Metadata(
+                        meta.optString("name","Turnip v27.0.0-R1"),
+                        meta.optString("libraryName","libvulkan_freedreno.so"),
+                        meta.optInt("minApi",26));
+                });
+            if(!SHA.equals(installed.id))
+                throw new IllegalStateException("Turnip R1 archive digest mismatch");
+            p.edit().putString("driver_path",installed.library.getAbsolutePath())
+                .putString("driver_name","Turnip v27.0.0-R1 · Adreno 6xx/7xx").apply();
+        } catch(java.io.FileNotFoundException missingAsset) {
+            // Developer checkout without staged APK assets: system driver, never
+            // secretly pick an incompatible one.
+        }
+    }
+}
