@@ -37,39 +37,50 @@ final class SaveChoicePanel extends Dialog {
     SaveChoicePanel(Activity activity,GameChoiceProtocol.Request request,Bitmap[] thumbnails,IntConsumer selection,java.util.function.Function<KeyEvent,String> buttonName){
         super(activity);this.buttonName=buttonName;this.activity=activity;this.request=request;this.selection=selection;selected=request.focus;
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-        LinearLayout root=column();root.setPadding(dp(18),dp(16),dp(18),dp(16));root.setBackgroundColor(BG);
-        root.addView(text("THE LAST OF US REMASTERED",12,OLIVE));
+        LinearLayout root=column();root.setPadding(dp(12),dp(8),dp(12),dp(8));root.setBackgroundColor(BG);
+        root.addView(text("THE LAST OF US REMASTERED",11,OLIVE));
         LinearLayout header=new LinearLayout(activity);header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView heading=text(title(),24,TEXT);heading.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
+        TextView heading=text(title(),20,TEXT);heading.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
         header.addView(heading,new LinearLayout.LayoutParams(0,-2,1));
-        Button close=button("×",false,()->answer(-2));header.addView(close,new LinearLayout.LayoutParams(dp(44),dp(44)));root.addView(header);
+        Button close=button("×",false,()->answer(-2));header.addView(close,new LinearLayout.LayoutParams(dp(38),dp(38)));root.addView(header);
         int existing=0;for(var entry:request.entries)if(!entry.isNew)existing++;
-        TextView count=text(tr("Salvamentos")+" · "+existing,12,MUTED);count.setPadding(0,dp(3),0,dp(10));root.addView(count);
+        TextView count=text(tr("Salvamentos")+" · "+existing,12,MUTED);count.setPadding(0,dp(2),0,dp(4));root.addView(count);
         scroll=new ScrollView(activity);LinearLayout list=column();scroll.addView(list);
         cards=new LinearLayout[request.entries.length];
         for(int i=0;i<cards.length;i++){
             final int index=i;GameChoiceProtocol.Entry entry=request.entries[i];
-            LinearLayout card=new LinearLayout(activity);card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(dp(12),dp(10),dp(12),dp(10));cards[i]=card;
+            LinearLayout card=new LinearLayout(activity);card.setGravity(Gravity.CENTER_VERTICAL);card.setPadding(dp(8),dp(6),dp(8),dp(6));cards[i]=card;
             if(thumbnails!=null && i<thumbnails.length && thumbnails[i]!=null){
                 ImageView image=new ImageView(activity);image.setScaleType(ImageView.ScaleType.CENTER_CROP);image.setImageBitmap(thumbnails[i]);
-                card.addView(image,new LinearLayout.LayoutParams(dp(128),dp(72)));
+                card.addView(image,new LinearLayout.LayoutParams(dp(112),dp(62)));
             }else{
                 TextView missing=text(entry.isNew?tr("Novo save"):tr("Sem miniatura"),11,MUTED);missing.setGravity(Gravity.CENTER);missing.setBackgroundColor(0xff101813);
-                card.addView(missing,new LinearLayout.LayoutParams(dp(128),dp(72)));
+                card.addView(missing,new LinearLayout.LayoutParams(dp(112),dp(62)));
             }
-            LinearLayout words=column();LinearLayout.LayoutParams wordsLp=new LinearLayout.LayoutParams(0,-2,1);wordsLp.leftMargin=dp(14);card.addView(words,wordsLp);
-            TextView name=text(entry.isNew?tr("Novo save"):entry.heading(),16,TEXT);name.setTypeface(null,Typeface.BOLD);words.addView(name);
-            if(!entry.title.isEmpty() && !entry.title.equals(entry.heading()) && !entry.isNew)words.addView(text(entry.title,12,MUTED));
-            if(!entry.detail.isEmpty()){TextView detail=text(entry.detail,12,MUTED);words.addView(detail);}
-            if(!entry.directory.isEmpty())words.addView(text(tr("Slot")+" · "+entry.directory,11,MUTED));
-            if(!entry.isNew)words.addView(text(date(entry.timestamp),11,OLIVE));
+            LinearLayout words=column();LinearLayout.LayoutParams wordsLp=new LinearLayout.LayoutParams(0,-1,1);wordsLp.leftMargin=dp(10);card.addView(words,wordsLp);
+            TextView name=text(entry.isNew?tr("Novo save"):entry.heading(),14,TEXT);
+            name.setTypeface(null,Typeface.BOLD);name.setSingleLine(true);
+            name.setEllipsize(android.text.TextUtils.TruncateAt.END);words.addView(name);
+            String summary=!entry.detail.isEmpty()?entry.detail:
+                    !entry.title.isEmpty() && !entry.title.equals(entry.heading())?entry.title:entry.label;
+            if(!entry.isNew && !summary.isEmpty()){
+                TextView detail=text(summary,11,MUTED);detail.setMaxLines(2);
+                detail.setEllipsize(android.text.TextUtils.TruncateAt.END);words.addView(detail);
+            }
+            String metadata=(entry.directory.isEmpty()?"":tr("Slot")+" · "+entry.directory);
+            if(!entry.isNew && entry.timestamp>0)metadata+=(metadata.isEmpty()?"":"  •  ")+date(entry.timestamp);
+            if(!metadata.isEmpty()){
+                TextView info=text(metadata,10,OLIVE);info.setSingleLine(true);
+                info.setEllipsize(android.text.TextUtils.TruncateAt.END);words.addView(info);
+            }
             card.setOnClickListener(v->select(index));card.setContentDescription(entry.heading());
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(8);list.addView(card,lp);
+            card.setOnLongClickListener(v->{showSaveDetails(entry);return true;});
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(84));lp.bottomMargin=dp(5);list.addView(card,lp);
         }
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        LinearLayout footer=new LinearLayout(activity);footer.setGravity(Gravity.RIGHT);footer.setPadding(0,dp(10),0,0);
-        footer.addView(button(tr("Cancelar"),false,()->answer(-2)),new LinearLayout.LayoutParams(dp(128),dp(46)));
-        LinearLayout.LayoutParams actionLp=new LinearLayout.LayoutParams(dp(150),dp(46));actionLp.leftMargin=dp(10);
+        LinearLayout footer=new LinearLayout(activity);footer.setGravity(Gravity.RIGHT);footer.setPadding(0,dp(5),0,0);
+        footer.addView(button(tr("Cancelar"),false,()->answer(-2)),new LinearLayout.LayoutParams(dp(120),dp(42)));
+        LinearLayout.LayoutParams actionLp=new LinearLayout.LayoutParams(dp(140),dp(42));actionLp.leftMargin=dp(10);
         footer.addView(button(action(),true,()->answer(selected)),actionLp);root.addView(footer);
         root.setFocusableInTouchMode(true);root.requestFocus();
         setContentView(root);setOnCancelListener(d->answer(-2));select(selected);
@@ -88,8 +99,19 @@ final class SaveChoicePanel extends Dialog {
     void updateThumbnails(Bitmap[] pictures){
         for(int i=0;i<cards.length && i<pictures.length;i++)if(pictures[i]!=null){
             ImageView image=new ImageView(activity);image.setScaleType(ImageView.ScaleType.CENTER_CROP);image.setImageBitmap(pictures[i]);
-            cards[i].removeViewAt(0);cards[i].addView(image,0,new LinearLayout.LayoutParams(dp(128),dp(72)));
+            cards[i].removeViewAt(0);cards[i].addView(image,0,new LinearLayout.LayoutParams(dp(112),dp(62)));
         }
+    }
+    private void showSaveDetails(GameChoiceProtocol.Entry entry){
+        StringBuilder details=new StringBuilder();
+        if(!entry.title.isEmpty())details.append(entry.title).append('\\n');
+        if(!entry.subtitle.isEmpty() && !entry.subtitle.equals(entry.title))details.append(entry.subtitle).append('\\n');
+        if(!entry.detail.isEmpty())details.append(entry.detail).append('\\n');
+        if(!entry.directory.isEmpty())details.append(tr("Slot")).append(": ").append(entry.directory).append('\\n');
+        if(!entry.isNew && entry.timestamp>0)details.append(date(entry.timestamp));
+        new android.app.AlertDialog.Builder(activity)
+                .setTitle(entry.heading()).setMessage(details.toString().trim())
+                .setPositiveButton(android.R.string.ok,null).show();
     }
     private int dp(int n){return Math.round(n*activity.getResources().getDisplayMetrics().density);}
     private String tr(String value){return TlouLanguage.t(activity,value);}
