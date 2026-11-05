@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config;
 import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk=28, application=android.app.Application.class)
+@Config(sdk=30, application=android.app.Application.class)
 public class GameSetupDialogTest {
     private void buttons(View view,List<Button> out) {
         if(view instanceof Button)out.add((Button)view);
@@ -53,4 +53,25 @@ public class GameSetupDialogTest {
             }
         }
     }
+    @Test public void releaseProfileDisablesDiagnosticOverheadAndPreservesTestedDefaults() {
+        try(var controller=Robolectric.buildActivity(Activity.class).setup()) {
+            Activity activity=controller.get();
+            PortSettings.prefs(activity).edit().putBoolean("gpu_profile",true)
+                .putBoolean("memory_walk_once",false).putBoolean("host_copy_batch",true)
+                .putString("game_path","/storage/emulated/0/TLOU").commit();
+            PortSettings.retireTestPreferences(activity);
+            java.util.Map<String,String> env=new java.util.HashMap<>();
+            env.put("TLOU_CPU_PHASE_SAMPLES","1");env.put("GOW3_GPU_PROFILE","1");
+            env.put("GOW3_FRAME_STATS","1");env.put("GOW3_PERF_DIAG","1");
+            PortSettings.environment(activity,env);
+            assertEquals("0",env.get("TLOU_CPU_PHASE_SAMPLES"));
+            for(String name:new String[]{"GOW3_GPU_PROFILE","GOW3_FRAME_STATS","GOW3_PERF_DIAG"})
+                assertFalse(env.containsKey(name));
+            assertEquals("1",env.get("TLOU_MEMORY_WALK_ONCE"));
+            assertEquals("1",env.get("TLOU_RING_BINDING_CURSOR"));
+            assertEquals("0",env.get("GOW3_TLOU_HOST_COPY_BATCH"));
+            assertEquals("/storage/emulated/0/TLOU",PortSettings.prefs(activity).getString("game_path",""));
+        }
+    }
+
 }

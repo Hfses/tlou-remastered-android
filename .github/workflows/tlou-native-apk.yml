@@ -76,6 +76,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14.3'
+          cache-read-only: false
       - name: Preflight compile and Android resource validation
         run: gradle -p android-launcher :app:testReleaseUnitTest :app:lintVitalRelease --no-daemon --max-workers=2
       - uses: android-actions/setup-android@v3
@@ -224,6 +225,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14.3'
+          cache-read-only: false
       - name: Preparation, native reuse guards, FPS and save tests
         run: |
           python3 -m unittest discover -s android/tests -v

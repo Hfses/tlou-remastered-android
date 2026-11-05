@@ -63,6 +63,8 @@ final class PortSettings {
         env.put("TLOU_SPLIT_CS64","1");
         env.put("TLOU_MAPPED_FAULT_READBACKS","1");
         env.put("TLOU_MAPPED_READBACKS","1");
+        // The native Android default is ON unless explicitly disabled.
+        env.put("TLOU_CPU_PHASE_SAMPLES","0");
         // Leave profiling truly disabled. Some native switches check presence,
         // so setting "0" instead of removing is incorrect.
         for(String name:new String[]{"GOW3_GPU_PROFILE","GOW3_FRAME_STATS","GOW3_PERF_DIAG"})
