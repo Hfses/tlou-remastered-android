@@ -32,7 +32,7 @@ final class PortSettings {
         env.put("GOW3_LAND_ON_GUEST",p.getBoolean("land_on_guest",false)?"1":"0");
         // Temporal SRT readbacks: same already-required producer tick, CPU-dirty
         // and GPU ownership checked again after the wait. Default ON.
-        env.put("TLOU_SRT_HOT_READBACKS",p.getBoolean("srt_hot_readbacks",true)?"1":"0");
+        env.put("TLOU_SRT_HOT_READBACKS",p.getBoolean("srt_hot_readbacks",false)?"1":"0");
         env.put("TLOU_SRT_DEP_BATCH","0"); // measured zero groups, retired
         // The normal value is 1024; reducing the threshold lets small truly
         // immutable buffers reach the same tracked, write-guarded arena.

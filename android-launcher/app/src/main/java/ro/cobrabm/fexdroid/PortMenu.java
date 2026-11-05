@@ -108,8 +108,8 @@ final class PortMenu {
             note("Preencher tela é aplicado na hora. O limite de apresentação não desbloqueia a lógica de FPS do jogo.");
         } else if(section.equals("experiments")) {
             heading("OTIMIZAÇÕES EXPERIMENTAIS");
-            note("O readback temporal SRT vem ligado; todas as outras experiências preservam as configurações já salvas. Reinicie para aplicar.");
-            toggle("srt_hot_readbacks","SRT: juntar leituras recentes na mesma espera GPU",true);
+            note("SRT temporal desligado por padrão: o teste de 04/11 reduziu o número de leituras, mas não trouxe ganho demonstrável de FPS nem reduziu materialmente as esperas de GPU. Reinicie para aplicar.");
+            toggle("srt_hot_readbacks","SRT: juntar leituras recentes na mesma espera GPU",false);
             note("Aproveita um readback obrigatório para trazer pequenas tabelas recentes com produtor já registrado. Exclui páginas alteradas pela CPU ou com readbacks pendentes; desative se observar qualquer artefato ou travamento.");
             toggle("fetch_no_block","GoW III: espera de escrita fora da thread GPU",false);
             note("Movimenta para a thread CPU uma espera por escrita GPU já submetida; exige fila de cópia compatível. Até 3 tentativas, depois usa o caminho original.");
