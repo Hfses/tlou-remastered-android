@@ -181,10 +181,24 @@ public final class MainActivity extends Activity {
         TextView version=text("v0.1",13,ACCENT);
         version.setGravity(Gravity.RIGHT);header.addView(version,new LinearLayout.LayoutParams(dp(60),-2));
         root.addView(header);
-        TextView title=text("THE LAST OF US",34,TEXT);
-        title.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));root.addView(title);
-        TextView subtitle=text("R E M A S T E R E D",12,ACCENT);
-        subtitle.setPadding(0,0,0,dp(14));root.addView(subtitle);
+        if(currentTab.equals("home")) {
+            // The hero is bundled with the APK: shown immediately and offline,
+            // like the other Daedalus game launchers.
+            ImageView hero=new ImageView(this);
+            hero.setImageResource(R.drawable.tlou_hero);
+            hero.setContentDescription("The Last of Us Remastered");
+            hero.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            hero.setBackground(background(PANEL));
+            hero.setClipToOutline(true);
+            LinearLayout.LayoutParams art=new LinearLayout.LayoutParams(-1,dp(210));
+            art.topMargin=dp(8);art.bottomMargin=dp(13);
+            root.addView(hero,art);
+        } else {
+            TextView title=text("THE LAST OF US",34,TEXT);
+            title.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));root.addView(title);
+            TextView subtitle=text("R E M A S T E R E D",12,ACCENT);
+            subtitle.setPadding(0,0,0,dp(14));root.addView(subtitle);
+        }
 
         LinearLayout tabs=new LinearLayout(this);
         tabs.setOrientation(LinearLayout.HORIZONTAL);
