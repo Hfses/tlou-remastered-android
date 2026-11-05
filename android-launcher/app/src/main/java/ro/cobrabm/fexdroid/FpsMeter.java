@@ -20,10 +20,10 @@ final class FpsMeter {
         if(elapsed>=500_000_000L) {
             fps=(totalFrames-frames)*1_000_000_000.0/elapsed;
             frames=totalFrames;time=nowNanos;presented=totalFrames;
-            if(fps>0) {
-                minimum=Double.isNaN(minimum)?fps:Math.min(minimum,fps);
-                maximum=Double.isNaN(maximum)?fps:Math.max(maximum,fps);
-            }
+            // A 500 ms period with no displayed frames is a real zero-FPS stall;
+            // it must appear in MIN instead of being silently filtered out.
+            minimum=Double.isNaN(minimum)?fps:Math.min(minimum,fps);
+            maximum=Double.isNaN(maximum)?fps:Math.max(maximum,fps);
         }
         return fps;
     }
