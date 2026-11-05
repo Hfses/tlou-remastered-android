@@ -952,6 +952,7 @@ static bool TlouAndroidPhysicsShape(u32 slot, u32 stride, u32 records, u64 bytes
     }();
     return enabled && TlouPhysicsReadback::Shape(slot, stride, records, bytes);
 #else
+    (void)slot; (void)stride; (void)records; (void)bytes;
     return false;
 #endif
 }
@@ -5835,7 +5836,7 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                     if (physics_shape_fallback) {
                         static std::atomic<u32> samples{0};
                         if (samples.fetch_add(1, std::memory_order_relaxed) < 8) {
-                            std::printf("TLOU Android physics-shaped EOP result: shader %#llx slot %u size %llu stride %u records %u\\n",
+                            std::printf("TLOU Android physics-shaped EOP result: shader %#llx slot %u size %llu stride %u records %u\n",
                                         static_cast<unsigned long long>(stage.pgm_hash),
                                         binding.buffer, static_cast<unsigned long long>(size),
                                         vsharp.stride, vsharp.num_records);
