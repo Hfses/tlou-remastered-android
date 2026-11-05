@@ -191,7 +191,7 @@ public final class GameActivity extends Activity {
             if(resumed && game!=null && game.isAlive()) {
                 long now=SystemClock.elapsedRealtimeNanos();
                 double fps=fpsMeter.sample(Gow3Present.framesIfLoaded(),now);
-                if(hudTelemetry!=null)hudTelemetry.sample((int)game.pid(),now);
+                if(hudTelemetry!=null)hudTelemetry.sample(hudTelemetry.runtimePid(game),now);
                 SharedPreferences p=PortSettings.prefs(this);
                 String mode=p.getString("hud_mode","full");
                 StringBuilder value=new StringBuilder(String.format(Locale.ROOT,"%.0f FPS",fps));
