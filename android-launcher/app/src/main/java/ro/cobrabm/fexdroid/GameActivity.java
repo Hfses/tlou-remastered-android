@@ -21,6 +21,7 @@ import android.content.SharedPreferences;
 import android.graphics.Typeface;
 import android.text.SpannableString;
 import android.text.Spanned;
+import android.text.TextUtils;
 import android.text.style.ForegroundColorSpan;
 import android.graphics.drawable.GradientDrawable;
 import android.widget.FrameLayout;
@@ -102,7 +103,8 @@ public final class GameActivity extends Activity {
         layout.addView(touch,pos(-1,-1,Gravity.CENTER));
         gameLayout=layout;
         status=new TextView(this);status.setGravity(Gravity.CENTER);status.setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
-        status.setTextColor(0xffcbdcb1);status.setSingleLine(true);status.setPadding(dp(10),dp(6),dp(10),dp(6));status.setText("0.0 FPS");
+        status.setTextColor(0xffcbdcb1);status.setSingleLine(true);
+        status.setEllipsize(TextUtils.TruncateAt.END);status.setPadding(dp(10),dp(6),dp(10),dp(6));status.setText("0.0 FPS");
         layout.addView(status,pos(-2,-2,Gravity.TOP|Gravity.LEFT));
         status.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol || b-t!=ob-ot)placeHud();});
         final float[] drag=new float[2];
@@ -377,6 +379,10 @@ public final class GameActivity extends Activity {
             if(gameLayout==null || closing.get() || gameLayout.getWidth()<1 ||
                 gameLayout.getHeight()<1)return;
             SharedPreferences p=PortSettings.prefs(this);
+            // Keep at least 72 dp free for the hamburger on the top edge;
+            // oversized full-detail HUDs remain a single line (ellipsized).
+            int allowedWidth=Math.max(dp(160),gameLayout.getWidth()-dp(82));
+            if(status.getMaxWidth()!=allowedWidth)status.setMaxWidth(allowedWidth);
             int maxX=Math.max(0,gameLayout.getWidth()-status.getWidth());
             int maxY=Math.max(0,gameLayout.getHeight()-status.getHeight());
             int margin=dp(8), x=margin, y=margin;
