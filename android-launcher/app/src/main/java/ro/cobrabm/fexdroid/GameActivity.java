@@ -51,6 +51,7 @@ public final class GameActivity extends Activity {
     private volatile boolean started;
     private boolean resumed;
     private final FpsMeter fpsMeter=new FpsMeter();
+    private final GpuTurboSession gpuTurbo=new GpuTurboSession();
 
     private static FrameLayout.LayoutParams pos(int w,int h,int gravity) {
         return new FrameLayout.LayoutParams(w,h,gravity);
@@ -95,7 +96,7 @@ public final class GameActivity extends Activity {
         layout.addView(touch,pos(-1,-1,Gravity.CENTER));
         gameLayout=layout;
         status=new TextView(this);status.setGravity(Gravity.CENTER);status.setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
-        status.setTextColor(0xffe0e9cf);status.setPadding(dp(10),dp(6),dp(10),dp(6));status.setText("0.0 FPS");
+        status.setTextColor(0xffcbdcb1);status.setSingleLine(true);status.setPadding(dp(10),dp(6),dp(10),dp(6));status.setText("0.0 FPS");
         layout.addView(status,pos(-2,-2,Gravity.TOP|Gravity.LEFT));
         status.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol || b-t!=ob-ot)placeHud();});
         final float[] drag=new float[2];
@@ -174,9 +175,16 @@ public final class GameActivity extends Activity {
         try {
             if(resumed && game!=null && game.isAlive()) {
                 double fps=fpsMeter.sample(Gow3Present.framesIfLoaded(),SystemClock.elapsedRealtimeNanos());
-                String value=String.format(Locale.ROOT,"%.1f FPS",fps);
-                if(PortSettings.prefs(this).getString("hud_mode","compact").equals("compact"))
-                    value+="  ·  "+(fps>0?String.format(Locale.ROOT,"%.1f ms",1000.0/fps):"— ms");
+                String mode=PortSettings.prefs(this).getString("hud_mode","full");
+                String value=String.format(Locale.ROOT,"FPS %.1f",fps);
+                if(!"minimal".equals(mode)) {
+                    value+="  |  "+(fps>0?String.format(Locale.ROOT,"%.1f ms",1000.0/fps):"— ms");
+                }
+                if("full".equals(mode)) {
+                    value+=String.format(Locale.ROOT,"  |  MIN %.1f  MAX %.1f",fpsMeter.minimum(),fpsMeter.maximum());
+                    value+="  |  "+PortSettings.prefs(this).getString("resolution","720")+"p";
+                }
+                if(gpuTurbo.isActive())value+="  |  TURBO";
                 status.setText(value);
             } else fpsMeter.reset();
         } catch (Throwable ignored) {}
@@ -282,6 +290,7 @@ public final class GameActivity extends Activity {
             update("Iniciando TLOU x86-64 pelo FEX...");
             if(closing.get())return;
             RunLog.write(this,"ProcessBuilder.start • iniciando FEX • watchdog de teste desativado");
+            gpuTurbo.start(this); // root is optional; if unavailable gameplay still runs
             game=builder.start();
             if(closing.get()){game.destroyForcibly();game.waitFor();return;}
             RunLog.write(this,"Processo FEX criado");
@@ -302,6 +311,7 @@ public final class GameActivity extends Activity {
                 while(child.isAlive())try{child.waitFor();}catch(InterruptedException e){interrupted=true;}
                 if(interrupted)Thread.currentThread().interrupt();
             }
+            gpuTurbo.stop(this);
             if(saveGuard!=null)try{saveGuard.close();}catch(IOException e){RunLog.failure(this,"Saves lock",e);}
         }
     }
@@ -313,7 +323,7 @@ public final class GameActivity extends Activity {
         status.setVisibility(p.getBoolean("hud_visible",true)?View.VISIBLE:View.GONE);
         status.setTextSize(p.getInt("hud_size",14));
         GradientDrawable bg=new GradientDrawable();bg.setColor((p.getInt("hud_opacity",65)*255/100)<<24|0x101813);bg.setCornerRadius(dp(8));status.setBackground(bg);
-        boolean show=p.getBoolean("touch_visible",true);if(!show)touch.release();touch.setVisibility(show?View.VISIBLE:View.GONE);touch.setAlpha(p.getInt("touch_opacity",55)/100f);
+        boolean show=p.getBoolean("touch_visible",true);if(!show)touch.release();touch.setVisibility(show?View.VISIBLE:View.GONE);touch.setAlpha(p.getInt("touch_opacity",55)/100f);touch.invalidate();
         if(started)Gow3Present.fullscreen(p.getBoolean("fullscreen",false));
         placeHud();
     }
@@ -338,7 +348,7 @@ public final class GameActivity extends Activity {
             public void importDriver(){}public void selectDriver(){}
             public void editControls(){touch.setVisibility(View.VISIBLE);touch.setAlpha(.9f);menuButton.setVisibility(View.GONE);touch.edit(()->{menuButton.setVisibility(View.VISIBLE);applyLiveSettings();});}
             public void resetControls(){touch.resetLayout();applyLiveSettings();}
-            public void exitGame(){stopAndExit();}public void changed(){applyLiveSettings();}
+            public void exitGame(){stopAndExit();}public void quitApp(){stopAndExit(true);}public void changed(){applyLiveSettings();}
         }).open("home");
     }
     @Override public void onBackPressed(){showMenu();}
@@ -351,7 +361,8 @@ public final class GameActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("TLOU — logs").setView(scroll).setPositiveButton("Fechar",null).show();
     }
 
-    private void stopAndExit() {
+    private void stopAndExit() { stopAndExit(false); }
+    private void stopAndExit(boolean quitApp) {
         if (!closing.compareAndSet(false,true)) return;
         handler.removeCallbacksAndMessages(null);
         Process child=game;
@@ -362,7 +373,7 @@ public final class GameActivity extends Activity {
         try { if(touch!=null) touch.release(); } catch(Exception ignored) {}
         try { if(audio!=null) audio.stop(); } catch(Exception ignored) {}
         try { if(started) Gow3Present.stop(); } catch(Exception ignored) {}
-        finish();
+        if(quitApp)finishAffinity(); else finish();
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent e) {
