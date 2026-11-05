@@ -168,7 +168,7 @@ static int32_t mount(int32_t user, const char *title, const DirName *dir, uint32
     if (runtime_file_mount(result->point.data,host) != 0) {
         slots[slot].used=0;
         pthread_mutex_unlock(&lock);
-        printf("Runtime: save data mount failed: guest mount table full for '%s'\\n",dir->data);
+        printf("Runtime: save data mount failed: guest mount table full for '%s'\n",dir->data);
         return ERR_INTERNAL;
     }
     ++mounts_done;
