@@ -38,6 +38,8 @@ public final class MainActivity extends Activity {
     private Runnable afterPermission;
     private Uri pendingPkg;
     private InstallTools tools;
+    private boolean directLaunchConsumed;
+    private boolean firstRunDialogShown;
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -57,12 +59,38 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(BACKGROUND);
         getWindow().setNavigationBarColor(BACKGROUND);
         buildHome();
+        // Storage authorization is the first onboarding interaction, before
+        // game selection and before any optional driver setup.
+        if(!prefs.getBoolean("onboarding_seen",false)) {
+            if(!access())withAccess(this::showFirstRunSetup);
+            else showFirstRunSetup();
+        } else scheduleDirectLaunch();
         // Optional packaged driver installation runs off the main/UI thread.
         worker.execute(()->{
             try { BuiltinDrivers.ensureDefault(this); }
             catch(Exception e) { android.util.Log.w("TLOU", "Turnip R1 auto-select unavailable", e); }
             runOnUiThread(()->{if(!isDestroyed())refresh();});
         });
+    }
+    private void showFirstRunSetup() {
+        if(firstRunDialogShown || isFinishing())return;
+        firstRunDialogShown=true;
+        new AlertDialog.Builder(this).setTitle("Configurar The Last of Us")
+            .setMessage("Selecione como deseja adicionar seu jogo. A instalação e a preparação são feitas automaticamente.")
+            .setItems(new String[]{"Instalar PKG","Selecionar pasta do jogo","Agora não"},
+                (dialog,selection)->{
+                    prefs.edit().putBoolean("onboarding_seen",true).apply();
+                    if(selection==0)pickFile(PICK_PKG);
+                    else if(selection==1)pickFolder(PICK_GAME);
+                    else scheduleDirectLaunch();
+                }).setCancelable(false).show();
+    }
+    private void scheduleDirectLaunch() {
+        if(directLaunchConsumed || !prefs.getBoolean("launch_direct",false) ||
+            prefs.getString("game_path","").isEmpty())return;
+        directLaunchConsumed=true;
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(
+            ()->withAccess(()->prepareSelected(true)));
     }
     private void selectTab(String tab) {
         if(busy)return;
@@ -149,11 +177,9 @@ public final class MainActivity extends Activity {
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);
         TextView brand=text("DAEDALUS  /  ANDROID",12,ACCENT);brand.setLetterSpacing(.14f);
         header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
-        Button menu=new Button(this);menu.setText("☰");menu.setTextSize(22);
-        menu.setContentDescription(TlouLanguage.t(this,"Menu"));
-        menu.setOnClickListener(v->{if(!busy)openMenu("home");});
-        header.addView(menu,new LinearLayout.LayoutParams(dp(46),dp(46)));
-        buttons.add(menu);root.addView(header);
+        TextView version=text("v0.1",13,ACCENT);
+        version.setGravity(Gravity.RIGHT);header.addView(version,new LinearLayout.LayoutParams(dp(60),-2));
+        root.addView(header);
         TextView title=text("THE LAST OF US",34,TEXT);
         title.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));root.addView(title);
         TextView subtitle=text("R E M A S T E R E D",12,ACCENT);
@@ -175,10 +201,8 @@ public final class MainActivity extends Activity {
             add(game,"Instalar por PKG",false,()->withAccess(()->pickFile(PICK_PKG)));
             TextView manual=text("Informar caminho da pasta",12,ACCENT);
             manual.setOnClickListener(v->{if(!busy)manualPath();});game.addView(manual);
-            LinearLayout drivers=card(root,"DRIVER VULKAN");
-            driverInfo=text("",12,MUTED);drivers.addView(driverInfo);
-            add(drivers,"Selecionar driver Vulkan",false,this::selectDriver);
-            add(drivers,"Importar driver ZIP ou SO",false,()->pickFile(PICK_DRIVER));
+            toggleSetting(game,"launch_direct","Entrar direto no jogo",false);
+            add(game,"Sair do aplicativo",false,this::finishAffinity);
         } else if(currentTab.equals("patches")) {
             LinearLayout box=card(root,"PATCHES");
             box.addView(text("Patches validados para o eboot reconhecido. Reinicie para aplicar.",12,MUTED));
@@ -204,10 +228,30 @@ public final class MainActivity extends Activity {
                 new String[]{"30","60","0"},"60");
             toggleSetting(video,"vsync","VSync",true);
             video.addView(text("Readback 1 (relaxado) e perfil do log 32 fixos.",12,MUTED));
+            LinearLayout drivers=card(root,"DRIVER VULKAN");
+            driverInfo=text("",12,MUTED);drivers.addView(driverInfo);
+            add(drivers,"Selecionar driver Vulkan",false,this::selectDriver);
+            add(drivers,"Importar driver ZIP ou SO",false,()->pickFile(PICK_DRIVER));
+            toggleSetting(drivers,"gpu_turbo","Adreno Turbo (sem root)",false);
+            drivers.addView(text("Política KGSL de máximo desempenho; a proteção térmica continua ativa. Pode não funcionar em todos os dispositivos.",12,MUTED));
             LinearLayout app=card(root,"IDIOMA E INTERFACE");
             languageChoice(app);
             app.addView(text("O idioma do jogo é escolhido no próprio The Last of Us.",12,MUTED));
-            add(app,"Controles e HUD",false,()->openMenu("hud"));
+            LinearLayout controls=card(root,"CONTROLES E HUD");
+            toggleSetting(controls,"hud_visible","Mostrar FPS",true);
+            choice(controls,"hud_mode","Estilo do HUD",
+                new String[]{"Uma linha completa","FPS + tempo de frame","Apenas FPS"},
+                new String[]{"full","compact","minimal"},"full");
+            choice(controls,"hud_corner","Posição do HUD",
+                new String[]{"Superior esquerdo","Superior direito","Inferior esquerdo",
+                    "Inferior direito","Personalizada (arrastar)"},
+                new String[]{"0","1","2","3","-1"},"0");
+            toggleSetting(controls,"touch_visible","Controles na tela",true);
+            choice(controls,"control_color","Cor dos controles",
+                new String[]{"Verde oliva","Âmbar","Branco","Vermelho","Azul"},
+                new String[]{"olive","amber","white","red","blue"},"olive");
+            controls.addView(text("Editar posição dos botões: abra o menu ☰ durante o jogo.",12,MUTED));
+            toggleSetting(app,"launch_direct","Entrar direto no jogo",false);
             LinearLayout data=card(root,"SAVES");
             add(data,"Exportar saves ZIP",false,this::exportSaves);
             add(data,"Importar saves ZIP",false,()->pickFile(IMPORT_SAVES));
@@ -283,11 +327,11 @@ public final class MainActivity extends Activity {
     private void pickFile(int code) { Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT); i.setType("*/*"); i.addCategory(Intent.CATEGORY_OPENABLE); i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION); startActivityForResult(i,code); }
     private void pickFolder(int code) { Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE); i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION); startActivityForResult(i,code); }
     private void refresh() {
-        if(gameInfo==null)return;
+        if(gameInfo==null && driverInfo==null)return;
         String folder=prefs.getString("game_path","");
-        gameInfo.setText(folder.isEmpty()?TlouLanguage.t(this,"Nenhum jogo selecionado"):folder);
-        driverInfo.setText(PortSettings.summary(this)+"\n"+prefs.getString("driver_name",TlouLanguage.t(this,"Driver do sistema")));
-        permission.setVisibility(access()?View.GONE:View.VISIBLE);
+        if(gameInfo!=null)gameInfo.setText(folder.isEmpty()?TlouLanguage.t(this,"Nenhum jogo selecionado"):folder);
+        if(driverInfo!=null)driverInfo.setText(PortSettings.summary(this)+"\\n"+prefs.getString("driver_name",TlouLanguage.t(this,"Driver do sistema")));
+        if(permission!=null)permission.setVisibility(access()?View.GONE:View.VISIBLE);
     }
     private void task(String message, Work work) {
         if(busy)return; busy=true; for(Button b:buttons)b.setEnabled(false); progress.setVisibility(View.VISIBLE);
