@@ -73,6 +73,10 @@ final class PortSettings {
             env.remove(name);
 
         env.put("GOW3_READBACKS","1"); // Precise=2 caused artifacts; never resurrect.
+        env.put("GOW3_EOP_READBACK","1"); // Selective readbacks, not Precise/Readback 2.
+        // Temporary bounded coverage audit for CUSA00552 01.00. This only logs
+        // at most 40 distinct candidate compute bindings; no shader dumps or waits.
+        env.put("TLOU_PHYSICS_COVERAGE","1");
         env.put("GOW3_ASYNC_SHADERS","1");
         env.put("GOW3_FRAMES_AHEAD","0");
         env.put("TLOU_DESCRIPTOR_BULK","0");
