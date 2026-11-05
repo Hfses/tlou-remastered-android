@@ -29,6 +29,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Preflight translations, default language and offline artwork
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          rows = Path('android-launcher/app/src/main/assets/ui-translations.tsv').read_text(encoding='utf-8').splitlines()
+          rows = [line.split(chr(9)) for line in rows if line and not line.startswith('#')]
+          assert len(rows) >= 150, 'Missing translated labels'
+          assert all(len(row) == 10 and all(row) for row in rows), 'Incomplete translation columns'
+          assert len({row[0] for row in rows}) == len(rows), 'Duplicate translation labels'
+          lang = Path('android-launcher/app/src/main/java/ro/cobrabm/fexdroid/TlouLanguage.java').read_text()
+          assert 'LocaleList.getDefault()' in lang, 'System default locale unavailable'
+          assert 'return 1; // English fallback' in lang, 'English fallback unavailable'
+          art = Path('android-launcher/app/src/main/res/drawable-nodpi/tlou_hero.jpg')
+          assert art.is_file() and art.stat().st_size > 1024, 'Launcher offline hero art missing'
+          print('Preflight OK:', len(rows), 'labels across 10 languages; English fallback; game art')
+          PY
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
