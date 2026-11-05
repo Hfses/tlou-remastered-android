@@ -71,13 +71,14 @@ final class SaveChoicePanel extends Dialog {
         footer.addView(button(tr("Cancelar"),false,()->answer(-2)),new LinearLayout.LayoutParams(dp(128),dp(46)));
         LinearLayout.LayoutParams actionLp=new LinearLayout.LayoutParams(dp(150),dp(46));actionLp.leftMargin=dp(10);
         footer.addView(button(action(),true,()->answer(selected)),actionLp);root.addView(footer);
+        root.setFocusableInTouchMode(true);root.requestFocus();
         setContentView(root);setOnCancelListener(d->answer(-2));select(selected);
         setOnKeyListener((d,key,event)->{
             if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
             String mapped=buttonName==null?null:buttonName.apply(event);
             if(key==KeyEvent.KEYCODE_DPAD_UP || key==KeyEvent.KEYCODE_DPAD_DOWN){select((selected+(key==KeyEvent.KEYCODE_DPAD_UP?-1:1)+cards.length)%cards.length);return true;}
-            if("cross".equals(mapped) || (buttonName==null && key==KeyEvent.KEYCODE_BUTTON_A) || key==KeyEvent.KEYCODE_DPAD_CENTER){answer(selected);return true;}
-            if("circle".equals(mapped) || (buttonName==null && key==KeyEvent.KEYCODE_BUTTON_B)){answer(-2);return true;}return false;
+            if("cross".equals(mapped) || (buttonName==null && key==KeyEvent.KEYCODE_BUTTON_A) || key==KeyEvent.KEYCODE_DPAD_CENTER || key==KeyEvent.KEYCODE_ENTER){answer(selected);return true;}
+            if("circle".equals(mapped) || (buttonName==null && key==KeyEvent.KEYCODE_BUTTON_B) || key==KeyEvent.KEYCODE_ESCAPE){answer(-2);return true;}return false;
         });
         final int[] hat={0};root.setOnGenericMotionListener((v,event)->{
             int y=Math.round(event.getAxisValue(MotionEvent.AXIS_HAT_Y));if(y!=0 && y!=hat[0])select((selected+y+cards.length)%cards.length);hat[0]=y;return y!=0;
@@ -94,7 +95,7 @@ final class SaveChoicePanel extends Dialog {
     private String tr(String value){return TlouLanguage.t(activity,value);}
     private LinearLayout column(){LinearLayout l=new LinearLayout(activity);l.setOrientation(1);return l;}
     private TextView text(String value,int size,int color){TextView t=new TextView(activity);t.setText(value);t.setTextSize(size);t.setTextColor(color);return t;}
-    private Button button(String value,boolean primary,Runnable action){Button b=new Button(activity);b.setAllCaps(false);b.setText(value);b.setTextColor(primary?BG:TEXT);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(primary?OLIVE:0xff303c33));b.setOnClickListener(v->action.run());return b;}
+    private Button button(String value,boolean primary,Runnable action){Button b=new Button(activity);b.setFocusable(false);b.setAllCaps(false);b.setText(value);b.setTextColor(primary?BG:TEXT);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(primary?OLIVE:0xff303c33));b.setOnClickListener(v->action.run());return b;}
     private String title(){switch(request.title){case "Load game":return tr("Carregar jogo");case "Save game":return tr("Salvar jogo");case "Delete save":return tr("Excluir save");default:return request.title;}}
     private String action(){switch(request.title){case "Load game":return tr("Carregar");case "Save game":return tr("Salvar");case "Delete save":return tr("Excluir");default:return tr("Selecionar");}}
     private String date(long seconds){

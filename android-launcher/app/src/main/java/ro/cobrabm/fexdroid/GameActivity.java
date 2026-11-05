@@ -54,7 +54,7 @@ public final class GameActivity extends Activity {
     private boolean editingControls;
     private EdgeMenuGesture edgeMenu;
     private File runtimePidFile;
-    private GameChoiceBridge gameChoices;
+    private volatile GameChoiceBridge gameChoices;
     private String prepared;
     private volatile boolean started;
     private boolean resumed;
@@ -156,8 +156,6 @@ public final class GameActivity extends Activity {
             error("Não foi possível iniciar AHardwareBuffer: "+err);
             return;
         }
-        gameChoices=new GameChoiceBridge(this,stateDir,()->{if(playerMenu!=null)playerMenu.dismiss();if(editingControls)touch.finishEdit();touch.release();pad.reset();},pad::name);
-        gameChoices.start();
         Thread starter=new Thread(this::launch,"tlou-fex-launcher");
         starter.start();
         handler.postDelayed(this::refreshFps,500);
@@ -242,6 +240,10 @@ public final class GameActivity extends Activity {
             File state=new File(getFilesDir(),"tlou");
             File user=new File(state,"user");
             saveGuard=SaveArchive.lock(user);
+            if(closing.get())return;
+            gameChoices=new GameChoiceBridge(this,state,()->{if(playerMenu!=null)playerMenu.dismiss();if(editingControls)touch.finishEdit();touch.release();pad.reset();},pad::name);
+            gameChoices.start();
+            if(closing.get())return;
             if (!user.exists() && !user.mkdirs()) throw new IllegalStateException("Falha no usuário PS4");
             if (!app0.isDirectory()) throw new IllegalStateException("tlou-view ausente, rode o preparador TLOU");
             List<String> args=new ArrayList<>();
@@ -333,6 +335,7 @@ public final class GameActivity extends Activity {
                 while(child.isAlive())try{child.waitFor();}catch(InterruptedException e){interrupted=true;}
                 if(interrupted)Thread.currentThread().interrupt();
             }
+            if(gameChoices!=null)gameChoices.close();
             gpuTurbo.stop(this);
             if(saveGuard!=null)try{saveGuard.close();}catch(IOException e){RunLog.failure(this,"Saves lock",e);}
         }

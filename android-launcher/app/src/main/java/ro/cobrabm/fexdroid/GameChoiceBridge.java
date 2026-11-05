@@ -29,6 +29,7 @@ final class GameChoiceBridge {
         this.activity=activity;this.request=new File(state,"choice.request");this.response=new File(state,"choice.reply");this.releaseInput=releaseInput;
     }
     void start() throws java.io.IOException {
+        if(closed)return;
         java.nio.file.Files.deleteIfExists(request.toPath());java.nio.file.Files.deleteIfExists(response.toPath());
         worker.scheduleWithFixedDelay(this::poll,0,200,TimeUnit.MILLISECONDS);
     }
@@ -77,5 +78,8 @@ final class GameChoiceBridge {
         }catch(Exception ignored){}
         return images;
     }
-    void close(){closed=true;worker.shutdownNow();imageWorker.shutdownNow();if(dialog!=null){dialog.dismiss();dialog=null;}}
+    void close(){
+        if(closed)return;closed=true;worker.shutdownNow();imageWorker.shutdownNow();
+        activity.runOnUiThread(()->{if(dialog!=null){dialog.dismiss();dialog=null;}});
+    }
 }

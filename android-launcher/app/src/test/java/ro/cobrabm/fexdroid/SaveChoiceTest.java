@@ -77,6 +77,8 @@ public class SaveChoiceTest {
             chosen[0]=-99;panel=new SaveChoicePanel(controller.get(),nativeRequest(),null,index->chosen[0]=index);panel.show();
             panel.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_DPAD_DOWN));
             panel.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_BUTTON_A));assertEquals(1,chosen[0]);
+            chosen[0]=-99;panel=new SaveChoicePanel(controller.get(),nativeRequest(),null,index->chosen[0]=index);panel.show();
+            panel.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_ESCAPE));assertEquals(-2,chosen[0]);
         }
     }
     @Test public void thumbnailsComeOnlyFromTheActualSaveTree() throws Exception {
