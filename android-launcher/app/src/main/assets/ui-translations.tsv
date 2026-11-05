@@ -90,3 +90,25 @@ Instalando PKG…	Installing PKG…	Instalando PKG…	Installation du PKG…	PKG
 Driver Vulkan	Vulkan driver	Controlador Vulkan	Pilote Vulkan	Vulkan-Treiber	Driver Vulkan	Vulkan sürücüsü	Sterownik Vulkan	Драйвер Vulkan	Vulkan ड्राइवर
 A operação não foi concluída.	The operation could not be completed.	No se pudo completar la operación.	L’opération n’a pas pu aboutir.	Der Vorgang konnte nicht abgeschlossen werden.	Impossibile completare l’operazione.	İşlem tamamlanamadı.	Nie udało się ukończyć operacji.	Не удалось завершить операцию.	कार्रवाई पूरी नहीं हो सकी।
 Não foi possível concluir	Could not complete	No se pudo completar	Impossible de terminer	Abschluss fehlgeschlagen	Impossibile completare	Tamamlanamadı	Nie można ukończyć	Не удалось завершить	पूरा नहीं हो सका
+Entrar direto no jogo	Launch directly into game	Entrar directamente al juego	Lancer directement le jeu	Spiel direkt starten	Avvia direttamente il gioco	Doğrudan oyunu başlat	Uruchom grę bezpośrednio	Запускать игру сразу	सीधे गेम चलाएँ
+Sair do aplicativo	Exit application	Salir de la aplicación	Quitter l’application	App beenden	Esci dall'applicazione	Uygulamadan çık	Zamknij aplikację	Выйти из приложения	ऐप से बाहर निकलें
+Adreno Turbo (sem root)	Adreno Turbo (no root)	Adreno Turbo (sin root)	Adreno Turbo (sans root)	Adreno Turbo (ohne Root)	Adreno Turbo (senza root)	Adreno Turbo (rootsuz)	Adreno Turbo (bez roota)	Adreno Turbo (без root)	Adreno Turbo (रूट के बिना)
+Uma linha completa	Full single line	Una línea completa	Une seule ligne complète	Eine vollständige Zeile	Una riga completa	Tek satırda tüm bilgiler	Pełny jeden wiersz	Полная одна строка	एक पंक्ति में सभी आँकड़े
+Apenas FPS	FPS only	Solo FPS	FPS uniquement	Nur FPS	Solo FPS	Yalnızca FPS	Tylko FPS	Только FPS	केवल FPS
+Cor dos controles	Control color	Color de controles	Couleur des commandes	Farbe der Steuerung	Colore dei comandi	Kontrol rengi	Kolor przycisków	Цвет кнопок	कंट्रोल का रंग
+Verde oliva	Olive green	Verde oliva	Vert olive	Olivgrün	Verde oliva	Zeytin yeşili	Oliwkowy	Оливковый	ऑलिव हरा
+Âmbar	Amber	Ámbar	Ambre	Bernstein	Ambra	Kehribar	Bursztynowy	Янтарный	अंबर
+Branco	White	Blanco	Blanc	Weiß	Bianco	Beyaz	Biały	Белый	सफ़ेद
+Vermelho	Red	Rojo	Rouge	Rot	Rosso	Kırmızı	Czerwony	Красный	लाल
+Azul	Blue	Azul	Bleu	Blau	Blu	Mavi	Niebieski	Синий	नीला
+Configurar The Last of Us	Set up The Last of Us	Configurar The Last of Us	Configurer The Last of Us	The Last of Us einrichten	Configura The Last of Us	The Last of Us'u kur	Skonfiguruj The Last of Us	Настроить The Last of Us	The Last of Us सेटअप
+Instalar PKG	Install PKG	Instalar PKG	Installer PKG	PKG installieren	Installa PKG	PKG yükle	Zainstaluj PKG	Установить PKG	PKG इंस्टॉल करें
+Selecionar pasta do jogo	Select game folder	Seleccionar carpeta del juego	Choisir le dossier du jeu	Spielordner auswählen	Seleziona cartella del gioco	Oyun klasörünü seç	Wybierz folder gry	Выбрать папку игры	गेम फ़ोल्डर चुनें
+Agora não	Not now	Ahora no	Pas maintenant	Nicht jetzt	Non ora	Şimdi değil	Nie teraz	Не сейчас	अभी नहीं
+Editar posição dos botões: abra o menu ☰ durante o jogo.	Edit button positions: open ☰ during gameplay.	Edita los botones: abre ☰ durante el juego.	Modifier les boutons : ouvrir ☰ en jeu.	Tasten verschieben: ☰ im Spiel öffnen.	Modifica pulsanti: apri ☰ in gioco.	Tuşları düzenle: oyunda ☰ menüsünü aç.	Edytuj przyciski: otwórz ☰ podczas gry.	Изменить кнопки: откройте ☰ во время игры.	बटन बदलें: खेलते समय ☰ खोलें।
+As otimizações do log 32 permanecem fixas.	Log 32 optimizations stay fixed.	Las optimizaciones del registro 32 quedan fijas.	Les optimisations du journal 32 restent fixes.	Log-32-Optimierungen bleiben fest aktiviert.	Le ottimizzazioni del log 32 restano fisse.	Log 32 optimizasyonları sabit kalır.	Optymalizacje z logu 32 pozostają stałe.	Оптимизации лога 32 остаются фиксированными.	लॉग 32 ऑप्टिमाइज़ेशन स्थिर हैं।
+Desenvolvimento: Erick Mendes / Daedalus Android	Development: Erick Mendes / Daedalus Android	Desarrollo: Erick Mendes / Daedalus Android	Développement : Erick Mendes / Daedalus Android	Entwicklung: Erick Mendes / Daedalus Android	Sviluppo: Erick Mendes / Daedalus Android	Geliştirme: Erick Mendes / Daedalus Android	Twórca: Erick Mendes / Daedalus Android	Разработка: Erick Mendes / Daedalus Android	डेवलपर: Erick Mendes / Daedalus Android
+Código-fonte no GitHub	Source code on GitHub	Código fuente en GitHub	Code source sur GitHub	Quellcode auf GitHub	Codice sorgente su GitHub	GitHub kaynak kodu	Kod źródłowy na GitHub	Исходный код на GitHub	GitHub पर स्रोत कोड
+FEX-Emu no GitHub	FEX-Emu on GitHub	FEX-Emu en GitHub	FEX-Emu sur GitHub	FEX-Emu auf GitHub	FEX-Emu su GitHub	GitHub'da FEX-Emu	FEX-Emu na GitHub	FEX-Emu на GitHub	GitHub पर FEX-Emu
+shadPS4 no GitHub	shadPS4 on GitHub	shadPS4 en GitHub	shadPS4 sur GitHub	shadPS4 auf GitHub	shadPS4 su GitHub	GitHub'da shadPS4	shadPS4 na GitHub	shadPS4 на GitHub	GitHub पर shadPS4
+libadrenotools no GitHub	libadrenotools on GitHub	libadrenotools en GitHub	libadrenotools sur GitHub	libadrenotools auf GitHub	libadrenotools su GitHub	GitHub'da libadrenotools	libadrenotools na GitHub	libadrenotools на GitHub	GitHub पर libadrenotools
