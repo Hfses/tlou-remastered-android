@@ -33,6 +33,8 @@ mkdir -p "$stage" "$assets" "$root/out/release"
 turnip_dir="$out/apk-assets/drivers"
 turnip_zip="$turnip_dir/turnip-v27-r1-a6xx-a7xx.zip"
 turnip_sha="07938ef843a73dd47ebb88ba9c2d3bca011667bd2b657e3b4a75d9ba8ed591a0"
+turnip_gen8_zip="$turnip_dir/turnip-gen8-v38-patched-a8xx.zip"
+turnip_gen8_sha="2bbb279a3da7680503a54a51a3051c7a4302c8fb2a089f8b183b4b5d6ba9ac17"
 mkdir -p "$turnip_dir"
 if [[ ! -s "$turnip_zip" ]] || ! echo "$turnip_sha  $turnip_zip" | sha256sum -c --status; then
   tmp="$turnip_zip.download"
@@ -54,7 +56,7 @@ gradle -p "$root/android-launcher" :app:assembleRelease --no-daemon --max-worker
 unsigned="$root/android-launcher/app/build/outputs/apk/release/app-release-unsigned.apk"
 [[ -s "$unsigned" ]] || { echo "Gradle did not produce an unsigned APK" >&2; exit 2; }
 aligned="$out/tlou-release-aligned.apk"
-apk="$root/out/release/TheLastOfUsRemastered-Android-Bionic-v0.31-arm64.apk"
+apk="$root/out/release/TheLastOfUsRemastered-Android-v0.1-arm64.apk"
 "$android_tools/zipalign" -f -p 4 "$unsigned" "$aligned"
 key="$out/experimental-development.jks"
 if [[ ! -f $key ]]; then
