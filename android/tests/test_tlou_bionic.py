@@ -4,6 +4,7 @@ from pathlib import Path
 import struct
 import tempfile
 import unittest
+from unittest.mock import patch
 
 MODULE = Path(__file__).resolve().parents[1] / "tlou_bionic.py"
 spec = importlib.util.spec_from_file_location("tlou_bionic", MODULE)
@@ -45,6 +46,20 @@ class TestTLOUBionic(unittest.TestCase):
             other = make_game(Path(tmp)/"other", title="CUSA01715")
             with self.assertRaisesRegex(m.PortError, "Wrong PS4 title"):
                 m.require_game(other)
+
+    def test_regional_sfo_requires_exact_known_executable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = make_game(Path(tmp)/"regional", title="CUSA00556", ver="01.00")
+            with self.assertRaisesRegex(m.PortError, "Wrong PS4 title"):
+                m.require_game(base)
+            # Simulate only the SHA returned by the byte-identical large user
+            # executable; the normal dummy game fixture must still be rejected.
+            with patch.object(m.hashlib, "sha256") as digest:
+                digest.return_value.hexdigest.return_value = m.VERIFIED_SELF_SHA256
+                profile = m.require_game(base)
+                self.assertEqual(profile["PORT_PROFILE"], "CUSA00552-SELF-SHA256")
+                with self.assertRaisesRegex(m.PortError, "Wrong PS4 title"):
+                    m.require_game(base, is_update=True)
 
     def test_update_overlay_never_mutates_game(self):
         with tempfile.TemporaryDirectory() as tmp:
