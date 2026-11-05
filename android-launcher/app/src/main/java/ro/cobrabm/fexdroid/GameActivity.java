@@ -19,6 +19,9 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.content.SharedPreferences;
 import android.graphics.Typeface;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
 import android.graphics.drawable.GradientDrawable;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -51,6 +54,7 @@ public final class GameActivity extends Activity {
     private volatile boolean started;
     private boolean resumed;
     private final FpsMeter fpsMeter=new FpsMeter();
+    private HudTelemetry hudTelemetry;
     private final GpuTurboSession gpuTurbo=new GpuTurboSession();
     private Boolean lastTurboChoice;
 
@@ -86,6 +90,7 @@ public final class GameActivity extends Activity {
         File input=new File(stateDir,"controller.state");
         RunLog.write(this,"Inicializando controle e áudio");
         pad=new PadBridge(input);
+        hudTelemetry=new HudTelemetry(this);
         audio=new AudioBridge(new File(stateDir,"audio.fifo"));
         logFile=new File(stateDir,"runtime.log");
 
@@ -103,7 +108,14 @@ public final class GameActivity extends Activity {
         final float[] drag=new float[2];
         status.setOnTouchListener((v,e)->{
             FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)status.getLayoutParams();
-            if(e.getActionMasked()==MotionEvent.ACTION_DOWN){drag[0]=e.getRawX()-lp.leftMargin;drag[1]=e.getRawY()-lp.topMargin;return true;}
+            if(e.getActionMasked()==MotionEvent.ACTION_DOWN){
+                // Convert anchor-based placement to absolute TOP|LEFT before dragging.
+                lp.gravity=Gravity.TOP|Gravity.LEFT;
+                lp.leftMargin=status.getLeft();lp.topMargin=status.getTop();
+                lp.rightMargin=0;lp.bottomMargin=0;status.setLayoutParams(lp);
+                drag[0]=e.getRawX()-lp.leftMargin;drag[1]=e.getRawY()-lp.topMargin;
+                return true;
+            }
             if(e.getActionMasked()==MotionEvent.ACTION_MOVE){
                 lp.leftMargin=Math.max(dp(4),Math.min(layout.getWidth()-status.getWidth()-dp(4),(int)(e.getRawX()-drag[0])));
                 lp.topMargin=Math.max(dp(4),Math.min(layout.getHeight()-status.getHeight()-dp(4),(int)(e.getRawY()-drag[1])));
@@ -172,23 +184,44 @@ public final class GameActivity extends Activity {
     }
 
     private void refreshFps() {
-        if (!started || closing.get()) return;
+        if(!started || closing.get())return;
         try {
             if(resumed && game!=null && game.isAlive()) {
-                double fps=fpsMeter.sample(Gow3Present.framesIfLoaded(),SystemClock.elapsedRealtimeNanos());
-                String mode=PortSettings.prefs(this).getString("hud_mode","full");
-                String value=String.format(Locale.ROOT,"FPS %.1f",fps);
-                if(!"minimal".equals(mode)) {
-                    value+="  |  "+(fps>0?String.format(Locale.ROOT,"%.1f ms",1000.0/fps):"— ms");
-                }
+                long now=SystemClock.elapsedRealtimeNanos();
+                double fps=fpsMeter.sample(Gow3Present.framesIfLoaded(),now);
+                if(hudTelemetry!=null)hudTelemetry.sample((int)game.pid(),now);
+                SharedPreferences p=PortSettings.prefs(this);
+                String mode=p.getString("hud_mode","full");
+                StringBuilder value=new StringBuilder(String.format(Locale.ROOT,"%.0f FPS",fps));
+                if(!"minimal".equals(mode) && p.getBoolean("hud_frametime",true))
+                    value.append(fps>0?String.format(Locale.ROOT,"  |  %.1f ms",1000.0/fps):"  |  — ms");
                 if("full".equals(mode)) {
-                    value+=String.format(Locale.ROOT,"  |  MIN %.1f  MAX %.1f",fpsMeter.minimum(),fpsMeter.maximum());
-                    value+="  |  "+PortSettings.prefs(this).getString("resolution","720")+"p";
+                    if(p.getBoolean("hud_gpu",true) && hudTelemetry!=null &&
+                        !hudTelemetry.gpuName().isEmpty())
+                        value.append("  |  GPU ").append(hudTelemetry.gpuName());
+                    if(p.getBoolean("hud_cpu",true) && hudTelemetry!=null &&
+                        !Double.isNaN(hudTelemetry.cpuPercent()))
+                        value.append(String.format(Locale.ROOT,"  |  CPU %.0f%%",hudTelemetry.cpuPercent()));
+                    if(p.getBoolean("hud_ram",true) && hudTelemetry!=null &&
+                        !Double.isNaN(hudTelemetry.ramGiB()))
+                        value.append(String.format(Locale.ROOT,"  |  RAM %.1f GB",hudTelemetry.ramGiB()));
+                    if(p.getBoolean("hud_minmax",true))
+                        value.append(String.format(Locale.ROOT,"  |  MIN %.0f  MAX %.0f",
+                            fpsMeter.minimum(),fpsMeter.maximum()));
+                    if(p.getBoolean("hud_resolution",false))
+                        value.append("  |  ").append(p.getString("resolution","720")).append('p');
                 }
-                if(gpuTurbo.isActive())value+="  |  TURBO";
-                status.setText(value);
-            } else fpsMeter.reset();
-        } catch (Throwable ignored) {}
+                if(gpuTurbo.isActive())value.append("  |  TURBO");
+                SpannableString oneRow=new SpannableString(value.toString());
+                int firstSeparator=value.indexOf("  |");
+                oneRow.setSpan(new ForegroundColorSpan(0xffc8db87),0,
+                    firstSeparator<0?oneRow.length():firstSeparator,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                status.setText(oneRow);
+            } else {
+                fpsMeter.reset();
+                if(hudTelemetry!=null)hudTelemetry.reset();
+            }
+        } catch(Throwable e) {android.util.Log.w("TLOU", "HUD sampling unavailable",e);}
         handler.postDelayed(this::refreshFps,500);
     }
 
@@ -322,8 +355,9 @@ public final class GameActivity extends Activity {
         if(closing.get() || status==null || touch==null)return;
         SharedPreferences p=PortSettings.prefs(this);
         status.setVisibility(p.getBoolean("hud_visible",true)?View.VISIBLE:View.GONE);
-        status.setTextSize(p.getInt("hud_size",14));
-        GradientDrawable bg=new GradientDrawable();bg.setColor((p.getInt("hud_opacity",65)*255/100)<<24|0x101813);bg.setCornerRadius(dp(8));status.setBackground(bg);
+        status.setTextSize(p.getInt("hud_size",12));
+        status.setTextColor(0xffe1e9dc);
+        GradientDrawable bg=new GradientDrawable();bg.setColor((p.getInt("hud_opacity",65)*255/100)<<24|0x101813);bg.setCornerRadius(dp(6));bg.setStroke(dp(1),0x668c9d73);status.setBackground(bg);
         boolean show=p.getBoolean("touch_visible",true);if(!show)touch.release();touch.setVisibility(show?View.VISIBLE:View.GONE);touch.setAlpha(p.getInt("touch_opacity",55)/100f);touch.invalidate();
         if(started)Gow3Present.fullscreen(p.getBoolean("fullscreen",false));
         if(started) {
@@ -339,15 +373,44 @@ public final class GameActivity extends Activity {
         placeHud();
     }
     private void placeHud() {
-        SharedPreferences p=PortSettings.prefs(this);
         status.post(()->{
-            if(gameLayout==null || closing.get())return;
-            FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)status.getLayoutParams();
-            int w=Math.max(1,gameLayout.getWidth()-status.getWidth()-dp(8));int h=Math.max(1,gameLayout.getHeight()-status.getHeight()-dp(8));
+            if(gameLayout==null || closing.get() || gameLayout.getWidth()<1 ||
+                gameLayout.getHeight()<1)return;
+            SharedPreferences p=PortSettings.prefs(this);
+            int maxX=Math.max(0,gameLayout.getWidth()-status.getWidth());
+            int maxY=Math.max(0,gameLayout.getHeight()-status.getHeight());
+            int margin=dp(8), x=margin, y=margin;
             String corner=p.getString("hud_corner","0");
-            lp.leftMargin=dp(4)+(corner.equals("-1")?Math.round(p.getFloat("hud_x",0)*w):(corner.equals("1")||corner.equals("3")?w-dp(48):0));
-            lp.topMargin=dp(4)+(corner.equals("-1")?Math.round(p.getFloat("hud_y",0)*h):(corner.equals("2")||corner.equals("3")?h:0));
-            lp.leftMargin=Math.max(dp(4),Math.min(w,lp.leftMargin));lp.topMargin=Math.max(dp(4),Math.min(h,lp.topMargin));status.setLayoutParams(lp);
+            switch(corner) {
+                case "1": x=maxX-margin; y=dp(64); break; // reserve top-right hamburger
+                case "2": x=margin; y=maxY-margin; break;
+                case "3": x=maxX-margin; y=maxY-margin; break;
+                case "4": x=maxX/2; y=margin; break; // top center
+                case "5": x=maxX/2; y=maxY/2; break; // center
+                case "6": x=maxX/2; y=maxY-margin; break; // bottom center
+                case "7": x=margin; y=maxY/2; break; // middle left
+                case "8": x=maxX-margin; y=maxY/2; break; // middle right
+                case "-1":
+                    x=Math.round(p.getFloat("hud_x",0)*maxX);
+                    y=Math.round(p.getFloat("hud_y",0)*maxY);
+                    break;
+                default: break; // top left: never overlaps top-right menu button
+            }
+            x=Math.max(0,Math.min(maxX,x));y=Math.max(0,Math.min(maxY,y));
+            // A long single-row HUD can reach the menu even when centered.
+            // Reserve the button's rectangle for all non-custom preset placements.
+            if(!"-1".equals(corner) && menuButton!=null && menuButton.getWidth()>0 &&
+                x < menuButton.getRight()+margin &&
+                x+status.getWidth() > menuButton.getLeft()-margin &&
+                y < menuButton.getBottom()+margin &&
+                y+status.getHeight() > menuButton.getTop()-margin)
+                y=Math.min(maxY,menuButton.getBottom()+margin);
+            FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)status.getLayoutParams();
+            if(lp.gravity== (Gravity.TOP|Gravity.LEFT) && lp.leftMargin==x &&
+                lp.topMargin==y && lp.rightMargin==0 && lp.bottomMargin==0)return;
+            lp.gravity=Gravity.TOP|Gravity.LEFT;
+            lp.leftMargin=x;lp.topMargin=y;lp.rightMargin=0;lp.bottomMargin=0;
+            status.setLayoutParams(lp);
         });
     }
     private void showMenu() {
