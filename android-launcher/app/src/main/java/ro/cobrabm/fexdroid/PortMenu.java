@@ -141,26 +141,19 @@ final class PortMenu {
         content.addView(spinner,new LinearLayout.LayoutParams(-1,dp(50)));
         note("O idioma do jogo é escolhido no próprio The Last of Us.");
     }
+    private void setScreenMode(boolean fill) {
+        prefs.edit().putBoolean("fullscreen",fill).apply();
+        actions.changed(); // GameActivity updates SurfaceFlinger immediately
+        render(); // visible selection responds without dismiss/restarting game
+    }
     private void screenMode() {
-        heading("Tela");
-        Spinner spinner=new Spinner(activity,Spinner.MODE_DROPDOWN);
-        ArrayAdapter<String> adapter=new ArrayAdapter<>(activity,
-            android.R.layout.simple_spinner_dropdown_item,
-            new String[]{tr("Ajustar à tela (proporção original)"),
-                         tr("Preencher tela (sem barras)")});
-        spinner.setAdapter(adapter);
-        int current=prefs.getBoolean("fullscreen",false)?1:0;
-        spinner.setSelection(current);spinner.setTag(current);
-        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
-            public void onNothingSelected(AdapterView<?> parent){}
-            public void onItemSelected(AdapterView<?> parent,View v,int idx,long id) {
-                if((Integer)spinner.getTag()==idx)return;
-                spinner.setTag(idx);
-                prefs.edit().putBoolean("fullscreen",idx==1).apply();actions.changed();
-            }
-        });
-        content.addView(spinner,new LinearLayout.LayoutParams(-1,dp(50)));
-        note("Pode alterar durante o jogo, sem reiniciar.");
+        heading("Modo de exibição");
+        boolean full=prefs.getBoolean("fullscreen",false);
+        row((full?"○ ":"● ")+tr("Tela normal (proporção original)"),
+            ()->setScreenMode(false));
+        row((full?"● ":"○ ")+tr("Tela cheia (preencher a tela)"),
+            ()->setScreenMode(true));
+        note("O modo muda durante o jogo, sem reiniciar.");
     }
     private void slider(String key,String label,int min,int max,int fallback) {
         TextView title=text(label+": "+prefs.getInt(key,fallback),13,INK);
@@ -186,6 +179,7 @@ final class PortMenu {
             case "home":
                 heading(inGame?"DURANTE O JOGO":"MENU");
                 row("Vídeo e tela",()->go("video"));
+                screenMode(); // separate one-tap fit and fill actions in the main in-game menu
                 row("Patches",()->go("patches"));
                 row("Idioma e interface",()->go("settings"));
                 row("Controles e HUD",()->go("hud"));
@@ -240,10 +234,19 @@ final class PortMenu {
                     new String[]{"Uma linha completa","FPS + tempo de frame","Apenas FPS"},
                     new String[]{"full","compact","minimal"},"full");
                 choice("hud_corner","Posição do HUD",
-                    new String[]{"Superior esquerdo","Superior direito","Inferior esquerdo",
-                                 "Inferior direito","Personalizada (arrastar)"},
-                    new String[]{"0","1","2","3","-1"},"0");
-                slider("hud_size","Tamanho do HUD",10,26,14);
+                    new String[]{"Superior esquerdo","Superior direito",
+                        "Inferior esquerdo","Inferior direito","Superior central",
+                        "Centro da tela","Inferior central","Central esquerdo",
+                        "Central direito","Personalizada (arrastar)"},
+                    new String[]{"0","1","2","3","4","5","6","7","8","-1"},"0");
+                heading("Informações exibidas na mesma linha");
+                toggle("hud_frametime","Tempo de frame (ms)",true);
+                toggle("hud_gpu","Nome da GPU",true);
+                toggle("hud_cpu","Uso da CPU (jogo)",true);
+                toggle("hud_ram","RAM utilizada pelo jogo",true);
+                toggle("hud_minmax","FPS mínimo e máximo",true);
+                toggle("hud_resolution","Resolução",false);
+                slider("hud_size","Tamanho do HUD",10,26,12);
                 slider("hud_opacity","Opacidade do fundo (%)",0,100,65);
                 toggle("touch_visible","Controles na tela",true);
                 choice("control_color","Cor dos controles",
