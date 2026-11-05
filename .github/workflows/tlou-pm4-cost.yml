@@ -1,0 +1,43 @@
+name: TLOU PM4 checksum correctness and CPU cost
+
+on:
+  push:
+    branches: ['perf/pm4-checksum-validation']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checksum:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install benchmark dependency used by the runtime
+        run: sudo apt-get update -qq && sudo apt-get install -y libxxhash-dev
+      - name: Build and run the production checksum benchmark
+        run: |
+          set -euo pipefail
+          mkdir -p out/pm4-cost
+          uname -m | tee out/pm4-cost/architecture.txt
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+            gow3_pc/tests/test_pm4_checksum_cost.cpp -lxxhash -o out/pm4-cost/checksum
+          out/pm4-cost/checksum | tee out/pm4-cost/result.txt
+          out/pm4-cost/checksum | tee out/pm4-cost/repeat.txt
+      - name: Check memory access and undefined behavior
+        run: |
+          set -euo pipefail
+          g++ -std=c++20 -O1 -g -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            gow3_pc/tests/test_pm4_checksum_cost.cpp -lxxhash -o out/pm4-cost/checksum-asan
+          out/pm4-cost/checksum-asan --correctness-only
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pm4-cost-${{ matrix.runner }}
+          path: out/pm4-cost/*.txt
+          if-no-files-found: error
