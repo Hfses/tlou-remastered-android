@@ -24,6 +24,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.io.File;
+import java.io.IOException;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -201,6 +202,7 @@ public final class GameActivity extends Activity {
     }
 
     private void launch() {
+        SaveArchive.Guard saveGuard=null;
         try {
             RunLog.write(this,"Instalando executável Bionic do APK");
             File bin=installBinary();
@@ -209,6 +211,7 @@ public final class GameActivity extends Activity {
             File app0=new File(base,"tlou-view");
             File state=new File(getFilesDir(),"tlou");
             File user=new File(state,"user");
+            saveGuard=SaveArchive.lock(user);
             if (!user.exists() && !user.mkdirs()) throw new IllegalStateException("Falha no usuário PS4");
             if (!app0.isDirectory()) throw new IllegalStateException("tlou-view ausente, rode o preparador TLOU");
             List<String> args=new ArrayList<>();
@@ -280,7 +283,7 @@ public final class GameActivity extends Activity {
             if(closing.get())return;
             RunLog.write(this,"ProcessBuilder.start • iniciando FEX • watchdog de teste desativado");
             game=builder.start();
-            if(closing.get()){game.destroyForcibly();return;}
+            if(closing.get()){game.destroyForcibly();game.waitFor();return;}
             RunLog.write(this,"Processo FEX criado");
             final int result=game.waitFor();
             RunLog.write(this,"Processo FEX finalizado: código "+result);
@@ -292,6 +295,14 @@ public final class GameActivity extends Activity {
         } catch (Throwable err) {
             RunLog.failure(this,"Falha ao executar FEX",err);
             if(!closing.get()) error("Falha ao iniciar runtime TLOU: "+err+"\n"+tailLog());
+        } finally {
+            // Never release the transfer lock while a surviving child could still write saves.
+            Process child=game;
+            if(child!=null&&child.isAlive()) {child.destroyForcibly();boolean interrupted=false;
+                while(child.isAlive())try{child.waitFor();}catch(InterruptedException e){interrupted=true;}
+                if(interrupted)Thread.currentThread().interrupt();
+            }
+            if(saveGuard!=null)try{saveGuard.close();}catch(IOException e){RunLog.failure(this,"Saves lock",e);}
         }
     }
 

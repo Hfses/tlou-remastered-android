@@ -16,6 +16,8 @@ final class PortMenu {
     interface Actions {
         void logs(); void exportLogs(); void chooseGame(); void installPkg();
         void importDriver(); void selectDriver(); void editControls(); void resetControls(); void exitGame();
+        default void importSaves() {}
+        default void exportSaves() {}
         void changed();
     }
     private final Activity activity;
@@ -88,11 +90,11 @@ final class PortMenu {
             heading(inGame?"DURANTE O JOGO":"CONFIGURAÇÕES");
             row("Vídeo e desempenho",()->go("video"));row("Patches do jogo",()->go("patches"));
             row("Controles e HUD",()->go("hud"));
-            if(!inGame){row("Jogo e drivers",()->go("library"));}
+            if(!inGame){row("Jogo e drivers",()->go("library"));row("Saves · importar / exportar",()->go("saves"));}
             row("Análise de desempenho",()->go("profiling"));
             action("Ver logs",actions::logs);if(!inGame)action("Exportar logs ZIP",actions::exportLogs);
             if(inGame)action("Voltar ao launcher",actions::exitGame);
-            note("TLOU Remastered  ·  Daedalus v0.29");
+            note("TLOU Remastered  ·  Daedalus v0.31 experimental");
         } else if(section.equals("video")) {
             heading("VÍDEO E DESEMPENHO");note("Aplicados ao iniciar o jogo. Compare as opções no mesmo cenário.");
             choice("resolution","Resolução interna (patch de eboot)",new String[]{"Original (referência)","1280 × 720 · experimental","960 × 540 · experimental","640 × 360 · experimental"},new String[]{"original","720","540","360"},"original");
@@ -100,12 +102,37 @@ final class PortMenu {
             note("Readback: 1 · Relaxado (fixo). O Readback 2 foi removido porque causava bugs gráficos e perda de FPS.");
             toggle("mapped_readbacks","Readback direto de buffers",true);
             note("Lê a memória compartilhada após esperar os dados da GPU. Desligue para comparar a cópia intermediária anterior; requer reabrir o jogo.");
-            row("Experimentos de desempenho",()->go("experiments"));
+            row("Novos testes de desempenho · v0.31",()->go("perf31"));
+            row("Experimentos anteriores",()->go("experiments"));
             choice("fps_limit","Limite de FPS",new String[]{"30 FPS","60 FPS","Sem limite de apresentação"},new String[]{"30","60","0"},"60");
             toggle("vsync","VSync",true);toggle("async_shaders","Compilação assíncrona de shaders",true);
             choice("frames_ahead","Fila de renderização",new String[]{"0 · Menor latência","1 · Padrão","2 · Maior fila / latência"},new String[]{"0","1","2"},"1");
             toggle("fullscreen","Preencher tela (esticar)",false);
             note("Preencher tela é aplicado na hora. O limite de apresentação não desbloqueia a lógica de FPS do jogo.");
+        } else if(section.equals("saves")) {
+            heading("SAVES DO JOGO");
+            note("Feche o jogo antes de transferir saves. O ZIP inclui progresso, perfil e metadados. Importar substitui os saves ativos e mantém uma cópia de segurança dos anteriores.");
+            action("Exportar saves ZIP",actions::exportSaves);
+            action("Importar saves ZIP",actions::importSaves);
+            note("Para importar, selecione um ZIP exportado pelo TLOU com a pasta savedata.");
+        } else if(section.equals("perf31")) {
+            heading("TESTES DE DESEMPENHO · v0.31");
+            note("Opções independentes, desligadas por padrão. Reinicie o jogo após mudar. Compare primeiro uma por vez na mesma cena, com Medir passes da GPU desligado.");
+            toggle("memory_walk_once","Memória: evitar buscas repetidas",false);
+            note("Percorre os mesmos mapeamentos sob a trava original. Mantém a cópia e o tratamento de lacunas.");
+            toggle("ring_binding_cursor","Bindings: percorrer constantes em ordem",false);
+            note("Reduz consultas dentro do mesmo draw. Não reutiliza dados ou descritores de outros draws.");
+            toggle("draw_counter_trim","Draw: reduzir contadores internos",false);
+            note("Evita medições por pacote quando o relatório de perfil está desligado. Com perfil ligado, mantém os contadores.");
+            toggle("compute_perm_memo","Compute: reutilizar especialização compatível",false);
+            note("Reaproveita a especialização somente com descritores e estado idênticos. Leituras SRT e sincronização continuam ativas.");
+            toggle("host_copy_batch","Cópias host: agrupar comandos consecutivos",false);
+            note("Agrupa somente cópias adjacentes na fila. Pode piorar sequências com poucas cópias; mantenha apenas se ajudar no seu teste.");
+            row("Desativar os cinco testes v0.31",()->{
+                prefs.edit().putBoolean("memory_walk_once",false).putBoolean("ring_binding_cursor",false)
+                    .putBoolean("draw_counter_trim",false).putBoolean("compute_perm_memo",false)
+                    .putBoolean("host_copy_batch",false).apply();actions.changed();render();
+            });
         } else if(section.equals("experiments")) {
             heading("OTIMIZAÇÕES EXPERIMENTAIS");
             note("SRT temporal desligado por padrão: o teste de 04/11 reduziu o número de leituras, mas não trouxe ganho demonstrável de FPS nem reduziu materialmente as esperas de GPU. Reinicie para aplicar.");
@@ -134,7 +161,7 @@ final class PortMenu {
                 new String[]{"auto","0","2","4","6"},"auto");
             note("Prefetch e compilação paralela podem mudar travamentos e correção visual. O modo automático de workers é o original.");
             row("Desativar todos os experimentos",()->{
-                prefs.edit().putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("srt_hot_readbacks",false).remove("compute_wait_fast").remove("relaxed_skinning_fp").putBoolean("mapped_fault_readbacks",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
+                prefs.edit().putBoolean("memory_walk_once",false).putBoolean("ring_binding_cursor",false).putBoolean("draw_counter_trim",false).putBoolean("compute_perm_memo",false).putBoolean("host_copy_batch",false).putBoolean("fetch_no_block",false).putBoolean("land_on_guest",false).putBoolean("static_min_512",false).putBoolean("stack_mapped_readback",false).putBoolean("inline_single_copy",false).putBoolean("split_cs64",false).putBoolean("srt_hot_readbacks",false).remove("compute_wait_fast").remove("relaxed_skinning_fp").putBoolean("mapped_fault_readbacks",false).putBoolean("descriptor_bulk",false).putBoolean("prep_pool",false).putBoolean("cpu_trims",false)
                     .putBoolean("prefetch_pipelines",false).putBoolean("parallel_pipelines",false)
                     .putString("prep_workers","auto").apply();
                 actions.changed();render();

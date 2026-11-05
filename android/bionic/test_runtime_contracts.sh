@@ -56,3 +56,18 @@ if grep -Fq '"2 · Preciso' android-launcher/app/src/main/java/ro/cobrabm/fexdro
     echo 'ERROR: TLOU Precise readback was reintroduced' >&2
     exit 1
 fi
+
+# v0.31 opt-in paths: exact memory bytes, packet-local bindings and copy completion.
+cc -std=c11 -O2 -Wall -Wextra -Werror -pthread \
+  gow3_pc/tests/test_memory_walk_cost.c -o "$test_dir/memory-walk"
+"$test_dir/memory-walk" --correctness-only
+for test in ring_binding_cursor tlou_host_copy_batch; do
+  g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I gow3_pc/gpu/shim -I gow3_pc/gpu/shadps4 \
+    "gow3_pc/tests/test_${test}.cpp" -o "$test_dir/$test"
+  "$test_dir/$test" --correctness-only
+done
+python3 gow3_pc/tests/extract_host_copy_chunks.py "$test_dir"
+g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread \
+  -I "$test_dir" -I gow3_pc/gpu/shim -I gow3_pc/gpu/shadps4 \
+  gow3_pc/tests/test_tlou_threaded_record_chunk.cpp -o "$test_dir/threaded-copy"
+"$test_dir/threaded-copy" --correctness-only

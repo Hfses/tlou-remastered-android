@@ -26,7 +26,7 @@ import java.util.concurrent.Executors;
 
 /** TLOU launcher: PKG or extracted game -> automatic on-device preparation. */
 public final class MainActivity extends Activity {
-    private static final int PICK_GAME=501, PICK_DRIVER=502, PICK_PKG=503, PICK_DEST=504, SAVE_LOGS=505;
+    private static final int PICK_GAME=501, PICK_DRIVER=502, PICK_PKG=503, PICK_DEST=504, SAVE_LOGS=505, IMPORT_SAVES=506, EXPORT_SAVES=507;
     private static final int BACKGROUND=0xff101613, PANEL=0xff1b2520, TEXT=0xffe7e9df, MUTED=0xffa6b0a4, ACCENT=0xffc2cf96;
     private SharedPreferences prefs;
     private TextView gameInfo, driverInfo, status, permission;
@@ -69,14 +69,21 @@ public final class MainActivity extends Activity {
         driverInfo=text("",13,MUTED);config.addView(driverInfo);
         add(config,"Vídeo e desempenho",false,()->openMenu("video"));
         add(config,"Patches do jogo",false,()->openMenu("patches"));
+        add(config,"Saves · importar / exportar",false,()->openMenu("saves"));
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setIndeterminate(true);progress.setVisibility(View.GONE);root.addView(progress);
         status=text("Pronto para continuar. Abra o menu lateral para drivers, HUD e controles.",13,MUTED);root.addView(status);
         permission=text("Permitir acesso aos arquivos",13,ACCENT);permission.setPadding(0,dp(12),0,dp(12));permission.setOnClickListener(v->withAccess(this::refresh));root.addView(permission);
-        root.addView(text("CUSA00552  ·  Daedalus v0.16",11,MUTED));setContentView(scroll);refresh();
+        root.addView(text("CUSA00552  ·  Daedalus v0.31 experimental",11,MUTED));setContentView(scroll);refresh();
     }
     private void exportLogs() {
         Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/zip");save.addCategory(Intent.CATEGORY_OPENABLE);
         save.putExtra(Intent.EXTRA_TITLE,"TLOU-Android-Logs.zip");startActivityForResult(save,SAVE_LOGS);
+    }
+    private File saveUser(){return new File(getFilesDir(),"tlou/user");}
+    private void exportSaves() {
+        Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/zip");save.addCategory(Intent.CATEGORY_OPENABLE);
+        save.putExtra(Intent.EXTRA_TITLE,"TLOU-Saves-"+new java.text.SimpleDateFormat("yyyyMMdd-HHmmss",java.util.Locale.ROOT).format(new Date())+".zip");
+        startActivityForResult(save,EXPORT_SAVES);
     }
     private void openMenu(String section) {
         new PortMenu(this,false,new PortMenu.Actions(){
@@ -85,6 +92,8 @@ public final class MainActivity extends Activity {
             public void installPkg(){withAccess(()->pickFile(PICK_PKG));}
             public void importDriver(){pickFile(PICK_DRIVER);}public void selectDriver(){MainActivity.this.selectDriver();}
             public void editControls(){}public void resetControls(){}public void exitGame(){}
+            public void importSaves(){pickFile(IMPORT_SAVES);}
+            public void exportSaves(){MainActivity.this.exportSaves();}
             public void changed(){refresh();}
         }).open(section);
     }
@@ -229,6 +238,20 @@ public final class MainActivity extends Activity {
         try{getContentResolver().takePersistableUriPermission(uri,data.getFlags()&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION));}catch(Exception ignored){}
         try{
             if(code==SAVE_LOGS){task("Exportando logs…",()->{java.io.OutputStream out=getContentResolver().openOutputStream(uri,"w");if(out==null)throw new IOException("Não foi possível abrir o destino");RunLog.export(this,out);update("Logs ZIP salvos.");});}
+            else if(code==EXPORT_SAVES){task("Exportando saves…",()->{
+                try(OutputStream out=getContentResolver().openOutputStream(uri,"w")){
+                    if(out==null)throw new IOException("Não foi possível abrir o destino");
+                    SaveArchive.exportZip(saveUser(),out);
+                }update("Saves exportados com sucesso.");
+            });}
+            else if(code==IMPORT_SAVES){task("Importando saves…",()->{
+                try(InputStream in=getContentResolver().openInputStream(uri)){
+                    if(in==null)throw new IOException("Não foi possível abrir o ZIP");
+                    File backup=SaveArchive.importZip(saveUser(),in);
+                    RunLog.write(this,"Saves importados; backup anterior: "+(backup==null?"sem saves anteriores":backup.getAbsolutePath()));
+                    update(backup==null?"Saves importados com sucesso.":"Saves importados. Os anteriores foram preservados em backup.");
+                }
+            });}
             else if(code==PICK_GAME)chooseGame(local(uri,true));
             else if(code==PICK_DRIVER)importDriver(uri);
             else if(code==PICK_PKG){pendingPkg=uri;new AlertDialog.Builder(this).setTitle("Destino do jogo").setMessage("Escolha onde criar a pasta CUSA00552. O PKG será extraído diretamente para ela; depois o app prepara o jogo automaticamente.").setPositiveButton("Escolher destino",(d,w)->pickFolder(PICK_DEST)).setNegativeButton("Cancelar",(d,w)->pendingPkg=null).show();}

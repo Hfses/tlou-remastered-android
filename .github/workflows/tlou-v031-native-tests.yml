@@ -1,0 +1,43 @@
+name: TLOU v0.31 optional paths and save archives
+on:
+  push:
+    branches: [android-bionic-stage1]
+    paths: ['android-launcher/**', 'gow3_pc/**', '.github/workflows/tlou-v031-native-tests.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  correctness:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Save archive round-trip and running-game exclusion
+        run: bash android/bionic/test_fps.sh
+      - name: Shader specialization prerequisites
+        run: sudo apt-get update -qq && sudo apt-get install -qq -y libboost-dev libspdlog-dev libfmt-dev libvulkan-dev
+      - name: Exact optional paths, memory safety and cross-thread copy completion
+        run: |
+          set -euo pipefail
+          mkdir -p out/v031
+          cc -std=c11 -O2 -Wall -Wextra -Werror -pthread gow3_pc/tests/test_memory_walk_cost.c -o out/v031/memory
+          out/v031/memory --correctness-only
+          cc -std=c11 -O1 -g -pthread -fsanitize=address,undefined -fno-omit-frame-pointer gow3_pc/tests/test_memory_walk_cost.c -o out/v031/memory-san
+          out/v031/memory-san --correctness-only
+          for test in ring_binding_cursor tlou_host_copy_batch draw_pipe_busy_sample; do
+            g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I gow3_pc/gpu/shim -I gow3_pc/gpu/shadps4 "gow3_pc/tests/test_${test}.cpp" -o "out/v031/$test"
+            "out/v031/$test" --correctness-only
+          done
+          python3 gow3_pc/tests/extract_host_copy_chunks.py out/v031
+          g++ -std=c++20 -O1 -g -pthread -fsanitize=address,undefined -fno-omit-frame-pointer -I out/v031 -I gow3_pc/gpu/shim -I gow3_pc/gpu/shadps4 gow3_pc/tests/test_tlou_threaded_record_chunk.cpp -o out/v031/chunks-san
+          out/v031/chunks-san --correctness-only
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable -Wno-reorder -Wno-class-memaccess -pthread -I gow3_pc/tests/native-shim -I gow3_pc/gpu/shadps4 -I gow3_pc/gpu/shim gow3_pc/tests/test_tlou_compute_perm_memo.cpp -o out/v031/memo
+          out/v031/memo --correctness-only
