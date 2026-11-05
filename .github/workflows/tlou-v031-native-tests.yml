@@ -44,9 +44,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out/v031
-          python3 gow3_pc/tests/extract_host_copy_chunks.py out/v031
-          g++ -std=c++20 -O1 -g -pthread -fsanitize=address,undefined -fno-omit-frame-pointer -I out/v031 -I gow3_pc/gpu/shim -I gow3_pc/gpu/shadps4 gow3_pc/tests/test_tlou_threaded_record_chunk.cpp -o out/v031/chunks-san
-          out/v031/chunks-san --correctness-only
+          python3 gow3_pc/tests/extract_host_copy_chunks.py out/v031 > out/v031/chunks-extract.txt 2>&1
+          g++ -std=c++20 -O1 -g -pthread -fsanitize=address,undefined -fno-omit-frame-pointer -I out/v031 -I gow3_pc/gpu/shim -I gow3_pc/gpu/shadps4 gow3_pc/tests/test_tlou_threaded_record_chunk.cpp -o out/v031/chunks-san > out/v031/chunks-compile.txt 2>&1
+          out/v031/chunks-san --correctness-only > out/v031/chunks-run.txt 2>&1
+      - name: Preserve copy diagnostics even when the job fails
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: v031-copy-diagnostics-${{ matrix.runner }}
+          path: out/v031/*.txt
+          if-no-files-found: warn
       - name: Shader specialization prerequisites
         if: ${{ !cancelled() }}
         timeout-minutes: 5
