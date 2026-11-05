@@ -19,6 +19,8 @@ import java.util.Locale;
 final class BuiltinDrivers {
     private static final String ASSET="drivers/turnip-v27-r1-a6xx-a7xx.zip";
     private static final String SHA="07938ef843a73dd47ebb88ba9c2d3bca011667bd2b657e3b4a75d9ba8ed591a0";
+    private static final String ASSET_8XX="drivers/turnip-gen8-v38-patched-a8xx.zip";
+    private static final String SHA_8XX="2bbb279a3da7680503a54a51a3051c7a4302c8fb2a089f8b183b4b5d6ba9ac17";
 
     private BuiltinDrivers() {}
 
@@ -68,23 +70,28 @@ final class BuiltinDrivers {
         try { gpu=renderer(); }
         catch(Throwable e) { return; } // unknown GPU: keep system default
         String name=gpu.toLowerCase(Locale.ROOT);
-        if(!name.contains("adreno") || !name.matches(".*\\b[67][0-9]{2}\\b.*"))
-            return; // 8xx, Mali, unknown: never install an incompatible Turnip.
+        if(!name.contains("adreno"))return;
+        boolean a8=name.matches(".*\\b8[0-9]{2}\\b.*");
+        boolean a67=name.matches(".*\\b[67][0-9]{2}\\b.*");
+        if(!a8 && !a67)return;
+        String asset=a8?ASSET_8XX:ASSET;
+        String digest=a8?SHA_8XX:SHA;
+        String display=a8?"Turnip Gen8 V38 Patched · Adreno 8xx":"Turnip v27.0.0-R1 · Adreno 6xx/7xx";
         File drivers=new File(context.getFilesDir(),"drivers");
-        try(InputStream archive=context.getAssets().open(ASSET)){
+        try(InputStream archive=context.getAssets().open(asset)){
             DriverArchive.Installed installed=DriverArchive.install(
                 drivers,archive,Build.VERSION.SDK_INT,file->{
                     JSONObject meta=new JSONObject(new String(Files.readAllBytes(file.toPath()),
                         java.nio.charset.StandardCharsets.UTF_8));
                     return new DriverArchive.Metadata(
-                        meta.optString("name","Turnip v27.0.0-R1"),
+                        meta.optString("name",display),
                         meta.optString("libraryName","libvulkan_freedreno.so"),
                         meta.optInt("minApi",26));
                 });
-            if(!SHA.equals(installed.id))
+            if(!digest.equals(installed.id))
                 throw new IllegalStateException("Turnip R1 archive digest mismatch");
             p.edit().putString("driver_path",installed.library.getAbsolutePath())
-                .putString("driver_name","Turnip v27.0.0-R1 · Adreno 6xx/7xx").apply();
+                .putString("driver_name",display).apply();
         } catch(java.io.FileNotFoundException missingAsset) {
             // Developer checkout without staged APK assets: system driver, never
             // secretly pick an incompatible one.
