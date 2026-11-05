@@ -5833,15 +5833,39 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                         !TlouEopReadbackBinding(stage.pgm_hash, binding.buffer) &&
                         TlouAndroidPhysicsShape(binding.buffer, vsharp.stride,
                                                 vsharp.num_records, size);
-                    if (physics_shape_fallback) {
-                        static std::atomic<u32> samples{0};
-                        if (samples.fetch_add(1, std::memory_order_relaxed) < 8) {
-                            std::printf("TLOU Android physics-shaped EOP result: shader %#llx slot %u size %llu stride %u records %u\n",
-                                        static_cast<unsigned long long>(stage.pgm_hash),
-                                        binding.buffer, static_cast<unsigned long long>(size),
-                                        vsharp.stride, vsharp.num_records);
+                    // One bounded diagnostic window for the Android game: the PC
+                    // hash pair may differ from the CUSA00552 01.00 guest shader.
+                    // Record candidate compute outputs even when the known hashes
+                    // and the exact 48-byte record shape do NOT match. No GPU
+                    // copies, waits or extra barriers are introduced here.
+#ifdef __ANDROID__
+                    static const bool trace_physics_coverage = [] {
+                        const char* env = std::getenv("TLOU_PHYSICS_COVERAGE");
+                        return env && env[0] == '1';
+                    }();
+                    if (trace_physics_coverage && compute_stage &&
+                        (binding.buffer == 5 || binding.buffer == 6) &&
+                        size && size <= 64_KB &&
+                        (vsharp.stride == 48 || (size >= 4096 && size <= 8192))) {
+                        const u64 identity = (u64(stage.pgm_hash) << 32) |
+                                             (u64(binding.buffer) << 24) |
+                                             (u64(vsharp.stride & 0xff) << 16) |
+                                             (u64(vsharp.num_records) & 0xffff);
+                        static std::array<std::atomic<u64>, 64> observed{};
+                        const u32 index = u32((identity * 0x9e3779b97f4a7c15ull) >> 58);
+                        if (observed[index].exchange(identity, std::memory_order_relaxed) != identity) {
+                            static std::atomic<u32> reported{0};
+                            if (reported.fetch_add(1, std::memory_order_relaxed) < 40) {
+                                std::printf("TLOU physics coverage: hash=%08llx slot=%u stride=%u records=%u bound=%llu pc=%u shape=%u\n",
+                                            static_cast<unsigned long long>(stage.pgm_hash),
+                                            binding.buffer, vsharp.stride, vsharp.num_records,
+                                            static_cast<unsigned long long>(size),
+                                            TlouEopReadbackBinding(stage.pgm_hash, binding.buffer),
+                                            physics_shape_fallback);
+                            }
                         }
                     }
+#endif
                     Gow3WatchRange::Note("storage", stage.pgm_hash, binding.buffer,
                                          vsharp.base_address, size);
                     VideoCore::NoteGpuWriter(vsharp.base_address, size, stage.pgm_hash);
