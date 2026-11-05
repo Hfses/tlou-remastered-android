@@ -50,7 +50,11 @@ public final class GameActivity extends Activity {
     private File logFile;
     private TextView status;
     private FrameLayout gameLayout;
-    private Button menuButton;
+    private PortMenu playerMenu;
+    private boolean editingControls;
+    private EdgeMenuGesture edgeMenu;
+    private File runtimePidFile;
+    private GameChoiceBridge gameChoices;
     private String prepared;
     private volatile boolean started;
     private boolean resumed;
@@ -91,7 +95,9 @@ public final class GameActivity extends Activity {
         File input=new File(stateDir,"controller.state");
         RunLog.write(this,"Inicializando controle e áudio");
         pad=new PadBridge(input);
-        hudTelemetry=new HudTelemetry(this);
+        runtimePidFile=new File(stateDir,"runtime.pid");
+        hudTelemetry=new HudTelemetry(this,runtimePidFile);
+        edgeMenu=new EdgeMenuGesture(getResources().getDisplayMetrics().density);
         audio=new AudioBridge(new File(stateDir,"audio.fifo"));
         logFile=new File(stateDir,"runtime.log");
 
@@ -102,6 +108,9 @@ public final class GameActivity extends Activity {
         touch=new TouchControllerOverlay(this,pad,false);
         layout.addView(touch,pos(-1,-1,Gravity.CENTER));
         gameLayout=layout;
+        layout.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{
+            if(r-l!=or-ol || b-t!=ob-ot)placeHud();
+        });
         status=new TextView(this);status.setGravity(Gravity.LEFT);
         HudPresentation.style(status,PortSettings.prefs(this));
         status.setText(HudPresentation.text("full",0,Double.NaN,Double.NaN,true,true));
@@ -131,10 +140,6 @@ public final class GameActivity extends Activity {
             }
             return true;
         });
-        menuButton=new Button(this);menuButton.setText("☰");menuButton.setTextSize(20);menuButton.setTextColor(0xffdfe8d1);
-        menuButton.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x88202c24));menuButton.setContentDescription(TlouLanguage.t(this,"Menu do emulador"));
-        FrameLayout.LayoutParams menuPos=pos(dp(44),dp(44),Gravity.TOP|Gravity.RIGHT);menuPos.topMargin=dp(8);menuPos.rightMargin=dp(8);
-        menuButton.setOnClickListener(v->showMenu());layout.addView(menuButton,menuPos);
         setContentView(layout);
         // InsetsController is available only after a decor exists and is attached.
         layout.post(()->{immersive();applyLiveSettings();});
@@ -151,6 +156,8 @@ public final class GameActivity extends Activity {
             error("Não foi possível iniciar AHardwareBuffer: "+err);
             return;
         }
+        gameChoices=new GameChoiceBridge(this,stateDir,()->{if(playerMenu!=null)playerMenu.dismiss();if(editingControls)touch.finishEdit();touch.release();pad.reset();},pad::name);
+        gameChoices.start();
         Thread starter=new Thread(this::launch,"tlou-fex-launcher");
         starter.start();
         handler.postDelayed(this::refreshFps,500);
@@ -256,7 +263,7 @@ public final class GameActivity extends Activity {
                 args.add("--patches");
                 args.add(patches.getAbsolutePath());
             }
-            ProcessBuilder builder=new ProcessBuilder(args);
+            ProcessBuilder builder=new ProcessBuilder(RuntimeProcess.command(args,runtimePidFile));
             Map<String,String> env=builder.environment();
             File home=new File(state,"home"), temp=new File(state,"tmp"), config=new File(home,".fex-emu"), cache=new File(home,".cache/fex-emu");
             for(File directory:new File[]{home,temp,config,cache})
@@ -356,37 +363,17 @@ public final class GameActivity extends Activity {
             if(gameLayout==null || closing.get() || gameLayout.getWidth()<1 ||
                 gameLayout.getHeight()<1)return;
             SharedPreferences p=PortSettings.prefs(this);
-            // Keep the compact two-line HUD clear of the menu button.
-            int allowedWidth=Math.max(dp(160),gameLayout.getWidth()-dp(82));
+            android.graphics.Insets safe=android.graphics.Insets.NONE;
+            WindowInsets insets=gameLayout.getRootWindowInsets();
+            if(insets!=null)safe=insets.getInsets(WindowInsets.Type.displayCutout()|WindowInsets.Type.systemBars());
+            int margin=dp(8);
+            int availableWidth=Math.max(1,gameLayout.getWidth()-safe.left-safe.right);
+            int availableHeight=Math.max(1,gameLayout.getHeight()-safe.top-safe.bottom);
+            int allowedWidth=Math.max(1,availableWidth-2*margin);
             if(status.getMaxWidth()!=allowedWidth)status.setMaxWidth(allowedWidth);
-            int maxX=Math.max(0,gameLayout.getWidth()-status.getWidth());
-            int maxY=Math.max(0,gameLayout.getHeight()-status.getHeight());
-            int margin=dp(8), x=margin, y=margin;
-            String corner=p.getString("hud_corner","0");
-            switch(corner) {
-                case "1": x=maxX-margin; y=dp(64); break; // reserve top-right hamburger
-                case "2": x=margin; y=maxY-margin; break;
-                case "3": x=maxX-margin; y=maxY-margin; break;
-                case "4": x=maxX/2; y=margin; break; // top center
-                case "5": x=maxX/2; y=maxY/2; break; // center
-                case "6": x=maxX/2; y=maxY-margin; break; // bottom center
-                case "7": x=margin; y=maxY/2; break; // middle left
-                case "8": x=maxX-margin; y=maxY/2; break; // middle right
-                case "-1":
-                    x=Math.round(p.getFloat("hud_x",0)*maxX);
-                    y=Math.round(p.getFloat("hud_y",0)*maxY);
-                    break;
-                default: break; // top left: never overlaps top-right menu button
-            }
-            x=Math.max(0,Math.min(maxX,x));y=Math.max(0,Math.min(maxY,y));
-            // Keep every preset position clear of the menu.
-            // Reserve the button's rectangle for all non-custom preset placements.
-            if(!"-1".equals(corner) && menuButton!=null && menuButton.getWidth()>0 &&
-                x < menuButton.getRight()+margin &&
-                x+status.getWidth() > menuButton.getLeft()-margin &&
-                y < menuButton.getBottom()+margin &&
-                y+status.getHeight() > menuButton.getTop()-margin)
-                y=Math.min(maxY,menuButton.getBottom()+margin);
+            int[] anchor=HudPlacement.position(availableWidth,availableHeight,status.getWidth(),status.getHeight(),
+                margin,p.getString("hud_corner","0"),p.getFloat("hud_x",0),p.getFloat("hud_y",0));
+            int x=safe.left+anchor[0],y=safe.top+anchor[1];
             FrameLayout.LayoutParams lp=(FrameLayout.LayoutParams)status.getLayoutParams();
             if(lp.gravity== (Gravity.TOP|Gravity.LEFT) && lp.leftMargin==x &&
                 lp.topMargin==y && lp.rightMargin==0 && lp.bottomMargin==0)return;
@@ -398,16 +385,33 @@ public final class GameActivity extends Activity {
     private void showMenu() {
         if(closing.get())return;
         if(!started || touch==null || pad==null){stopAndExit();return;}
+        if(playerMenu!=null && playerMenu.isShowing())return;
         touch.release();pad.reset(); // release held inputs; keep the controller/provider connected
-        new PortMenu(this,true,new PortMenu.Actions(){
+        playerMenu=new PortMenu(this,true,new PortMenu.Actions(){
             public void logs(){showLog();}public void exportLogs(){}public void chooseGame(){}public void installPkg(){}
             public void importDriver(){}public void selectDriver(){}
-            public void editControls(){touch.setVisibility(View.VISIBLE);touch.setAlpha(.9f);menuButton.setVisibility(View.GONE);touch.edit(()->{menuButton.setVisibility(View.VISIBLE);applyLiveSettings();});}
+            public void editControls(){editingControls=true;touch.setVisibility(View.VISIBLE);touch.setAlpha(.9f);touch.edit(()->{editingControls=false;applyLiveSettings();});}
             public void resetControls(){touch.resetLayout();applyLiveSettings();}
             public void exitGame(){stopAndExit();}public void quitApp(){stopAndExit(true);}public void changed(){applyLiveSettings();}
-        }).open("home");
+        });
+        playerMenu.open("home");
     }
-    @Override public void onBackPressed(){showMenu();}
+    @Override public boolean dispatchTouchEvent(MotionEvent event) {
+        if(edgeMenu==null || !started || closing.get() || editingControls)
+            return super.dispatchTouchEvent(event);
+        int result=edgeMenu.onEvent(event);
+        if(result==EdgeMenuGesture.OPEN) {
+            MotionEvent cancel=MotionEvent.obtain(event);
+            cancel.setAction(MotionEvent.ACTION_CANCEL);
+            super.dispatchTouchEvent(cancel);cancel.recycle();
+            showMenu();return true;
+        }
+        if(result==EdgeMenuGesture.CONSUME)return true;
+        return super.dispatchTouchEvent(event);
+    }
+    @Override public void onBackPressed(){
+        if(editingControls && touch!=null)touch.finishEdit();else showMenu();
+    }
 
     private String tailLog() { return RunLog.tail(RunLog.runtime(this),12000); }
 
@@ -465,6 +469,8 @@ public final class GameActivity extends Activity {
 
     @Override protected void onDestroy() {
         stopAndExit();
+        if(playerMenu!=null)playerMenu.dismiss();
+        if(gameChoices!=null)gameChoices.close();
         if(hudTelemetry!=null)hudTelemetry.close();
         super.onDestroy();
     }

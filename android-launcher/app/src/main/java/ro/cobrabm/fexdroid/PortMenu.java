@@ -35,7 +35,7 @@ final class PortMenu {
 
     PortMenu(Activity activity,boolean inGame,Actions actions) {
         this.activity=activity;this.inGame=inGame;this.actions=actions;
-        if(!inGame)throw new IllegalArgumentException("O menu de três barras é exclusivo da GameActivity");
+        if(!inGame)throw new IllegalArgumentException("O menu do jogo é exclusivo da GameActivity");
         prefs=PortSettings.prefs(activity);
     }
     private int dp(int value) {
@@ -70,7 +70,7 @@ final class PortMenu {
             w.setBackgroundDrawableResource(android.R.color.transparent);
             w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
             WindowManager.LayoutParams lp=w.getAttributes();lp.dimAmount=.6f;
-            lp.gravity=Gravity.RIGHT;lp.width=Math.min(dp(390),
+            lp.gravity=Gravity.LEFT|Gravity.TOP;lp.width=Math.min(dp(390),
                 (int)(activity.getResources().getDisplayMetrics().widthPixels*.94));lp.height=-1;
             w.setAttributes(lp);
         }
@@ -79,6 +79,9 @@ final class PortMenu {
         if(w!=null)w.setLayout(Math.min(dp(390),
             (int)(activity.getResources().getDisplayMetrics().widthPixels*.94)),-1);
     }
+    boolean isShowing(){return dialog!=null && dialog.isShowing();}
+    void dismiss(){if(dialog!=null)dialog.dismiss();}
+    int drawerGravity(){return dialog.getWindow().getAttributes().gravity;}
     private void heading(String label) {
         TextView v=text(label,13,OLIVE);v.setTypeface(null,Typeface.BOLD);content.addView(v);
     }
@@ -198,8 +201,8 @@ final class PortMenu {
                     new String[]{"original","720","540","360"},"original");
                 screenMode();
                 choice("fps_limit","Limite de FPS",
-                    new String[]{"30 FPS","60 FPS","Sem limite"},
-                    new String[]{"30","60","0"},"60");
+                    new String[]{"30 FPS","60 FPS"},
+                    new String[]{"30","60"},"60");
                 toggle("vsync","VSync",true);
                 break;
             case "patches":

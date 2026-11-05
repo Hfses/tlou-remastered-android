@@ -23,15 +23,15 @@ import static org.junit.Assert.*;
 @Config(sdk=30, application=android.app.Application.class, qualifiers="mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public class PresentationTest {
-    @Test public void fullHudUsesTwoLinesAndOriginalReferenceColors() {
+    @Test public void fullHudUsesOneLineAndOriginalReferenceColors() {
         SpannableString text=HudPresentation.text("full",60,42,23,true,true);
-        assertEquals("FPS 60\nGPU 42% · CPU 23%",text.toString());
+        assertEquals("FPS 60 · GPU 42% · CPU 23%",text.toString());
         ForegroundColorSpan[] colors=text.getSpans(0,text.length(),ForegroundColorSpan.class);
         assertEquals(3,colors.length);
         assertEquals(0xff76ff03,colors[0].getForegroundColor());
         assertEquals(0xffe040fb,colors[1].getForegroundColor());
         assertEquals(0xff00e5ff,colors[2].getForegroundColor());
-        assertEquals("FPS 0\nGPU N/A · CPU N/A",HudPresentation.text("full",0,Double.NaN,Double.NaN,true,true).toString());
+        assertEquals("FPS 0 · GPU N/A · CPU N/A",HudPresentation.text("full",0,Double.NaN,Double.NaN,true,true).toString());
         assertEquals("FPS 60",HudPresentation.text("minimal",60,42,23,true,true).toString());
     }
     private String labels(View view) {
@@ -66,7 +66,8 @@ public class PresentationTest {
             Activity a=controller.get();TextView hud=new TextView(a);HudPresentation.style(hud,PortSettings.prefs(a));
             hud.setText(HudPresentation.text("full",60,42,23,true,true));
             hud.measure(View.MeasureSpec.makeMeasureSpec(411,View.MeasureSpec.AT_MOST),View.MeasureSpec.makeMeasureSpec(200,View.MeasureSpec.AT_MOST));
-            assertTrue(hud.getMeasuredWidth()<250);assertTrue(hud.getMeasuredHeight()<80);
+            assertTrue(hud.getMeasuredWidth()<300);assertTrue(hud.getMeasuredHeight()<45);
+            assertEquals(1,hud.getMaxLines());
             render(hud,hud.getMeasuredWidth(),"hud-reference.png");
         }
     }

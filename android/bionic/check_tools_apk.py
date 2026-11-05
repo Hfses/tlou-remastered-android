@@ -35,6 +35,9 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
             needed = set(re.findall(r'NEEDED.*?\[(.*?)\]', dynamic))
             if needed - allowed:
                 raise ValueError(f'{name} needs unpackaged or non-Android libraries: {needed-allowed}')
+        gpu_symbols=subprocess.check_output(['readelf','--dyn-syms','--wide',str(root/'libgow3gpu.so')],text=True)
+        if any(name not in gpu_symbols for name in ('gow3gpu_save_choice_begin','gow3gpu_save_choice_cancel')):
+            raise ValueError('Packaged GPU lacks structured Android save selection')
         interp = subprocess.check_output(['readelf', '-lW', str(root/'gow3-probe')], text=True)
         if '/system/bin/linker64' not in interp:
             raise ValueError('Runtime is not an Android executable')

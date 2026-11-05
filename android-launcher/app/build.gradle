@@ -10,7 +10,7 @@ android {
         // Android 10/11 allow execution of extracted native payload in app-private files
         // for legacy target SDK. Keep separate from SDK version for compilation.
         targetSdk 28
-        versionCode 36
+        versionCode 37
         versionName '0.1'
     }
     buildTypes {

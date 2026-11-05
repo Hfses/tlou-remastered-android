@@ -122,7 +122,7 @@ final class TouchControllerOverlay extends View {
     }
     void release() { controls.clear(); positions.clear(); publish(); }
     void edit(Runnable done) { release(); editing=true; onEditDone=done; invalidate(); }
-    private void finishEdit() {
+    void finishEdit() {
         editPointer=-1; dragged=null; editing=false; invalidate();
         if (onEditDone!=null) onEditDone.run();
         onEditDone=null;

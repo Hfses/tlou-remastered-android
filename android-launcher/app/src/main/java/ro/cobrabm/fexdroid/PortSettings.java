@@ -26,6 +26,8 @@ final class PortSettings {
             "prep_pool","cpu_trims","prefetch_pipelines","parallel_pipelines",
             "prep_workers","frames_ahead","descriptor_bulk","readback","sotc_precise_narrow",
             "compute_wait_fast","relaxed_skinning_fp"}) edit.remove(key);
+        String limit=prefs(context).getString("fps_limit","60");
+        if(!"30".equals(limit) && !"60".equals(limit))edit.putString("fps_limit","60");
         edit.apply();
     }
 
@@ -84,7 +86,7 @@ final class PortSettings {
 
         // Only presentation controls remain user-adjustable.
         env.put("GOW3_VSYNC",p.getBoolean("vsync",true)?"1":"0");
-        env.put("GOW3_FPS_LIMIT",p.getString("fps_limit","60"));
+        env.put("GOW3_FPS_LIMIT",fpsLimit(context));
     }
 
     static String experimentReport(Context context,Map<String,String> env) {
@@ -94,11 +96,14 @@ final class PortSettings {
         return result.toString();
     }
 
+    static String fpsLimit(Context context) {
+        return "30".equals(prefs(context).getString("fps_limit","60"))?"30":"60";
+    }
     static String summary(Context context) {
         SharedPreferences p=prefs(context);
-        String r=p.getString("resolution","original"), limit=p.getString("fps_limit","60");
+        String r=p.getString("resolution","original"), limit=fpsLimit(context);
         String res=r.equals("original")?"Original":r+"p";
-        return res+"  ·  "+(limit.equals("0")?"FPS livre":limit+" FPS")+"  ·  "+
+        return res+"  ·  "+(limit+" FPS")+"  ·  "+
             (p.getBoolean("vsync",true)?"VSync ON":"VSync OFF");
     }
 }

@@ -237,8 +237,8 @@ public final class MainActivity extends Activity {
             LinearLayout video=card(root,"VÍDEO E TELA");
             screenChoice(video);
             choice(video,"fps_limit","Limite de FPS",
-                new String[]{"30 FPS","60 FPS","Sem limite"},
-                new String[]{"30","60","0"},"60");
+                new String[]{"30 FPS","60 FPS"},
+                new String[]{"30","60"},"60");
             toggleSetting(video,"vsync","VSync",true);
             LinearLayout drivers=card(root,"DRIVER VULKAN");
             driverInfo=text("",12,MUTED);drivers.addView(driverInfo);
@@ -266,7 +266,7 @@ public final class MainActivity extends Activity {
             choice(controls,"control_color","Cor dos controles",
                 new String[]{"Verde oliva","Âmbar","Branco","Vermelho","Azul"},
                 new String[]{"olive","amber","white","red","blue"},"olive");
-            controls.addView(text("Editar posição dos botões: abra o menu ☰ durante o jogo.",12,MUTED));
+            controls.addView(text("Editar posição dos botões: deslize da borda esquerda para abrir o menu.",12,MUTED));
             toggleSetting(app,"launch_direct","Entrar direto no jogo",false);
             LinearLayout data=card(root,"SAVES");
             add(data,"Exportar saves ZIP",false,this::exportSaves);

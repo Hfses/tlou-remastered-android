@@ -16,6 +16,11 @@ import java.util.Locale;
  */
 final class HudTelemetry {
     private final long ticksPerSecond;
+    private final File pidFile;
+    private final Context context;
+    private String cpuSourceState="";
+    private int sampledPid=-1;
+    private final java.util.concurrent.atomic.AtomicBoolean resetPending=new java.util.concurrent.atomic.AtomicBoolean();
     private long previousTicks=-1L, previousAt;
     private volatile double cpuPercent=Double.NaN;
     private volatile double memoryGiB=Double.NaN, deviceGiB=Double.NaN;
@@ -24,7 +29,9 @@ final class HudTelemetry {
     private int gpuRediscover;
 
 
-    HudTelemetry(Context context) {
+    HudTelemetry(Context context) {this(context,null);}
+    HudTelemetry(Context context,File pidFile) {
+        this.pidFile=pidFile;this.context=context.getApplicationContext();
         long hz=100;
         try { hz=Os.sysconf(OsConstants._SC_CLK_TCK); }catch(Throwable ignored){}
         ticksPerSecond=hz>0?hz:100;
@@ -50,6 +57,8 @@ final class HudTelemetry {
      */
     int runtimePid(Process process) {
         if(process==null || !process.isAlive())return -1;
+        int published=RuntimeProcess.readPid(pidFile);
+        if(published>0){runtimePid=published;return published;}
         if(runtimePid>0 && new File("/proc/"+runtimePid+"/stat").canRead())return runtimePid;
         try {
             java.lang.reflect.Method m=process.getClass().getMethod("pid");
@@ -93,7 +102,8 @@ final class HudTelemetry {
         }
     }
 
-    synchronized void sample(int pid,long nowNanos) {
+    void sample(int pid,long nowNanos) {
+        if(resetPending.getAndSet(false) || sampledPid!=pid){previousTicks=-1;previousAt=0;sampledPid=pid;}
         sampleGpu();
         if(pid<=0){cpuPercent=Double.NaN;memoryGiB=Double.NaN;return;}
         try {
@@ -102,7 +112,8 @@ final class HudTelemetry {
                 cpuPercent=(ticks-previousTicks)*100.0*1_000_000_000.0/
                     (ticksPerSecond*(nowNanos-previousAt)); // percent of one CPU core
             previousTicks=ticks;previousAt=nowNanos;
-        }catch(Exception e){cpuPercent=Double.NaN;}
+            cpuSource("active:"+pid,"HUD CPU: processo "+pid+", contadores do kernel, "+ticksPerSecond+" ticks/s");
+        }catch(Exception e){cpuPercent=Double.NaN;previousTicks=-1;previousAt=0;cpuSource("unavailable:"+pid,"HUD CPU indisponível: "+e);}
         try(BufferedReader reader=new BufferedReader(new FileReader("/proc/"+pid+"/status"))) {
             String line;
             while((line=reader.readLine())!=null)if(line.startsWith("VmRSS:")) {
@@ -111,6 +122,9 @@ final class HudTelemetry {
                 break;
             }
         }catch(Exception e){memoryGiB=Double.NaN;}
+    }
+    private void cpuSource(String state,String message){
+        if(!state.equals(cpuSourceState)){cpuSourceState=state;RunLog.write(context,message);}
     }
     private void sampleGpu() {
         if(gpuPaths==null || (gpuPaths.length==0 && ++gpuRediscover>=5)) {
@@ -132,5 +146,5 @@ final class HudTelemetry {
     double ramGiB(){return memoryGiB;}
     double totalRamGiB(){return deviceGiB;}
 
-    synchronized void reset(){previousTicks=-1L;previousAt=0;cpuPercent=Double.NaN;}
+    void reset(){resetPending.set(true);cpuPercent=Double.NaN;}
 }

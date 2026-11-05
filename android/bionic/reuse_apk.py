@@ -6,8 +6,8 @@ import subprocess
 import sys
 import zipfile
 
-BASE = "f8b8ff2d07cdb106b71253a8e14d219ff99f7934"
-APK_SHA = "a6e2783efc0eaa01ab9f91c35c9779488c21353dcbb16cc6c7cf852fdef07bd4"
+BASE = "bbad8cb42cea3fd79a995c89b7a9004b8ca75821"
+APK_SHA = "9b240d856718eaf13c12e3742e80018afa9a74a6897b1498390276e9a1f4dac0"
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGING_ONLY = {"android/bionic/reuse_apk.py", "android/tests/test_launcher_reuse.py"}
 

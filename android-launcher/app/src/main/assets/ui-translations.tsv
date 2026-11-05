@@ -26,7 +26,6 @@ Tela	Display	Pantalla	Écran	Bildschirm	Schermo	Ekran	Ekran	Экран	स्क
 Ajustar à tela (proporção original)	Fit screen (original aspect ratio)	Ajustar a pantalla (proporción original)	Ajuster à l’écran (format d’origine)	An Bildschirm anpassen (Originalformat)	Adatta allo schermo (proporzioni originali)	Ekrana sığdır (özgün en-boy oranı)	Dopasuj do ekranu (oryginalne proporcje)	Вписать в экран (исходные пропорции)	स्क्रीन में फ़िट करें (मूल अनुपात)
 Preencher tela (sem barras)	Fill screen (no bars)	Llenar pantalla (sin barras)	Remplir l’écran (sans bandes)	Bildschirm füllen (ohne Balken)	Riempi schermo (senza bande)	Ekranı doldur (siyah kenarlıksız)	Wypełnij ekran (bez pasów)	Заполнить экран (без полос)	स्क्रीन भरें (बिना पट्टियों के)
 Limite de FPS	FPS limit	Límite de FPS	Limite d’IPS	FPS-Limit	Limite FPS	FPS sınırı	Limit FPS	Ограничение FPS	FPS सीमा
-Sem limite	Unlimited	Sin límite	Sans limite	Unbegrenzt	Illimitato	Sınırsız	Bez limitu	Без ограничений	कोई सीमा नहीं
 PATCHES	PATCHES	PARCHES	CORRECTIFS	PATCHES	PATCH	YAMALAR	PATCHE	ПАТЧИ	पैच
 Patches validados para o eboot reconhecido. Reinicie para aplicar.	Patches verified for the recognized eboot. Restart to apply.	Parches verificados para el eboot reconocido. Reinicia para aplicarlos.	Correctifs vérifiés pour l’eboot reconnu. Redémarrez pour appliquer.	Patches für die erkannte eboot-Datei geprüft. Zum Anwenden neu starten.	Patch verificati per l’eboot riconosciuto. Riavvia per applicarli.	Tanınan eboot için yamalar doğrulandı. Uygulamak için yeniden başlatın.	Patche sprawdzono dla rozpoznanego eboot. Uruchom grę ponownie, aby zastosować.	Патчи проверены для распознанного eboot. Перезапустите игру для применения.	पहचाने गए eboot के लिए पैच जाँचे गए हैं। लागू करने के लिए पुनः शुरू करें।
 Desativar SSAO	Disable SSAO	Desactivar SSAO	Désactiver SSAO	SSAO deaktivieren	Disattiva SSAO	SSAO'yu kapat	Wyłącz SSAO	Отключить SSAO	SSAO बंद करें
@@ -102,7 +101,7 @@ Configurar The Last of Us	Set up The Last of Us	Configurar The Last of Us	Config
 Instalar PKG	Install PKG	Instalar PKG	Installer PKG	PKG installieren	Installa PKG	PKG yükle	Zainstaluj PKG	Установить PKG	PKG इंस्टॉल करें
 Selecionar pasta do jogo	Select game folder	Seleccionar carpeta del juego	Choisir le dossier du jeu	Spielordner auswählen	Seleziona cartella del gioco	Oyun klasörünü seç	Wybierz folder gry	Выбрать папку игры	गेम फ़ोल्डर चुनें
 Agora não	Not now	Ahora no	Pas maintenant	Nicht jetzt	Non ora	Şimdi değil	Nie teraz	Не сейчас	अभी नहीं
-Editar posição dos botões: abra o menu ☰ durante o jogo.	Edit button positions: open ☰ during gameplay.	Edita los botones: abre ☰ durante el juego.	Modifier les boutons : ouvrir ☰ en jeu.	Tasten verschieben: ☰ im Spiel öffnen.	Modifica pulsanti: apri ☰ in gioco.	Tuşları düzenle: oyunda ☰ menüsünü aç.	Edytuj przyciski: otwórz ☰ podczas gry.	Изменить кнопки: откройте ☰ во время игры.	बटन बदलें: खेलते समय ☰ खोलें।
+Editar posição dos botões: deslize da borda esquerda para abrir o menu.	Edit button positions: swipe right from the left edge to open the menu.	Editar botones: desliza desde el borde izquierdo para abrir el menú.	Modifier les boutons : balayez depuis le bord gauche pour ouvrir le menu.	Tasten bearbeiten: Zum Öffnen des Menüs vom linken Rand nach rechts wischen.	Modifica i pulsanti: scorri dal bordo sinistro per aprire il menu.	Düğmeleri düzenle: menüyü açmak için sol kenardan sağa kaydırın.	Edycja przycisków: przesuń od lewej krawędzi, aby otworzyć menu.	Расположение кнопок: проведите от левого края вправо, чтобы открыть меню.	बटन बदलने के लिए: मेनू खोलने हेतु बाएँ किनारे से दाईं ओर स्वाइप करें।
 Desenvolvimento: Erick Mendes / Daedalus Android	Development: Erick Mendes / Daedalus Android	Desarrollo: Erick Mendes / Daedalus Android	Développement : Erick Mendes / Daedalus Android	Entwicklung: Erick Mendes / Daedalus Android	Sviluppo: Erick Mendes / Daedalus Android	Geliştirme: Erick Mendes / Daedalus Android	Twórca: Erick Mendes / Daedalus Android	Разработка: Erick Mendes / Daedalus Android	डेवलपर: Erick Mendes / Daedalus Android
 Código-fonte no GitHub	Source code on GitHub	Código fuente en GitHub	Code source sur GitHub	Quellcode auf GitHub	Codice sorgente su GitHub	GitHub kaynak kodu	Kod źródłowy na GitHub	Исходный код на GitHub	GitHub पर स्रोत कोड
 FEX-Emu no GitHub	FEX-Emu on GitHub	FEX-Emu en GitHub	FEX-Emu sur GitHub	FEX-Emu auf GitHub	FEX-Emu su GitHub	GitHub'da FEX-Emu	FEX-Emu na GitHub	FEX-Emu на GitHub	GitHub पर FEX-Emu
@@ -159,3 +158,14 @@ REGISTROS	LOGS	REGISTROS	JOURNAUX	PROTOKOLLE	REGISTRI	GÜNLÜKLER	DZIENNIKI	ЖУ
 Abrir	Open	Abrir	Ouvrir	Öffnen	Apri	Aç	Otwórz	Открыть	खोलें
 Completa (FPS / GPU / CPU)	Full (FPS / GPU / CPU)	Completa (FPS / GPU / CPU)	Complète (FPS / GPU / CPU)	Vollständig (FPS / GPU / CPU)	Completa (FPS / GPU / CPU)	Tam (FPS / GPU / CPU)	Pełny (FPS / GPU / CPU)	Полный (FPS / GPU / CPU)	पूर्ण (FPS / GPU / CPU)
 Uso da GPU	GPU usage	Uso de GPU	Utilisation du GPU	GPU-Auslastung	Utilizzo GPU	GPU kullanımı	Użycie GPU	Загрузка GPU	GPU उपयोग
+Carregar jogo	Load game	Cargar partida	Charger une partie	Spiel laden	Carica partita	Oyunu yükle	Wczytaj grę	Загрузить игру	गेम लोड करें
+Salvar jogo	Save game	Guardar partida	Sauvegarder la partie	Spiel speichern	Salva partita	Oyunu kaydet	Zapisz grę	Сохранить игру	गेम सेव करें
+Excluir save	Delete save	Eliminar partida guardada	Supprimer une sauvegarde	Spielstand löschen	Elimina salvataggio	Kaydı sil	Usuń zapis	Удалить сохранение	सेव हटाएँ
+Novo save	New save	Nueva partida guardada	Nouvelle sauvegarde	Neuer Spielstand	Nuovo salvataggio	Yeni kayıt	Nowy zapis	Новое сохранение	नया सेव
+Salvamentos	Saves	Partidas guardadas	Sauvegardes	Spielstände	Salvataggi	Kayıtlar	Zapisy	Сохранения	सेव
+Sem miniatura	No thumbnail	Sin miniatura	Sans miniature	Kein Vorschaubild	Nessuna anteprima	Önizleme yok	Brak miniatury	Нет миниатюры	कोई थंबनेल नहीं
+Data indisponível	Date unavailable	Fecha no disponible	Date indisponible	Datum nicht verfügbar	Data non disponibile	Tarih mevcut değil	Data niedostępna	Дата недоступна	तारीख उपलब्ध नहीं
+Carregar	Load	Cargar	Charger	Laden	Carica	Yükle	Wczytaj	Загрузить	लोड करें
+Salvar	Save	Guardar	Sauvegarder	Speichern	Salva	Kaydet	Zapisz	Сохранить	सेव करें
+Excluir	Delete	Eliminar	Supprimer	Löschen	Elimina	Sil	Usuń	Удалить	हटाएँ
+Slot	Slot	Ranura	Emplacement	Speicherplatz	Slot	Yuva	Miejsce	Ячейка	स्लॉट
