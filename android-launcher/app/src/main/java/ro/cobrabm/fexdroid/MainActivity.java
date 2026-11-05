@@ -259,8 +259,16 @@ public final class MainActivity extends Activity {
                 new String[]{"full","compact","minimal"},"full");
             choice(controls,"hud_corner","Posição do HUD",
                 new String[]{"Superior esquerdo","Superior direito","Inferior esquerdo",
-                    "Inferior direito","Personalizada (arrastar)"},
-                new String[]{"0","1","2","3","-1"},"0");
+                    "Inferior direito","Superior central","Centro da tela",
+                    "Inferior central","Central esquerdo","Central direito",
+                    "Personalizada (arrastar)"},
+                new String[]{"0","1","2","3","4","5","6","7","8","-1"},"0");
+            toggleSetting(controls,"hud_frametime","Tempo de frame (ms)",true);
+            toggleSetting(controls,"hud_gpu","Nome da GPU",true);
+            toggleSetting(controls,"hud_cpu","Uso da CPU (jogo)",true);
+            toggleSetting(controls,"hud_ram","RAM utilizada pelo jogo",true);
+            toggleSetting(controls,"hud_minmax","FPS mínimo e máximo",true);
+            toggleSetting(controls,"hud_resolution","Resolução",false);
             toggleSetting(controls,"touch_visible","Controles na tela",true);
             choice(controls,"control_color","Cor dos controles",
                 new String[]{"Verde oliva","Âmbar","Branco","Vermelho","Azul"},
