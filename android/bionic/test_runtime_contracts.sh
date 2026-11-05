@@ -51,6 +51,12 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_inline_copy_rec
 
 # Producer-tick and late CPU-write safety gates for temporal SRT downloads.
 g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_hot_srt_readback.cpp -o "$test_dir/tlou-hot-srt"
+
+# Check Android's narrow fallback for TLOU 01.00 physics result layouts.
+# The full APK build must fail if this changes or accidentally matches skinning.
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+  gow3_pc/tests/test_tlou_physics_readback.cpp -o "$test_dir/tlou-physics-readback"
+"$test_dir/tlou-physics-readback"
 "$test_dir/tlou-hot-srt"
 
 # Distinguish fewer wait API calls from actual modeled producer stalls.
