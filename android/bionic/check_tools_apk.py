@@ -39,9 +39,26 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
         if '/system/bin/linker64' not in interp:
             raise ValueError('Runtime is not an Android executable')
         symbols = subprocess.check_output(['readelf', '--dyn-syms', '--wide', str(root/'libgow3present.so')], text=True)
-        for method in ('nativeStart', 'nativeSetSurface', 'nativeFrames', 'nativeSetFullscreen', 'nativeShutdown'):
+        for method in ('nativeStart', 'nativeSetSurface', 'nativeFrames', 'nativeSetFullscreen', 'nativeSetAdrenoTurbo', 'nativeShutdown'):
             if 'Java_ro_cobrabm_fexdroid_Gow3Present_'+method not in symbols:
                 raise ValueError(f'Packaged presenter lacks JNI {method}')
+    # The v0.1 build must ship BOTH pinned Adreno generations plus localized
+    # launcher resources; a successful Java compile alone is not enough.
+    import hashlib
+    drivers = {
+        'assets/drivers/turnip-v27-r1-a6xx-a7xx.zip':
+            '07938ef843a73dd47ebb88ba9c2d3bca011667bd2b657e3b4a75d9ba8ed591a0',
+        'assets/drivers/turnip-gen8-v38-patched-a8xx.zip':
+            '2bbb279a3da7680503a54a51a3051c7a4302c8fb2a089f8b183b4b5d6ba9ac17',
+    }
+    for name, expected in drivers.items():
+        data = apk.read(name)
+        if hashlib.sha256(data).hexdigest() != expected:
+            raise ValueError(f'Incorrect driver digest: {name}')
+    ui_rows = apk.read('assets/ui-translations.tsv').decode('utf-8').splitlines()
+    ui_rows = [line for line in ui_rows if line and not line.startswith('#')]
+    if not ui_rows or any(len(line.split('\\t')) != 10 for line in ui_rows):
+        raise ValueError('Missing or malformed 10-language launcher translation table')
     arm64(apk.read('lib/arm64-v8a/libpython3.13.so'), 'libpython')
     with zipfile.ZipFile(io.BytesIO(apk.read('assets/tools.zip'))) as tools:
         for name in ('python/bin/python3.13', 'bin/orbis-pkg-util'):
