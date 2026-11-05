@@ -71,9 +71,10 @@ void ReportCpuPhases(const char* role,const std::array<const char*,N>& names,
                 "cpu-clock-reads={} sampled-mean-us",role,double(wall_ns)/1e9,
                 stats.calls,stats.samples,stats.dropped,stats.cpu_reads);
     for(std::size_t p=0;p<N;++p)
-        line+=fmt::format(" {}={:.3f}",names[p],
+        if(names[p])line+=fmt::format(" {}={:.3f}",names[p],
             stats.samples?double(stats.cpu_ns[p])/stats.samples/1000.0:0.0);
     std::printf("%s (thread CPU only; sampled, excludes waits)\n",line.c_str());
+    std::fflush(stdout);
 }
 using ResourceCpuSample=Detail::CpuPhaseSampler<6>::Sample;
 using ResourceCpuScope=Detail::CpuSampleBinding<ResourceCpuSample>;
@@ -2180,7 +2181,7 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* pre
     RENDERER_TRACE;
     static thread_local Detail::CpuPhaseSampler<3> cpu_sampler{CpuPhaseSamplingEnabled()};
     auto cpu_sample=cpu_sampler.Begin([](const auto& stats,u64 wall_ns) {
-        constexpr std::array<const char*,3> names{"entry","pipeline","draw-packet"};
+        constexpr std::array<const char*,3> names{"entry","pipeline","submit-draw"};
         ReportCpuPhases<3>("command-draw",names,stats,wall_ns);
     });
     Gow3Stats::draws.fetch_add(1, std::memory_order_relaxed);
@@ -2241,8 +2242,8 @@ void Rasterizer::Draw(bool is_indexed, u32 index_offset, const PreparedDraw* pre
         }
         return;
     }
+    cpu_sample.Phase(2);
     if (pipelined && FilterDrawPasses()) {
-        cpu_sample.Phase(2);
         PostDraw(pipeline, used_prepared, is_indexed, index_offset, nullptr, nullptr, pending);
         return;
     }
@@ -3071,7 +3072,7 @@ void Rasterizer::DispatchDirect() {
     RENDERER_TRACE;
     static thread_local Detail::CpuPhaseSampler<3> cpu_sampler{CpuPhaseSamplingEnabled()};
     auto cpu_sample=cpu_sampler.Begin([](const auto& stats,u64 wall_ns) {
-        constexpr std::array<const char*,3> names{"entry","pipeline","dispatch-packet"};
+        constexpr std::array<const char*,3> names{"entry","pipeline","submit-dispatch"};
         ReportCpuPhases<3>("command-dispatch",names,stats,wall_ns);
     });
     Gow3Stats::dispatches.fetch_add(1, std::memory_order_relaxed);
@@ -3085,8 +3086,8 @@ void Rasterizer::DispatchDirect() {
     if (!pipeline) {
         return;
     }
+    cpu_sample.Phase(2);
     if (pipelined) {
-        cpu_sample.Phase(2);
         PostDraw(pipeline, nullptr, false, 0, &CsRegs());
         return;
     }
@@ -3097,7 +3098,7 @@ void Rasterizer::DispatchRecord(const ComputePipeline* pipeline) {
     static thread_local Detail::CpuPhaseSampler<6> cpu_sampler{CpuPhaseSamplingEnabled()};
     auto cpu_sample=cpu_sampler.Begin([](const auto& stats,u64 wall_ns) {
         constexpr std::array<const char*,6> names{
-            "entry-hle","reserved","resource-setup","buffers","textures","dispatch-commands"};
+            "entry-hle",nullptr,"resource-setup","buffers","textures","dispatch-commands"};
         ReportCpuPhases<6>("dispatch-record",names,stats,wall_ns);
     });
     ResourceCpuScope resource_cpu_scope{cpu_sample};

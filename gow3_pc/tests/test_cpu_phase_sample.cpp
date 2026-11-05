@@ -77,6 +77,11 @@ void Correctness() {
               "and zero clock calls when OFF");
 }
 struct BenchResult {double ns;std::uint64_t sink,reads,samples;};
+inline void OpaqueBoundary() {
+#if defined(__GNUC__) || defined(__clang__)
+    asm volatile("" ::: "memory");
+#endif
+}
 struct BudgetCostClock {
     static inline std::uint64_t wall=100;
     static std::uint64_t WallNs(){wall+=125000000ull;return wall;}
@@ -92,7 +97,7 @@ double SelectedScopeCost() {
     }
     return std::chrono::duration<double,std::nano>(std::chrono::steady_clock::now()-before).count()/Selected;
 }
-BenchResult Measure(bool enabled) {
+BenchResult Measure(bool enabled,bool opaque=false) {
     CpuPhaseSampler<6> sampler{enabled};
     using Binding=CpuSampleBinding<CpuPhaseSampler<6>::Sample>;
     constexpr unsigned Draws=2000000;
@@ -105,6 +110,7 @@ BenchResult Measure(bool enabled) {
         // A dependent work stream prevents the empty loop being optimized out.
         for(unsigned phase=0;phase<16;++phase){
             work=(work^i^phase)*0x9e3779b97f4a7c15ull;
+            if(opaque)OpaqueBoundary();
             Binding::Phase(phase%6);
         }
     }
@@ -112,12 +118,14 @@ BenchResult Measure(bool enabled) {
     const auto s=sampler.Current();
     return {ns,work,s.cpu_reads,s.samples};
 }
-BenchResult MeasureBare() {
+BenchResult MeasureBare(bool opaque=false) {
     constexpr unsigned Draws=2000000;
     std::uint64_t work=8;
     const auto before=std::chrono::steady_clock::now();
-    for(unsigned i=0;i<Draws;++i)for(unsigned phase=0;phase<16;++phase)
+    for(unsigned i=0;i<Draws;++i)for(unsigned phase=0;phase<16;++phase) {
         work=(work^i^phase)*0x9e3779b97f4a7c15ull;
+        if(opaque)OpaqueBoundary();
+    }
     return {std::chrono::duration<double,std::nano>(std::chrono::steady_clock::now()-before).count()/Draws,
             work,0,0};
 }
@@ -142,4 +150,15 @@ int main(int argc,char** argv) {
     std::printf("clock-budget-case median ns/selected-scope=%.1f "
                 "(32 markers, 34 real CPU-clock reads, synthetic wall progression; "
                 "not total production instrumentation cost)\n",selected[2]);
+    std::array<double,5> opaque_bare{},opaque_on{};
+    for(unsigned i=0;i<6;++i){
+        BenchResult a,b;
+        if(i&1){b=Measure(true,true);a=MeasureBare(true);}
+        else{a=MeasureBare(true);b=Measure(true,true);}
+        assert(a.sink==b.sink);
+        if(i){opaque_bare[i-1]=a.ns;opaque_on[i-1]=b.ns;}}
+    std::ranges::sort(opaque_bare);std::ranges::sort(opaque_on);
+    std::printf("opaque-boundary sampler ns/draw bare=%.2f ON=%.2f added=%.2f "
+                "(compiler cannot hoist thread-local marker loads across boundaries)\n",
+                opaque_bare[2],opaque_on[2],opaque_on[2]-opaque_bare[2]);
 }

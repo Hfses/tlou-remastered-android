@@ -17,8 +17,8 @@ rather than another assumption about cache hit rates or GPU-wait counts.
 `tlou_cpu_phase_sample.h` is shared by production and standalone tests.
 There are four independent thread-local roles:
 
-- `command-draw`: entry, pipeline selection, draw-packet preparation.
-- `command-dispatch`: entry, compute pipeline selection, dispatch-packet preparation.
+- `command-draw`: entry, pipeline selection, submit-draw (packet preparation when pipelined).
+- `command-dispatch`: entry, compute pipeline selection, submit-dispatch (packet preparation when pipelined).
 - `draw-record`: entry, render state, resource setup, buffers, textures, draw commands.
 - `dispatch-record`: entry/HLE, resource setup, buffers, textures, dispatch commands.
 
@@ -71,6 +71,14 @@ An additional budget case executes 34 real CPU-clock reads per selected
 scope using synthetic wall progression, to measure the selected path's cost
 without sleeping or hiding its clock density in a fast unsampled loop.
 Native ARM64 and x86 CI run repeat benchmarks and ASan/UBSan checks.
+
+Initial native ARM64 confirmation (`42012965454`, `856fcb3`) measured a
+14.16 ns bare loop against 14.23/14.22 ns with sampling in two runs.
+The selected path with the maximum 34 real CPU-clock reads cost
+10.71/10.43 microseconds per sample. These are host microbenchmarks,
+not total Android instrumentation overhead. An additional opaque-memory
+boundary case prevents the compiler from hoisting the thread-local marker
+checks across work, as might otherwise happen in a simple pure loop.
 
 This build contains the accepted PM4 optimization and information needed
 to choose the next larger CPU change. It does not claim sustained FPS
