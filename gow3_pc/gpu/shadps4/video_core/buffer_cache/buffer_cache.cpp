@@ -2008,9 +2008,23 @@ void BufferCache::DownloadRanges(std::span<const std::pair<VAddr, u64>> ranges, 
         }
     };
     const auto finish_ranges = [&] {
-        for (const auto& [address, size] : ranges) if (size != 0) {
+        for (const auto& [address, size] : ranges) {
+            if (!size) continue;
             EraseLazyPages(address, size);
-            memory_tracker->UnmarkRegionAsGpuModified(address, size);
+            // Page-level GPU protection must survive when another dirty
+            // subrange of this page remains (e.g. a read-ahead candidate was
+            // rejected because the guest wrote to it while the GPU ran).
+            for (VAddr page = Common::AlignDown(address, LAZY_PAGE_SIZE);
+                 page < address + size; page += LAZY_PAGE_SIZE) {
+                bool still_gpu = false;
+                {
+                    std::shared_lock lk{gpu_ranges_mutex};
+                    still_gpu = gpu_modified_ranges.Intersects(page, LAZY_PAGE_SIZE);
+                }
+                if (!still_gpu) {
+                    memory_tracker->UnmarkRegionAsGpuModified(page, LAZY_PAGE_SIZE);
+                }
+            }
         }
     };
     // TLOU hot SRT readbacks: the SRT walker has drained Stage B before calling
@@ -2022,6 +2036,76 @@ void BufferCache::DownloadRanges(std::span<const std::pair<VAddr, u64>> ranges, 
     const size_t required_pieces = pending.size();
     const u64 required_bytes = total_size_bytes;
     u64 hot_published = 0, hot_candidates_added = 0;
+    // TLOU: a shader often reads several small GPU-produced SRT fields on
+    // the same 4 KiB page in succession. Waiting separately for each costs
+    // both a timeline query and a GPU->CPU serialization. Unlike the old
+    // history prefetch (unrelated tables on other pages), this copies only
+    // *currently GPU-modified* bytes on a page the game already requested.
+    // The mapped readback planner requires a known, completed producer tick;
+    // the existing late CPU-dirty/readback/lazy checks protect every extra
+    // piece. Failed read-ahead always retries the exact original request.
+    static const bool srt_page_ahead = [] {
+        const char* env = std::getenv("TLOU_SRT_PAGE_AHEAD");
+        return !env || env[0] != '0';
+    }();
+    u64 page_candidates = 0;
+    static struct SrtPageStats {
+        u64 requests = 0, candidates = 0, published = 0, late_skipped = 0;
+        std::chrono::steady_clock::time_point at = std::chrono::steady_clock::now();
+    } page_stats;
+    if (srt_page_ahead && mapped_reads && hot_srt && required_pieces &&
+        required_bytes <= MaxMappedReadbackBytes) {
+        ++page_stats.requests;
+        constexpr size_t MaxPagePieces = 16;
+        constexpr u64 MaxPageBytes = 4096;
+        boost::container::small_vector<VAddr, 4> visited_pages;
+        // GPU ranges in the requested subrange have already been removed
+        // by GpuRangesSubtract above; those still dirty on this page are
+        // exactly the additional candidates (no overlapping writes).
+        for (size_t i = 0; i < required_pieces && pending.size() < required_pieces + MaxPagePieces; ++i) {
+            const auto primary = pending[i]; // pending may reallocate
+            const VAddr page = Common::AlignDown(primary.address, LAZY_PAGE_SIZE);
+            if (primary.address + primary.size > page + LAZY_PAGE_SIZE ||
+                std::ranges::find(visited_pages, page) != visited_pages.end()) {
+                continue;
+            }
+            visited_pages.push_back(page);
+            if (page < primary.arena->cpu_addr ||
+                page + LAZY_PAGE_SIZE > primary.arena->cpu_addr + primary.arena->size_bytes ||
+                memory_tracker->IsRegionCpuModified(page, LAZY_PAGE_SIZE) ||
+                PendingReadbackTick(page, LAZY_PAGE_SIZE, false) ||
+                lazy_pages.contains(page)) {
+                continue;
+            }
+            // The page bitmap is only a coarse filter. The exact
+            // gpu_modified_ranges intervals below exclude the already
+            // fetched primary bytes and any CPU-owned subranges.
+            boost::container::small_vector<std::pair<VAddr, VAddr>, 8> pieces;
+            memory_tracker->ForEachDownloadRange<false>(
+                page, LAZY_PAGE_SIZE, [&](VAddr range, u64 bytes) {
+                    gpu_modified_ranges.ForEachInRange(range, bytes,
+                        [&](VAddr lo, VAddr hi) {
+                            if (lo < hi && lo >= page && hi <= page + LAZY_PAGE_SIZE) {
+                                pieces.emplace_back(lo, hi);
+                            }
+                        });
+                });
+            u64 added = 0;
+            for (const auto& [lo, hi] : pieces) {
+                const u64 aligned = (hi - lo + 63) & ~u64(63);
+                if (pending.size() >= required_pieces + MaxPagePieces ||
+                    added + aligned > MaxPageBytes ||
+                    total_size_bytes + aligned > MaxMappedReadbackBytes) {
+                    break;
+                }
+                pending.push_back({primary.arena, lo, hi - lo, total_size_bytes});
+                total_size_bytes += aligned;
+                added += aligned;
+                page_candidates += hi - lo;
+            }
+        }
+        page_stats.candidates += page_candidates;
+    }
     static const bool enable_hot_srt = [] {
         const char* env = std::getenv("TLOU_SRT_HOT_READBACKS");
         return env && env[0] == '1' && env[1] == 0;
@@ -2033,7 +2117,10 @@ void BufferCache::DownloadRanges(std::span<const std::pair<VAddr, u64>> ranges, 
         u64 requested = 0, candidates = 0, published = 0, late_skips = 0;
         std::chrono::steady_clock::time_point report_at = std::chrono::steady_clock::now();
     } hot_history;
-    if (mapped_reads && hot_srt && enable_hot_srt) {
+    // The disjoint-page temporal-history scan cost CPU but did not reduce
+    // gpu-ticks waits on logs 22/23. Keep it only as an explicit fallback
+    // when same-page read-ahead is disabled for diagnostics.
+    if (mapped_reads && hot_srt && enable_hot_srt && !srt_page_ahead) {
         ++hot_history.requested;
         const auto now = std::chrono::steady_clock::now();
         const u64 current = scheduler.CurrentTick();
@@ -2163,9 +2250,27 @@ void BufferCache::DownloadRanges(std::span<const std::pair<VAddr, u64>> ranges, 
             ++mapped_stats.direct;
             mapped_stats.bytes += required_bytes + hot_published;
             mapped_stats.no_submit += tick < current_tick;
+            if (srt_page_ahead && hot_srt) {
+                page_stats.published += hot_published;
+                page_stats.late_skipped += page_candidates - hot_published;
+                if ((page_stats.requests & 1023) == 0) {
+                    const auto now = std::chrono::steady_clock::now();
+                    if (now - page_stats.at >= std::chrono::seconds(5)) {
+                        std::printf("TLOU SRT same-page read-ahead (5 s): requests=%llu "
+                                    "candidate-bytes=%llu published-bytes=%llu "
+                                    "late-skipped-bytes=%llu\n",
+                            (unsigned long long)page_stats.requests,
+                            (unsigned long long)page_stats.candidates,
+                            (unsigned long long)page_stats.published,
+                            (unsigned long long)page_stats.late_skipped);
+                        page_stats = SrtPageStats{};
+                    }
+                }
+            }
             hot_history.candidates += hot_candidates_added;
-            hot_history.published += hot_published;
-            hot_history.late_skips += hot_candidates_added - hot_published;
+            hot_history.published += srt_page_ahead ? 0 : hot_published;
+            hot_history.late_skips += hot_candidates_added -
+                                      (srt_page_ahead ? 0 : hot_published);
             if (hot_srt && enable_hot_srt &&
                 std::chrono::steady_clock::now() - hot_history.report_at >= std::chrono::seconds(5)) {
                 hot_history.report_at = std::chrono::steady_clock::now();
