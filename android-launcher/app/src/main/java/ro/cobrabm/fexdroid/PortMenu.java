@@ -11,13 +11,14 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.*;
 
-/** The same TLOU-themed drawer is available from launcher and during play. */
+/** In-game-only TLOU-themed settings drawer; launcher uses its four tabs. */
 final class PortMenu {
     interface Actions {
         void logs(); void exportLogs(); void chooseGame(); void installPkg();
         void importDriver(); void selectDriver(); void editControls(); void resetControls(); void exitGame();
         default void importSaves() {}
         default void exportSaves() {}
+        default void quitApp(){exitGame();}
         void changed();
     }
     private static final int BG=0xff151c16, SURFACE=0xff253027, INK=0xffecefe4;
@@ -32,6 +33,7 @@ final class PortMenu {
 
     PortMenu(Activity activity,boolean inGame,Actions actions) {
         this.activity=activity;this.inGame=inGame;this.actions=actions;
+        if(!inGame)throw new IllegalArgumentException("O menu de três barras é exclusivo da GameActivity");
         prefs=PortSettings.prefs(activity);
     }
     private int dp(int value) {
@@ -190,7 +192,8 @@ final class PortMenu {
                     row("Saves",()->go("saves"));
                 }
                 row("Sobre",()->go("about"));
-                if(inGame)action("Voltar ao launcher",actions::exitGame);
+                action("Voltar ao launcher",actions::exitGame);
+                action("Sair do aplicativo",actions::quitApp);
                 break;
             case "video":
                 heading("VÍDEO E TELA");
@@ -223,14 +226,17 @@ final class PortMenu {
                 heading("AJUSTES");
                 language();
                 screenMode();
-                note("As otimizações testadas no log 32 estão fixas e não aparecem aqui.");
+                toggle("gpu_turbo","Adreno Turbo (sem root)",false);
+                note("Usa KGSL sem root; respeita limites térmicos. Pode ser ativado ou desativado durante o jogo.");
+                toggle("launch_direct","Entrar direto no jogo",false);
+                note("As otimizações do log 32 permanecem fixas.");
                 break;
             case "hud":
                 heading("CONTROLES E HUD");
                 toggle("hud_visible","Mostrar FPS",true);
                 choice("hud_mode","Estilo do HUD",
-                    new String[]{"FPS","FPS + tempo de frame"},
-                    new String[]{"minimal","compact"},"compact");
+                    new String[]{"Uma linha completa","FPS + tempo de frame","Apenas FPS"},
+                    new String[]{"full","compact","minimal"},"full");
                 choice("hud_corner","Posição do HUD",
                     new String[]{"Superior esquerdo","Superior direito","Inferior esquerdo",
                                  "Inferior direito","Personalizada (arrastar)"},
@@ -238,6 +244,9 @@ final class PortMenu {
                 slider("hud_size","Tamanho do HUD",10,26,14);
                 slider("hud_opacity","Opacidade do fundo (%)",0,100,65);
                 toggle("touch_visible","Controles na tela",true);
+                choice("control_color","Cor dos controles",
+                    new String[]{"Verde oliva","Âmbar","Branco","Vermelho","Azul"},
+                    new String[]{"olive","amber","white","red","blue"},"olive");
                 slider("touch_opacity","Opacidade dos controles (%)",15,100,55);
                 if(inGame) {
                     action("Editar posição dos botões",actions::editControls);
@@ -259,7 +268,10 @@ final class PortMenu {
                 break;
             case "about":
                 heading("SOBRE");
-                note("The Last of Us Remastered · Daedalus Android");
+                note("The Last of Us Remastered · Daedalus Android · v0.1");
+                note("Desenvolvimento: Erick Mendes / Daedalus Android.");
+                note("Repositório e referências: GitHub / erickmendes22/tlou-remastered-android");
+                note("Créditos: shadPS4, FEX-Emu, libadrenotools e colaboradores open source.");
                 note("Perfil de desempenho do log 32. Patches e resoluções preservados.");
                 note("O idioma da interface não altera a linguagem do jogo.");
                 action("Ver logs",actions::logs);
