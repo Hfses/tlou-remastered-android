@@ -27,6 +27,25 @@ stage="$out/apk-jni/arm64-v8a"
 assets="$out/apk-assets/runtime"
 python3 android/bionic/stage_tools.py
 mkdir -p "$stage" "$assets" "$root/out/release"
+# Reproducible original v27 R1 for Adreno 6xx/7xx. Never use a rolling Mesa
+# "latest" archive; the exact upstream asset digest is pinned for audit.
+# This runs ONLY when packaging is explicitly requested, never during commits.
+turnip_dir="$out/apk-assets/drivers"
+turnip_zip="$turnip_dir/turnip-v27-r1-a6xx-a7xx.zip"
+turnip_sha="07938ef843a73dd47ebb88ba9c2d3bca011667bd2b657e3b4a75d9ba8ed591a0"
+mkdir -p "$turnip_dir"
+if [[ ! -s "$turnip_zip" ]] || ! echo "$turnip_sha  $turnip_zip" | sha256sum -c --status; then
+  tmp="$turnip_zip.download"
+  rm -f "$tmp"
+  curl -fL --retry 3 --connect-timeout 20 --max-time 120 \
+    "https://github.com/StevenMXZ/Adreno-Tools-Drivers/releases/download/v27.0.0-R1/Turnip_v27.0.0-R1.zip" \
+    -o "$tmp"
+  echo "$turnip_sha  $tmp" | sha256sum -c
+  unzip -Z -1 "$tmp" | grep -q 'meta.json'
+  unzip -Z -1 "$tmp" | grep -q 'libvulkan_freedreno.so'
+  mv "$tmp" "$turnip_zip"
+fi
+echo "$turnip_sha  $turnip_zip" | sha256sum -c
 cp "$out/bin/gow3-probe" "$assets/gow3-probe"
 for lib in libgow3cpu.so libgow3gpu.so libgow3present.so libc++_shared.so; do
   cp "$out/lib/$lib" "$stage/$lib"
