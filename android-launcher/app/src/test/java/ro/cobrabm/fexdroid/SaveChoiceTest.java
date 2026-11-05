@@ -73,7 +73,7 @@ public class SaveChoiceTest {
     }
     @Test public void cancelReturnsToTheGameAndNativeOrderingIsPreserved(){
         try(var controller=Robolectric.buildActivity(Activity.class).setup()){
-            int[] chosen={-99};SaveChoicePanel panel=new SaveChoicePanel(controller.get(),nativeRequest(),null,index->chosen[0]=index);panel.show();panel.cancel();assertEquals(-2,chosen[0]);
+            int[] chosen={-99};SaveChoicePanel panel=new SaveChoicePanel(controller.get(),nativeRequest(),null,index->chosen[0]=index);panel.show();panel.cancel();org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();assertEquals(-2,chosen[0]);
             chosen[0]=-99;panel=new SaveChoicePanel(controller.get(),nativeRequest(),null,index->chosen[0]=index);panel.show();
             panel.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_DPAD_DOWN));
             panel.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_BUTTON_A));assertEquals(1,chosen[0]);
