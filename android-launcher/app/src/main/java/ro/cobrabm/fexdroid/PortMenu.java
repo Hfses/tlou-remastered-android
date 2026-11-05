@@ -156,7 +156,7 @@ final class PortMenu {
         note("O modo muda durante o jogo, sem reiniciar.");
     }
     private void slider(String key,String label,int min,int max,int fallback) {
-        TextView title=text(label+": "+prefs.getInt(key,fallback),13,INK);
+        TextView title=text(tr(label)+": "+prefs.getInt(key,fallback),13,INK);
         content.addView(title);
         SeekBar bar=new SeekBar(activity);bar.setMax(max-min);
         bar.setProgress(prefs.getInt(key,fallback)-min);

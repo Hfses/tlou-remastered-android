@@ -75,16 +75,14 @@ public final class MainActivity extends Activity {
     private void showFirstRunSetup() {
         if(firstRunDialogShown || isFinishing())return;
         firstRunDialogShown=true;
-        new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,"Configurar The Last of Us"))
-            .setMessage(TlouLanguage.t(this,"Selecione como deseja adicionar seu jogo. A instalação e a preparação são feitas automaticamente."))
-            .setItems(new String[]{TlouLanguage.t(this,"Instalar PKG"),TlouLanguage.t(this,"Selecionar pasta do jogo"),TlouLanguage.t(this,"Agora não")},
-                (dialog,selection)->{
-                    prefs.edit().putBoolean("onboarding_seen",true).apply();
-                    if(selection==0)pickFile(PICK_PKG);
-                    else if(selection==1)pickFolder(PICK_GAME);
-                    else scheduleDirectLaunch();
-                }).setCancelable(false).show();
+        GameSetupDialog.show(this,selection->{
+            prefs.edit().putBoolean("onboarding_seen",true).apply();
+            if(selection==0)pickFile(PICK_PKG);
+            else if(selection==1)pickFolder(PICK_GAME);
+            else scheduleDirectLaunch();
+        });
     }
+
     private void scheduleDirectLaunch() {
         if(directLaunchConsumed || !prefs.getBoolean("launch_direct",false) ||
             prefs.getString("game_path","").isEmpty())return;
@@ -350,7 +348,7 @@ public final class MainActivity extends Activity {
         if(gameInfo==null && driverInfo==null && permission==null)return;
         String folder=prefs.getString("game_path","");
         if(gameInfo!=null)gameInfo.setText(folder.isEmpty()?TlouLanguage.t(this,"Nenhum jogo selecionado"):folder);
-        if(driverInfo!=null)driverInfo.setText(PortSettings.summary(this)+"\\n"+prefs.getString("driver_name",TlouLanguage.t(this,"Driver do sistema")));
+        if(driverInfo!=null)driverInfo.setText(PortSettings.summary(this)+"\n"+prefs.getString("driver_name",TlouLanguage.t(this,"Driver do sistema")));
         if(permission!=null)permission.setVisibility(access()?View.GONE:View.VISIBLE);
     }
     private void task(String message, Work work) {
@@ -384,7 +382,7 @@ public final class MainActivity extends Activity {
     }
     private void manualPath() {
         EditText input=new EditText(this); input.setSingleLine(true); input.setText(prefs.getString("game_path",""));input.setHint("/storage/emulated/0/Jogos/CUSA00552");
-        new AlertDialog.Builder(this).setTitle("Pasta do jogo").setView(input).setNegativeButton(TlouLanguage.t(this,"Cancelar"),null).setPositiveButton("Selecionar",(d,w)->withAccess(()->chooseGame(new File(input.getText().toString().trim())))).show();
+        new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,"Pasta do jogo")).setView(input).setNegativeButton(TlouLanguage.t(this,"Cancelar"),null).setPositiveButton(TlouLanguage.t(this,"Selecionar"),(d,w)->withAccess(()->chooseGame(new File(input.getText().toString().trim())))).show();
     }
     private void installPkg(File pkg,File parent) {
         task("Instalando PKG…",()->{
@@ -426,7 +424,7 @@ public final class MainActivity extends Activity {
         });
     }
     private void selectDriver() {
-        List<String> names=new ArrayList<>(),paths=new ArrayList<>();names.add("Driver do sistema");paths.add("");
+        List<String> names=new ArrayList<>(),paths=new ArrayList<>();names.add(TlouLanguage.t(this,"Driver do sistema"));paths.add("");
         File root=new File(getFilesDir(),"drivers");File[] dirs=root.listFiles();
         if(dirs!=null)for(File d:dirs)try{
             if(d.getName().equals("raw")){
@@ -436,7 +434,7 @@ public final class MainActivity extends Activity {
         String current=prefs.getString("driver_path","");int checked=Math.max(0,paths.indexOf(current));
         new AlertDialog.Builder(this).setTitle("Driver Vulkan").setSingleChoiceItems(names.toArray(new String[0]),checked,(dialog,index)->{
             prefs.edit().putString("driver_path",paths.get(index)).putString("driver_name",names.get(index)).apply();refresh();dialog.dismiss();
-        }).setNegativeButton("Cancelar",null).show();
+        }).setNegativeButton(TlouLanguage.t(this,"Cancelar"),null).show();
     }
     private File local(Uri uri,boolean tree) throws Exception {
         String raw=null;
@@ -455,7 +453,7 @@ public final class MainActivity extends Activity {
     }
     private void showLog() {
         ScrollView scroll=new ScrollView(this);TextView text=new TextView(this);text.setText(RunLog.summary(this));text.setTextSize(12);text.setTextIsSelectable(true);text.setPadding(dp(16),dp(12),dp(16),dp(12));scroll.addView(text);
-        new AlertDialog.Builder(this).setTitle("TLOU — logs").setView(scroll).setPositiveButton("Fechar",null).show();
+        new AlertDialog.Builder(this).setTitle("TLOU — logs").setView(scroll).setPositiveButton(TlouLanguage.t(this,"Fechar"),null).show();
     }
     @Override protected void onResume(){super.onResume();refresh();if(afterPermission!=null){Runnable action=afterPermission;afterPermission=null;if(access())action.run();}
         else if(access()&&!prefs.getBoolean("onboarding_seen",false)&&!firstRunDialogShown)showFirstRunSetup();}
@@ -481,7 +479,7 @@ public final class MainActivity extends Activity {
             });}
             else if(code==PICK_GAME)chooseGame(local(uri,true));
             else if(code==PICK_DRIVER)importDriver(uri);
-            else if(code==PICK_PKG){pendingPkg=uri;new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,"Destino do jogo")).setMessage(TlouLanguage.t(this,"Escolha onde criar a pasta CUSA00552. O PKG será extraído diretamente para ela; depois o app prepara o jogo automaticamente.")).setPositiveButton(TlouLanguage.t(this,"Escolher destino"),(d,w)->pickFolder(PICK_DEST)).setNegativeButton("Cancelar",(d,w)->pendingPkg=null).show();}
+            else if(code==PICK_PKG){pendingPkg=uri;new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,"Destino do jogo")).setMessage(TlouLanguage.t(this,"Escolha onde criar a pasta CUSA00552. O PKG será extraído diretamente para ela; depois o app prepara o jogo automaticamente.")).setPositiveButton(TlouLanguage.t(this,"Escolher destino"),(d,w)->pickFolder(PICK_DEST)).setNegativeButton(TlouLanguage.t(this,"Cancelar"),(d,w)->pendingPkg=null).show();}
             else if(code==PICK_DEST&&pendingPkg!=null){Uri pkg=pendingPkg;pendingPkg=null;installPkg(local(pkg,false),local(uri,true));}
         }catch(Exception e){alert("Seleção",e.getMessage());}
     }
