@@ -48,6 +48,18 @@ if [[ ! -s "$turnip_zip" ]] || ! echo "$turnip_sha  $turnip_zip" | sha256sum -c 
   mv "$tmp" "$turnip_zip"
 fi
 echo "$turnip_sha  $turnip_zip" | sha256sum -c
+# The Gen8 patched package is distinct from R1 and is pinned to the upstream digest.
+if [[ ! -s "$turnip_gen8_zip" ]] || ! echo "$turnip_gen8_sha  $turnip_gen8_zip" | sha256sum -c --status; then
+  temp="$turnip_gen8_zip.download"
+  rm -f "$temp"
+  curl -fL --retry 3 --connect-timeout 20 --max-time 120 \
+    "https://github.com/StevenMXZ/Adreno-Tools-Drivers/releases/download/v27.0.0-R1/Turnip_Gen8_V38_Patched.zip" -o "$temp"
+  echo "$turnip_gen8_sha  $temp" | sha256sum -c
+  unzip -Z -1 "$temp" | grep -q 'meta.json'
+  unzip -Z -1 "$temp" | grep -q 'libvulkan_freedreno.so'
+  mv "$temp" "$turnip_gen8_zip"
+fi
+echo "$turnip_gen8_sha  $turnip_gen8_zip" | sha256sum -c
 cp "$out/bin/gow3-probe" "$assets/gow3-probe"
 for lib in libgow3cpu.so libgow3gpu.so libgow3present.so libc++_shared.so; do
   cp "$out/lib/$lib" "$stage/$lib"
