@@ -240,7 +240,6 @@ public final class MainActivity extends Activity {
                 new String[]{"30 FPS","60 FPS","Sem limite"},
                 new String[]{"30","60","0"},"60");
             toggleSetting(video,"vsync","VSync",true);
-            video.addView(text("Readback 1 (relaxado) e perfil do log 32 fixos.",12,MUTED));
             LinearLayout drivers=card(root,"DRIVER VULKAN");
             driverInfo=text("",12,MUTED);drivers.addView(driverInfo);
             add(drivers,"Selecionar driver Vulkan",false,this::selectDriver);
@@ -253,7 +252,7 @@ public final class MainActivity extends Activity {
             LinearLayout controls=card(root,"CONTROLES E HUD");
             toggleSetting(controls,"hud_visible","Mostrar FPS",true);
             choice(controls,"hud_mode","Estilo do HUD",
-                new String[]{"Uma linha completa","FPS + tempo de frame","Apenas FPS"},
+                new String[]{"Completa (FPS / GPU / CPU)","FPS + tempo de frame","Apenas FPS"},
                 new String[]{"full","compact","minimal"},"full");
             choice(controls,"hud_corner","Posição do HUD",
                 new String[]{"Superior esquerdo","Superior direito","Inferior esquerdo",
@@ -261,12 +260,8 @@ public final class MainActivity extends Activity {
                     "Inferior central","Central esquerdo","Central direito",
                     "Personalizada (arrastar)"},
                 new String[]{"0","1","2","3","4","5","6","7","8","-1"},"0");
-            toggleSetting(controls,"hud_frametime","Tempo de frame (ms)",true);
-            toggleSetting(controls,"hud_gpu","Nome da GPU",true);
+            toggleSetting(controls,"hud_gpu","Uso da GPU",true);
             toggleSetting(controls,"hud_cpu","Uso da CPU (jogo)",true);
-            toggleSetting(controls,"hud_ram","RAM utilizada pelo jogo",true);
-            toggleSetting(controls,"hud_minmax","FPS mínimo e máximo",true);
-            toggleSetting(controls,"hud_resolution","Resolução",false);
             toggleSetting(controls,"touch_visible","Controles na tela",true);
             choice(controls,"control_color","Cor dos controles",
                 new String[]{"Verde oliva","Âmbar","Branco","Vermelho","Azul"},
@@ -277,28 +272,15 @@ public final class MainActivity extends Activity {
             add(data,"Exportar saves ZIP",false,this::exportSaves);
             add(data,"Importar saves ZIP",false,()->pickFile(IMPORT_SAVES));
         } else {
-            LinearLayout about=card(root,"SOBRE");
-            about.addView(text("The Last of Us Remastered · Daedalus Android",17,TEXT));
-            about.addView(text("CUSA00552 1.00",12,ACCENT));
-            about.addView(text("Perfil de desempenho do log 32. Patches e resoluções preservados.",13,MUTED));
-            about.addView(text("O idioma da interface não altera a linguagem do jogo.",13,MUTED));
-            about.addView(text("Desenvolvimento: Erick Mendes / Daedalus Android",12,MUTED));
-            about.addView(text("Créditos: port de PC de ravencaio, FEX-Emu, libadrenotools e colaboradores de código aberto.",12,MUTED));
-            add(about,"Código-fonte no GitHub",false,()->openReference("https://github.com/erickmendes22/tlou-remastered-android"));
-            add(about,"FEX-Emu no GitHub",false,()->openReference("https://github.com/FEX-Emu/FEX"));
-            add(about,"Projeto de referência para PC",false,()->openReference("https://github.com/ravencaio/tlou-remastered-pc"));
-            add(about,"libadrenotools no GitHub",false,()->openReference("https://github.com/bylaws/libadrenotools"));
-            add(about,"Ver logs",false,this::showLog);
-            add(about,"Exportar logs ZIP",false,this::exportLogs);
+            root.addView(AboutPanel.create(this,this::showLog,this::exportLogs));
         }
 
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
         progress.setIndeterminate(true);progress.setVisibility(View.GONE);root.addView(progress);
-        status=text("Pronto para continuar.",12,MUTED);root.addView(status);
+        status=text("",12,MUTED);status.setVisibility(View.GONE);root.addView(status);
         permission=text("Permitir acesso aos arquivos",12,ACCENT);
         permission.setPadding(0,dp(10),0,dp(10));
         permission.setOnClickListener(v->withAccess(this::refresh));root.addView(permission);
-        root.addView(text("Daedalus Android · Perfil do log 32",11,MUTED));
         setContentView(scroll);refresh();
     }
     private void exportLogs() {
@@ -333,7 +315,7 @@ public final class MainActivity extends Activity {
     private void alert(String title,String message) { if(!isFinishing()&&!isDestroyed())new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,title)).setMessage(TlouLanguage.t(this,message)).setPositiveButton("OK",null).show(); }
     private void update(String message) {
         runOnUiThread(()->{if(!isDestroyed() && status!=null)
-            status.setText(TlouLanguage.t(this,message));});
+            {status.setText(TlouLanguage.t(this,message));status.setVisibility(View.VISIBLE);}});
     }
     private boolean access() { return Build.VERSION.SDK_INT<30 || Environment.isExternalStorageManager(); }
     private void withAccess(Runnable action) {

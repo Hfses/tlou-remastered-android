@@ -17,33 +17,30 @@ import java.util.Locale;
 final class HudTelemetry {
     private final long ticksPerSecond;
     private long previousTicks=-1L, previousAt;
-    private double cpuPercent=Double.NaN;
-    private double memoryGiB=Double.NaN, deviceGiB=Double.NaN;
-    private volatile String gpuName="";
+    private volatile double cpuPercent=Double.NaN;
+    private volatile double memoryGiB=Double.NaN, deviceGiB=Double.NaN;
+    private volatile double gpuPercent=Double.NaN;
+    private String[] gpuPaths;
+    private int gpuRediscover;
+
 
     HudTelemetry(Context context) {
         long hz=100;
         try { hz=Os.sysconf(OsConstants._SC_CLK_TCK); }catch(Throwable ignored){}
         ticksPerSecond=hz>0?hz:100;
-        try {
-            ActivityManager activity=(ActivityManager)context.getSystemService(Context.ACTIVITY_SERVICE);
-            ActivityManager.MemoryInfo info=new ActivityManager.MemoryInfo();
-            if(activity!=null) {activity.getMemoryInfo(info);deviceGiB=info.totalMem/(1024.0*1024.0*1024.0);}
-        }catch(Throwable ignored){}
-        // EGL context creation can block: never do it in the 500ms HUD/UI poll.
-        Thread detector=new Thread(()->{
-            try {
-                String renderer=BuiltinDrivers.renderer();
-                if(renderer!=null && renderer.toLowerCase(Locale.ROOT).contains("adreno")) {
-                    java.util.regex.Matcher m=java.util.regex.Pattern.compile(
-                        "(?i)adreno[^0-9]*([0-9]{3})").matcher(renderer);
-                    gpuName=m.find()?"Adreno "+m.group(1):"Adreno";
-                }
-            }catch(Throwable ignored){}
-        },"tlou-hud-gpu-name");
-        detector.setDaemon(true);detector.start();
+
     }
 
+    private final java.util.concurrent.ExecutorService sampler=java.util.concurrent.Executors.newSingleThreadExecutor(r->{Thread t=new Thread(r,"tlou-hud-sampler");t.setDaemon(true);return t;});
+    private final java.util.concurrent.atomic.AtomicBoolean pending=new java.util.concurrent.atomic.AtomicBoolean();
+    private volatile boolean closed;
+    private long requestedAt;
+    void requestSample(Process process,long now) {
+        if(closed || now-requestedAt<1_000_000_000L || !pending.compareAndSet(false,true))return;
+        requestedAt=now;
+        sampler.execute(()->{try{if(!closed)sample(runtimePid(process),now);}finally{pending.set(false);}});
+    }
+    void close(){closed=true;sampler.shutdownNow();}
     private int runtimePid=-1;
 
     /** Android libcore does not expose java.lang.Process.pid() in all SDKs.
@@ -75,7 +72,7 @@ final class HudTelemetry {
                     try(BufferedReader name=new BufferedReader(new FileReader(
                         "/proc/"+candidate+"/cmdline"))) {
                         char[] buf=new char[2048];int count=name.read(buf);
-                        if(count>0 && new String(buf,0,count).contains("gow3-probe")) {
+                        if(count>0 && (new String(buf,0,count).contains("tlou-probe") || new String(buf,0,count).contains("gow3-probe"))) {
                             runtimePid=candidate;return runtimePid;
                         }
                     }catch(Exception ignored){}
@@ -96,8 +93,9 @@ final class HudTelemetry {
         }
     }
 
-    void sample(int pid,long nowNanos) {
-        if(pid<=0)return;
+    synchronized void sample(int pid,long nowNanos) {
+        sampleGpu();
+        if(pid<=0){cpuPercent=Double.NaN;memoryGiB=Double.NaN;return;}
         try {
             long ticks=processTicks(pid);
             if(previousTicks>=0 && nowNanos>previousAt && ticks>=previousTicks)
@@ -114,9 +112,25 @@ final class HudTelemetry {
             }
         }catch(Exception e){memoryGiB=Double.NaN;}
     }
-    double cpuPercent(){return cpuPercent;}
+    private void sampleGpu() {
+        if(gpuPaths==null || (gpuPaths.length==0 && ++gpuRediscover>=5)) {
+            gpuRediscover=0;
+            gpuPaths=PerfHudMetrics.discoverGpuPaths(PerfHudMetrics.DEFAULT_GPU_PATHS,PerfHudMetrics.SCAN_ROOTS);
+        }
+        gpuPercent=Double.NaN;
+        for(String path:gpuPaths) {
+            String line=PerfHudMetrics.readFirstLine(path);
+            int n=path.endsWith("/gpubusy")?PerfHudMetrics.gpuBusyRatio(line):
+                path.endsWith("/mtk_mali/utilization")?PerfHudMetrics.mtkActive(line):PerfHudMetrics.parsePercent(line);
+            if(n>=0){gpuPercent=n;return;}
+        }
+        if(++gpuRediscover>=5){gpuPaths=null;gpuRediscover=0;}
+    }
+    double gpuPercent(){return gpuPercent;}
+    double cpuPercent(){return Double.isNaN(cpuPercent)?Double.NaN:
+        Math.min(100,cpuPercent/Math.max(1,Runtime.getRuntime().availableProcessors()));}
     double ramGiB(){return memoryGiB;}
     double totalRamGiB(){return deviceGiB;}
-    String gpuName(){return gpuName;}
-    void reset(){previousTicks=-1L;previousAt=0;cpuPercent=Double.NaN;}
+
+    synchronized void reset(){previousTicks=-1L;previousAt=0;cpuPercent=Double.NaN;}
 }

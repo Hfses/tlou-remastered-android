@@ -88,18 +88,9 @@ final class PortSettings {
     }
 
     static String experimentReport(Context context,Map<String,String> env) {
-        StringBuilder result=new StringBuilder("TLOU fixed Log32 profile: resolution=")
+        StringBuilder result=new StringBuilder("TLOU launch settings: resolution=")
             .append(prefs(context).getString("resolution","original"));
-        for(String key:new String[]{"TLOU_MEMORY_WALK_ONCE","TLOU_RING_BINDING_CURSOR",
-            "TLOU_DRAW_COUNTER_TRIM","GOW3_TLOU_COMPUTE_MEMO","GOW3_TLOU_HOST_COPY_BATCH",
-            "TLOU_SRT_HOT_READBACKS","GOW3_FETCH_NO_BLOCK","GOW3_LAND_ON_GUEST",
-            "GOW3_STATIC_MIN_BYTES","TLOU_STACK_MAPPED_READBACK","TLOU_INLINE_SINGLE_COPY",
-            "TLOU_SPLIT_CS64","TLOU_MAPPED_FAULT_READBACKS","TLOU_MAPPED_READBACKS",
-            "GOW3_READBACKS","GOW3_FRAMES_AHEAD","GOW3_ASYNC_SHADERS","GOW3_PREP_POOL",
-            "GOW3_CPU_TRIMS","GOW3_PREFETCH_PIPELINES","GOW3_PARALLEL_PIPELINES",
-            "GOW3_PREP_WORKERS"})
-            result.append(" ").append(key).append("=")
-                .append(env.containsKey(key)?env.get(key):"auto");
+        result.append("; renderer=Vulkan; CPU=FEX ARM64");
         return result.toString();
     }
 

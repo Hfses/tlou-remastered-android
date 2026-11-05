@@ -201,7 +201,6 @@ final class PortMenu {
                     new String[]{"30 FPS","60 FPS","Sem limite"},
                     new String[]{"30","60","0"},"60");
                 toggle("vsync","VSync",true);
-                note("Readback 1 (relaxado) e perfil do log 32 fixos.");
                 break;
             case "patches":
                 heading("PATCHES");
@@ -225,13 +224,12 @@ final class PortMenu {
                 toggle("gpu_turbo","Adreno Turbo (sem root)",false);
                 note("Usa KGSL sem root; respeita limites térmicos. Pode ser ativado ou desativado durante o jogo.");
                 toggle("launch_direct","Entrar direto no jogo",false);
-                note("As otimizações do log 32 permanecem fixas.");
                 break;
             case "hud":
                 heading("CONTROLES E HUD");
                 toggle("hud_visible","Mostrar FPS",true);
                 choice("hud_mode","Estilo do HUD",
-                    new String[]{"Uma linha completa","FPS + tempo de frame","Apenas FPS"},
+                    new String[]{"Completa (FPS / GPU / CPU)","FPS + tempo de frame","Apenas FPS"},
                     new String[]{"full","compact","minimal"},"full");
                 choice("hud_corner","Posição do HUD",
                     new String[]{"Superior esquerdo","Superior direito",
@@ -239,13 +237,8 @@ final class PortMenu {
                         "Centro da tela","Inferior central","Central esquerdo",
                         "Central direito","Personalizada (arrastar)"},
                     new String[]{"0","1","2","3","4","5","6","7","8","-1"},"0");
-                heading("Informações exibidas na mesma linha");
-                toggle("hud_frametime","Tempo de frame (ms)",true);
-                toggle("hud_gpu","Nome da GPU",true);
+                toggle("hud_gpu","Uso da GPU",true);
                 toggle("hud_cpu","Uso da CPU (jogo)",true);
-                toggle("hud_ram","RAM utilizada pelo jogo",true);
-                toggle("hud_minmax","FPS mínimo e máximo",true);
-                toggle("hud_resolution","Resolução",false);
                 slider("hud_size","Tamanho do HUD",10,26,12);
                 slider("hud_opacity","Opacidade do fundo (%)",0,100,65);
                 toggle("touch_visible","Controles na tela",true);
@@ -272,23 +265,7 @@ final class PortMenu {
                 action("Importar saves ZIP",actions::importSaves);
                 break;
             case "about":
-                heading("SOBRE");
-                note("The Last of Us Remastered · Daedalus Android · v0.1");
-                note("Desenvolvimento: Erick Mendes / Daedalus Android.");
-                note("Repositório e referências: GitHub / erickmendes22/tlou-remastered-android");
-                note("Créditos: port de PC de ravencaio, FEX-Emu, libadrenotools e colaboradores open source.");
-                row("Código-fonte no GitHub",()->activity.startActivity(new Intent(
-                    Intent.ACTION_VIEW,Uri.parse("https://github.com/erickmendes22/tlou-remastered-android"))));
-                row("FEX-Emu no GitHub",()->activity.startActivity(new Intent(
-                    Intent.ACTION_VIEW,Uri.parse("https://github.com/FEX-Emu/FEX"))));
-                row("Projeto de referência para PC",()->activity.startActivity(new Intent(
-                    Intent.ACTION_VIEW,Uri.parse("https://github.com/ravencaio/tlou-remastered-pc"))));
-                row("libadrenotools no GitHub",()->activity.startActivity(new Intent(
-                    Intent.ACTION_VIEW,Uri.parse("https://github.com/bylaws/libadrenotools"))));
-                note("Perfil de desempenho do log 32. Patches e resoluções preservados.");
-                note("O idioma da interface não altera a linguagem do jogo.");
-                action("Ver logs",actions::logs);
-                if(!inGame)action("Exportar logs ZIP",actions::exportLogs);
+                content.addView(AboutPanel.create(activity,actions::logs,null));
                 break;
             default:
                 section="home";render();

@@ -102,9 +102,9 @@ public final class GameActivity extends Activity {
         touch=new TouchControllerOverlay(this,pad,false);
         layout.addView(touch,pos(-1,-1,Gravity.CENTER));
         gameLayout=layout;
-        status=new TextView(this);status.setGravity(Gravity.CENTER);status.setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
-        status.setTextColor(0xffcbdcb1);status.setSingleLine(true);
-        status.setEllipsize(TextUtils.TruncateAt.END);status.setPadding(dp(10),dp(6),dp(10),dp(6));status.setText("0.0 FPS");
+        status=new TextView(this);status.setGravity(Gravity.LEFT);
+        HudPresentation.style(status,PortSettings.prefs(this));
+        status.setText(HudPresentation.text("full",0,Double.NaN,Double.NaN,true,true));
         layout.addView(status,pos(-2,-2,Gravity.TOP|Gravity.LEFT));
         status.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol || b-t!=ob-ot)placeHud();});
         final float[] drag=new float[2];
@@ -191,34 +191,13 @@ public final class GameActivity extends Activity {
             if(resumed && game!=null && game.isAlive()) {
                 long now=SystemClock.elapsedRealtimeNanos();
                 double fps=fpsMeter.sample(Gow3Present.framesIfLoaded(),now);
-                if(hudTelemetry!=null)hudTelemetry.sample(hudTelemetry.runtimePid(game),now);
+                if(hudTelemetry!=null && PortSettings.prefs(this).getBoolean("hud_visible",true))hudTelemetry.requestSample(game,now);
                 SharedPreferences p=PortSettings.prefs(this);
                 String mode=p.getString("hud_mode","full");
-                StringBuilder value=new StringBuilder(String.format(Locale.ROOT,"%.0f FPS",fps));
-                if(!"minimal".equals(mode) && p.getBoolean("hud_frametime",true))
-                    value.append(fps>0?String.format(Locale.ROOT,"  |  %.1f ms",1000.0/fps):"  |  — ms");
-                if("full".equals(mode)) {
-                    if(p.getBoolean("hud_gpu",true) && hudTelemetry!=null &&
-                        !hudTelemetry.gpuName().isEmpty())
-                        value.append("  |  GPU ").append(hudTelemetry.gpuName());
-                    if(p.getBoolean("hud_cpu",true) && hudTelemetry!=null &&
-                        !Double.isNaN(hudTelemetry.cpuPercent()))
-                        value.append(String.format(Locale.ROOT,"  |  CPU %.0f%%",hudTelemetry.cpuPercent()));
-                    if(p.getBoolean("hud_ram",true) && hudTelemetry!=null &&
-                        !Double.isNaN(hudTelemetry.ramGiB()))
-                        value.append(String.format(Locale.ROOT,"  |  RAM %.1f GB",hudTelemetry.ramGiB()));
-                    if(p.getBoolean("hud_minmax",true))
-                        value.append(String.format(Locale.ROOT,"  |  MIN %.0f  MAX %.0f",
-                            fpsMeter.minimum(),fpsMeter.maximum()));
-                    if(p.getBoolean("hud_resolution",false))
-                        value.append("  |  ").append(p.getString("resolution","720")).append('p');
-                }
-                if(gpuTurbo.isActive())value.append("  |  TURBO");
-                SpannableString oneRow=new SpannableString(value.toString());
-                int firstSeparator=value.indexOf("  |");
-                oneRow.setSpan(new ForegroundColorSpan(0xffc8db87),0,
-                    firstSeparator<0?oneRow.length():firstSeparator,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                status.setText(oneRow);
+                double cpu=hudTelemetry==null?Double.NaN:hudTelemetry.cpuPercent();
+                double gpu=hudTelemetry==null?Double.NaN:hudTelemetry.gpuPercent();
+                status.setText(HudPresentation.text(mode,fps,gpu,cpu,
+                    p.getBoolean("hud_gpu",true),p.getBoolean("hud_cpu",true)));
             } else {
                 fpsMeter.reset();
                 if(hudTelemetry!=null)hudTelemetry.reset();
@@ -230,8 +209,8 @@ public final class GameActivity extends Activity {
     private File installBinary() throws Exception {
         File root=new File(getFilesDir(),"tlou/runtime");
         if (!root.exists() && !root.mkdirs()) throw new IllegalStateException("Diretório de runtime indisponível");
-        File dst=new File(root,"gow3-probe");
-        File tmp=new File(root,"gow3-probe.tmp");
+        File dst=new File(root,"tlou-probe");
+        File tmp=new File(root,"tlou-probe.tmp");
         try(InputStream in=getAssets().open("runtime/gow3-probe");
             FileOutputStream out=new FileOutputStream(tmp)) {
             byte[] buf=new byte[128*1024];
@@ -357,9 +336,7 @@ public final class GameActivity extends Activity {
         if(closing.get() || status==null || touch==null)return;
         SharedPreferences p=PortSettings.prefs(this);
         status.setVisibility(p.getBoolean("hud_visible",true)?View.VISIBLE:View.GONE);
-        status.setTextSize(p.getInt("hud_size",12));
-        status.setTextColor(0xffe1e9dc);
-        GradientDrawable bg=new GradientDrawable();bg.setColor((p.getInt("hud_opacity",65)*255/100)<<24|0x101813);bg.setCornerRadius(dp(6));bg.setStroke(dp(1),0x668c9d73);status.setBackground(bg);
+        HudPresentation.style(status,p);
         boolean show=p.getBoolean("touch_visible",true);if(!show)touch.release();touch.setVisibility(show?View.VISIBLE:View.GONE);touch.setAlpha(p.getInt("touch_opacity",55)/100f);touch.invalidate();
         if(started)Gow3Present.fullscreen(p.getBoolean("fullscreen",false));
         if(started) {
@@ -379,8 +356,7 @@ public final class GameActivity extends Activity {
             if(gameLayout==null || closing.get() || gameLayout.getWidth()<1 ||
                 gameLayout.getHeight()<1)return;
             SharedPreferences p=PortSettings.prefs(this);
-            // Keep at least 72 dp free for the hamburger on the top edge;
-            // oversized full-detail HUDs remain a single line (ellipsized).
+            // Keep the compact two-line HUD clear of the menu button.
             int allowedWidth=Math.max(dp(160),gameLayout.getWidth()-dp(82));
             if(status.getMaxWidth()!=allowedWidth)status.setMaxWidth(allowedWidth);
             int maxX=Math.max(0,gameLayout.getWidth()-status.getWidth());
@@ -403,7 +379,7 @@ public final class GameActivity extends Activity {
                 default: break; // top left: never overlaps top-right menu button
             }
             x=Math.max(0,Math.min(maxX,x));y=Math.max(0,Math.min(maxY,y));
-            // A long single-row HUD can reach the menu even when centered.
+            // Keep every preset position clear of the menu.
             // Reserve the button's rectangle for all non-custom preset placements.
             if(!"-1".equals(corner) && menuButton!=null && menuButton.getWidth()>0 &&
                 x < menuButton.getRight()+margin &&
@@ -489,6 +465,7 @@ public final class GameActivity extends Activity {
 
     @Override protected void onDestroy() {
         stopAndExit();
+        if(hudTelemetry!=null)hudTelemetry.close();
         super.onDestroy();
     }
 }

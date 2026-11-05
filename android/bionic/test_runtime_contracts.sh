@@ -3,6 +3,16 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 test_dir=$(mktemp -d)
 trap 'rm -rf "$test_dir"' EXIT
+# Exercise real AppContent dispatch, including regional nonzero service labels.
+cc -std=c11 -D_GNU_SOURCE -O2 -Wall -Wextra -Werror -I gow3_pc -I gow3_pc/src \
+  gow3_pc/tests/test_content.c gow3_pc/src/runtime_content.c -o "$test_dir/content"
+"$test_dir/content"
+"$test_dir/content" --unknown
+if "$test_dir/content" --missing; then
+  echo 'ERROR: missing AppContent profile was accepted' >&2; exit 1
+else
+  test "$?" -eq 21
+fi
 for contract in tsc_clock fex_clock services; do
   cc -std=c11 -O2 -Wall -Wextra -Werror -pthread -I gow3_pc -I gow3_pc/src \
     "gow3_pc/tests/test_${contract}.c" -lm -o "$test_dir/$contract"
