@@ -43,6 +43,13 @@ public final class MainActivity extends Activity {
         super.onCreate(saved);
         prefs=getSharedPreferences("tlou",MODE_PRIVATE);
         PortSettings.retireTestPreferences(this);
+        // Log 32 actually ran at 720p with six effect-disabling patches.
+        // Only set these on a fresh install; never overwrite earlier choices.
+        SharedPreferences.Editor initial=prefs.edit();
+        if(!prefs.contains("resolution"))initial.putString("resolution","720");
+        for(String effect:PortSettings.EFFECTS)
+            if(!prefs.contains(effect))initial.putBoolean(effect,true);
+        initial.apply();
         // Keep paths chosen in the first experimental APK.
         if (!prefs.contains("game_path")) prefs.edit().putString("game_path",getPreferences(0).getString("prepared_path","")).apply();
         if (saved!=null && saved.getString("pending_pkg")!=null) pendingPkg=Uri.parse(saved.getString("pending_pkg"));
@@ -178,12 +185,12 @@ public final class MainActivity extends Activity {
             choice(box,"resolution","Resolução interna",
                 new String[]{"Original (1080p)","1280 × 720","960 × 540","640 × 360"},
                 new String[]{"original","720","540","360"},"original");
-            toggleSetting(box,"ssao","Desativar SSAO",false);
-            toggleSetting(box,"motion_blur","Desativar desfoque de movimento",false);
-            toggleSetting(box,"depth_of_field","Desativar profundidade de campo",false);
-            toggleSetting(box,"bloom","Desativar bloom",false);
-            toggleSetting(box,"sunlight_shadows","Desativar sombras solares",false);
-            toggleSetting(box,"subsurface","Desativar subsurface",false);
+            toggleSetting(box,"ssao","Desativar SSAO",true);
+            toggleSetting(box,"motion_blur","Desativar desfoque de movimento",true);
+            toggleSetting(box,"depth_of_field","Desativar profundidade de campo",true);
+            toggleSetting(box,"bloom","Desativar bloom",true);
+            toggleSetting(box,"sunlight_shadows","Desativar sombras solares",true);
+            toggleSetting(box,"subsurface","Desativar subsurface",true);
             add(box,"Restaurar patches e resolução",false,()->{
                 SharedPreferences.Editor edit=prefs.edit().putString("resolution","original");
                 for(String key:PortSettings.EFFECTS)edit.putBoolean(key,false);
