@@ -2,7 +2,7 @@ name: TLOU Bionic Full Native and APK
 
 on:
   push:
-    branches: [android-bionic-stage1]
+    branches: [android-bionic-stage1, tlou-ui-approval-log32-20261105]
     paths:
       - 'android/**'
       - 'android-launcher/**'
@@ -38,6 +38,16 @@ jobs:
           python3 -m unittest discover -s android/tests -v
           python3 -m pip install unicorn==2.1.4
           python3 gow3_pc/tests/test_srt_arm64.py -v
+      # Fail fast on Java/resources/manifest issues before expensive native builds.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Preflight compile and Android resource validation
+        run: gradle -p android-launcher :app:compileReleaseJavaWithJavac :app:lintVitalRelease --no-daemon --max-workers=2
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;29.0.14206865'
@@ -137,15 +147,15 @@ jobs:
         run: bash android/bionic/package_apk.sh
       - name: Verify APK payload and native dependency closure
         if: ${{ !contains(github.event.head_commit.message, '[native-only]') }}
-        run: python3 android/bionic/check_tools_apk.py out/release/TheLastOfUsRemastered-Android-Bionic-v0.31-arm64.apk
+        run: python3 android/bionic/check_tools_apk.py out/release/TheLastOfUsRemastered-Android-v0.1-arm64.apk
       - name: Publish installable TLOU APK
         if: ${{ !contains(github.event.head_commit.message, '[native-only]') }}
         uses: actions/upload-artifact@v4
         with:
-          name: TheLastOfUsRemastered-Android-Bionic-arm64
+          name: TheLastOfUsRemastered-Android-v0.1-arm64
           path: |
-            out/release/TheLastOfUsRemastered-Android-Bionic-v0.31-arm64.apk
-            out/release/TheLastOfUsRemastered-Android-Bionic-v0.31-arm64.apk.sha256
+            out/release/TheLastOfUsRemastered-Android-v0.1-arm64.apk
+            out/release/TheLastOfUsRemastered-Android-v0.1-arm64.apk.sha256
           if-no-files-found: error
       - name: Publish built native binaries
         uses: actions/upload-artifact@v4
