@@ -263,10 +263,10 @@ public final class MainActivity extends Activity {
             about.addView(text("Perfil de desempenho do log 32. Patches e resoluções preservados.",13,MUTED));
             about.addView(text("O idioma da interface não altera a linguagem do jogo.",13,MUTED));
             about.addView(text("Desenvolvimento: Erick Mendes / Daedalus Android",12,MUTED));
-            about.addView(text("Créditos: shadPS4, FEX-Emu, libadrenotools e colaboradores de código aberto.",12,MUTED));
+            about.addView(text("Créditos: port de PC de ravencaio, FEX-Emu, libadrenotools e colaboradores de código aberto.",12,MUTED));
             add(about,"Código-fonte no GitHub",false,()->openReference("https://github.com/erickmendes22/tlou-remastered-android"));
             add(about,"FEX-Emu no GitHub",false,()->openReference("https://github.com/FEX-Emu/FEX"));
-            add(about,"shadPS4 no GitHub",false,()->openReference("https://github.com/shadps4-emu/shadPS4"));
+            add(about,"Projeto de referência para PC",false,()->openReference("https://github.com/ravencaio/tlou-remastered-pc"));
             add(about,"libadrenotools no GitHub",false,()->openReference("https://github.com/bylaws/libadrenotools"));
             add(about,"Ver logs",false,this::showLog);
             add(about,"Exportar logs ZIP",false,this::exportLogs);
