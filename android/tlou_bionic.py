@@ -8,6 +8,7 @@ TLOU-specific FEX/ARM64 loader. No game content is shipped with the port.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 from pathlib import Path
 import shutil
@@ -16,6 +17,10 @@ import subprocess
 import sys
 
 TITLE_ID = "CUSA00552"
+# This exact base SELF is shared by the newly provided executable; accept
+# alternative regional SFO identifiers only when the game executable matches
+# byte-for-byte. The patch writer independently validates the same SHA.
+VERIFIED_SELF_SHA256 = "e5f0aa322f60bd90637cc10d83de08c77885b1921084021c630e04ed3d6febf7"
 _BOOT_FILES = ("eboot.bin", "sce_sys/param.sfo", "sce_module/libc.prx")
 
 
@@ -61,7 +66,13 @@ def require_game(folder: Path, *, is_update: bool = False) -> dict[str, str]:
     metadata = read_sfo(folder / "sce_sys/param.sfo")
     title = metadata.get("TITLE_ID")
     if title != TITLE_ID:
-        raise PortError(f"Wrong PS4 title: {title!r}; expected {TITLE_ID}")
+        # Never bypass title enforcement for update folders: their overlay
+        # resources must match the base title. For base games, a known binary
+        # signature is stronger evidence than a region-specific TITLE_ID.
+        if is_update or hashlib.sha256((folder / "eboot.bin").read_bytes()).hexdigest() != VERIFIED_SELF_SHA256:
+            raise PortError(f"Wrong PS4 title: {title!r}; expected {TITLE_ID}")
+        metadata["PORT_PROFILE"] = "CUSA00552-SELF-SHA256"
+        print(f"Recognized regional SFO {title!r} via byte-identical verified TLOU SELF.", flush=True)
     return metadata
 
 
