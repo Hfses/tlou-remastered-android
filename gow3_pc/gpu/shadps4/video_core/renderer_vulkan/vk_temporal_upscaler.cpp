@@ -1623,6 +1623,19 @@ void TemporalUpscaler::RunUiOnly(VideoCore::ImageId color_id, VideoCore::ImageId
     done_this_frame = ui_phase = true;
     ui_color = color_id;
     ui_depth = depth_id;
+    // Confirm in device logs that the guest-resolution route actually reached
+    // the final spatial copy. Source size and target size distinguish a fast
+    // one-copy game raster from expensive full-size scene proxies.
+    if (scaled_session && !composite_frames) {
+        static bool reported = false;
+        if (!reported) {
+            reported = true;
+            std::printf("TLOU guest raster UI spatial copy: %ux%u -> %ux%u "
+                        "(one final blit, FSR disabled)\n",
+                        source_width, source_height, ui_width, ui_height);
+            std::fflush(stdout);
+        }
+    }
 }
 
 void TemporalUpscaler::RunScaled() {
