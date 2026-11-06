@@ -43,7 +43,7 @@ final class PortSettings {
         // "proxy" is a compatibility fallback for devices whose aim/UI cannot
         // use that compositor. Never silently change the saved resolution.
         final String resolution=p.getString("resolution","original");
-        final boolean proxy="proxy".equals(p.getString("render_path","guest"));
+        final boolean proxy="proxy".equals(p.getString("render_path","proxy"));
         options.put("resolution",proxy?"original":resolution);
         // CUSA00552 01.00 on Xiaomi 23049PCD8G (Snapdragon 7+ Gen 2)
         // hit a game job-system deadlock after 806 s. The forced job-sleep
@@ -76,7 +76,7 @@ final class PortSettings {
         // resolves native-size intermediate targets (expensive on Adreno).
         final String scaledPreset=resolution.equals("720")?"1":
             resolution.equals("540")?"3":resolution.equals("360")?"4":null;
-        final String renderPath=p.getString("render_path","guest");
+        final String renderPath=p.getString("render_path","proxy");
         final boolean proxy="proxy".equals(renderPath);
         env.put("TLOU_EXPECT_SCENE_SIZE","1920x1080");
         env.put("GOW3_UPSCALER","off");
@@ -139,17 +139,12 @@ final class PortSettings {
         // which read-protects its own pages without a global switch.
         // Protecting ALL other pending readbacks caused many unrelated page
         // faults and a sharp performance regression on Adreno 830.
-        final String geometry=p.getString("geometry_sync","balanced");
-        final String geometryMode="fast".equals(geometry)?"0":
-            "full".equals(geometry)?"2":"1";
-        env.put("TLOU_AUTO_SMALL_CS_READBACK",geometryMode);
-        if ("2".equals(geometryMode)) {
-            // Compatibility mode preserves the slower fully protected behavior.
-            env.put("GOW3_ASYNC_READBACK","1");
-        } else {
-            // Balanced/Fast: protect only the explicit EOP result copies.
-            env.remove("GOW3_ASYNC_READBACK");
-        }
+        // Only shader-independent Full geometry synchronization is retained:
+        // both user-provided 720p and native 1080p logs used Full, without the
+        // previously suspected performance regression. No more Fast/Balanced
+        // profiles which can return character deformation.
+        env.put("TLOU_AUTO_SMALL_CS_READBACK","2");
+        env.put("GOW3_ASYNC_READBACK","1");
         // Temporary bounded coverage audit for CUSA00552 01.00. This only logs
         // at most 40 distinct candidate compute bindings; no shader dumps or waits.
         env.put("TLOU_PHYSICS_COVERAGE","1");
@@ -180,9 +175,9 @@ final class PortSettings {
               .append(env.containsKey("GOW3_RENDER_RES")?"guest-raster-single-ui-copy":
                       env.containsKey("TLOU_SPATIAL_SCENE")?"proxy-spatial-compat":"native");
         result.append("; temporal-fsr=off");
-        result.append("; geometry-sync=").append(env.getOrDefault("TLOU_AUTO_SMALL_CS_READBACK","1"));
+        result.append("; geometry-sync=full");
         result.append("; async-global-protect=").append(env.containsKey("GOW3_ASYNC_READBACK")?"on":"off");
-        result.append("; geometry-sync policy=0 known physics only / 1 balanced physics-class / 2 broad compatibility");
+        result.append("; geometry-sync policy=2 full only");
         result.append("; guest-job-worker-wake=")
               .append(conservativeJobWorkers()?"original":"patched-sleep");
         return result.toString();
