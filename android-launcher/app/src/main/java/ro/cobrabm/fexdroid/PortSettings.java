@@ -71,11 +71,11 @@ final class PortSettings {
     static void environment(Context context,Map<String,String> env) {
         SharedPreferences p=prefs(context);
         String resolution=p.getString("resolution","original");
-        // Both backends avoid FSR. Native guest raster minimizes GPU bandwidth:
-        // the game owns real 720/540/360 render targets and runs post at that
-        // resolution. Vulkan performs ONE linear scene-to-HUD spatial copy.
-        // Proxy fallback preserves the previously verified aiming behavior but
-        // resolves native-size intermediate targets (expensive on Adreno).
+        // Direct game mode: scene, gameplay HUD, crosshair and depth all
+        // use the selected resolution. 1080p movie allocations are unchanged
+        // in the guest profile. No Vulkan scene proxies or 720p->1080p HUD
+        // composition are inserted. The Android presenter handles output.
+        // "proxy" remains a separate optional compatibility method.
         final String scaledPreset=resolution.equals("720")?"1":
             resolution.equals("540")?"3":resolution.equals("360")?"4":null;
         final String renderPath=p.getString("render_path","guest");
@@ -89,20 +89,25 @@ final class PortSettings {
             env.put("TLOU_EXPECT_HOST_SCENE",actualSize);
             if(proxy) {
                 env.remove("GOW3_RENDER_RES");
+                env.remove("TLOU_UNIFIED_GUEST_UI");
                 env.put("GOW3_UPSCALE_PRESET",scaledPreset);
                 env.put("TLOU_SPATIAL_SCENE","1");
                 env.put("TLOU_HOST_SCENE_MODE","1");
             } else {
-                // The existing scaled_session/RunUiOnly path owns the native
-                // UI composition; no SceneTargets proxy allocation or resolves.
-                env.put("GOW3_RENDER_RES",actualSize);
+                // Scene/HUD/aim are patched to the same actualSize in eboot.
+                // Deliberately do not request any guest upscaler: that was
+                // forcing a second 1920x1080 HUD attachment and mixing it
+                // with 720p scene depth even with FSR temporal switched off.
+                env.remove("GOW3_RENDER_RES");
                 env.remove("GOW3_UPSCALE_PRESET");
                 env.remove("TLOU_SPATIAL_SCENE");
                 env.remove("TLOU_HOST_SCENE_MODE");
+                env.put("TLOU_UNIFIED_GUEST_UI","1");
                 env.put("TLOU_EXPECT_SCENE_SIZE",actualSize);
             }
         } else {
             env.remove("GOW3_RENDER_RES");
+            env.remove("TLOU_UNIFIED_GUEST_UI");
             env.remove("TLOU_SPATIAL_SCENE");
             env.remove("TLOU_HOST_SCENE_MODE");
             env.remove("TLOU_EXPECT_HOST_SCENE");
@@ -171,10 +176,14 @@ final class PortSettings {
             .append(prefs(context).getString("resolution","original"));
         result.append("; renderer=Vulkan; CPU=FEX ARM64");
         result.append("; game-raster=").append(env.getOrDefault("TLOU_EXPECT_SCENE_SIZE","1920x1080"));
-        result.append("; output-ui=1920x1080; host-scene=")
+        result.append("; game-ui=")
+              .append(env.containsKey("TLOU_UNIFIED_GUEST_UI")
+                      ?env.getOrDefault("TLOU_EXPECT_SCENE_SIZE","1920x1080")
+                      :"1920x1080");
+        result.append("; movie-buffers=native; host-scene=")
               .append(env.getOrDefault("TLOU_EXPECT_HOST_SCENE","native"));
         result.append("; scene-composite=")
-              .append(env.containsKey("GOW3_RENDER_RES")?"guest-raster-single-ui-copy":
+              .append(env.containsKey("TLOU_UNIFIED_GUEST_UI")?"unified-direct-no-ui-blit":
                       env.containsKey("TLOU_SPATIAL_SCENE")?"proxy-spatial-compat":"native");
         result.append("; temporal-fsr=off");
         result.append("; geometry-sync=full");
