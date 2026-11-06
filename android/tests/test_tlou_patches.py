@@ -58,9 +58,9 @@ class BaseExecutablePatches(unittest.TestCase):
             patcher.image_patches(elf, out, profiles.BASE_PATCHES)
             self.assertEqual(struct.unpack_from("<Q", out.read_bytes(), 16)[0], 6)
 
-    def test_low_resolution_game_hud_aim_share_one_coordinate_space(self):
-        # All gameplay and HUD constructors use the requested scene size.
-        # Preserve the native 1920x1080 video/movie allocation branches.
+    def test_low_resolution_game_hud_aim_and_post_share_one_coordinate_space(self):
+        # Full-size/half-size postprocess images were incorrectly pinned to
+        # 1920x1080 / 960x540, causing 1080p color alongside 720p depth.
         for profile, (width, height) in profiles.LOW_RES_SCENE.items():
             baseline = dict((at, (original, replacement))
                             for at, original, replacement in
@@ -68,8 +68,12 @@ class BaseExecutablePatches(unittest.TestCase):
             patches = profiles.scene_aim_resolution_patches(profile)
             self.assertEqual(len(patches), len(baseline))
             changed = {at for at, old, new in patches if new != baseline[at][1]}
-            self.assertEqual(changed, {*profiles.GAME_UI_NATIVE_OVERRIDES,
-                                       profiles.AIM_NORMALIZATION_ADDRESS})
+            required = {*profiles.GAME_UI_NATIVE_OVERRIDES,
+                        *profiles.POSTPROCESS_FULL_SITES,
+                        *profiles.POSTPROCESS_HALF_SITES,
+                        profiles.AIM_NORMALIZATION_ADDRESS}
+            self.assertEqual(changed, required)
+            updated = {at: new for at, old, new in patches}
             for at, original, replacement in patches:
                 self.assertEqual(original, baseline[at][0])
                 self.assertEqual(len(replacement), len(original))
@@ -78,16 +82,21 @@ class BaseExecutablePatches(unittest.TestCase):
                     self.assertIn(struct.pack("<I", height).hex(), replacement)
                     self.assertNotIn("80070000", replacement)
                     self.assertNotIn("38040000", replacement)
-            b = bytes.fromhex(dict((at, new) for at, _, new in patches)[
-                profiles.AIM_NORMALIZATION_ADDRESS])
+            for at in profiles.POSTPROCESS_FULL_SITES:
+                self.assertIn("b9"+struct.pack("<I",width).hex()+
+                              "41b8"+struct.pack("<I",height).hex(), updated[at])
+                self.assertNotIn("b98007000041b838040000", updated[at])
+            for at in profiles.POSTPROCESS_HALF_SITES:
+                self.assertIn("b9"+struct.pack("<I",width//2).hex()+
+                              "41b8"+struct.pack("<I",height//2).hex(), updated[at])
+                self.assertNotIn("b9c003000041b81c020000", updated[at])
+            b = bytes.fromhex(updated[profiles.AIM_NORMALIZATION_ADDRESS])
             self.assertAlmostEqual(struct.unpack_from("<f", b, 1)[0], 1/height, places=8)
             self.assertAlmostEqual(struct.unpack_from("<f", b, 10)[0], 1/width, places=8)
-            for address in profiles.MOVIE_NATIVE_ALLOCATION_SITES:
-                self.assertEqual(dict((at, new) for at, _, new in patches)[address],
-                                 baseline[address][1])
             self.assertEqual(profiles.selected_options({"resolution":profile})
                              ["resolution-"+profile], patches)
         self.assertNotIn("resolution-original", profiles.selected_options({"resolution":"original"}))
+
 
     def test_low_resolution_rejects_unrecognized_hud_patch(self):
         address = next(iter(profiles.GAME_UI_NATIVE_OVERRIDES))
