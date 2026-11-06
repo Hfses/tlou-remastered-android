@@ -198,34 +198,37 @@ PERFORMANCE_RESOLUTIONS = {
 }
 
 
-# CUSA00552 01.00: the resolution profiles retain a 1920x1080 UI but
-# 0x9d4023 is a screen-coordinate normalization routine. The Bachata-derived
-# replacement above wrote 1/1920 and 1/1080 at *every* resolution, so a
-# scene-space aim point at 720p/540p/360p was normalized in 1080p pixels.
-# Keep all other UI/viewport patches unchanged; repair only the pair of
-# reciprocal factors at this verified instruction address.
+# CUSA00552 01.00: the game's low-resolution patch changes scene
+# allocations, but the device's 720p target audit shows a separate 1920x1080
+# HUD/movie surface. The 1080p baseline uses native inverse dimensions for
+# the 32-byte pixel-coordinate uniform at 0x9D4023.
+#
+# Earlier code replaced that uniform with 1/720 and 1/1280 in 720p (and
+# analogous values at 540p/360p). It put a scene-space normalizer into an
+# output-space HUD surface and was part of the crosshair misalignment.
+# The guarded Bachata-derived low-res profiles *already* preserve native
+# 1/1080 and 1/1920 at this instruction; do not override those constants.
 LOW_RES_SCENE = {"720": (1280, 720), "540": (960, 540), "360": (640, 360)}
 AIM_NORMALIZATION_ADDRESS = 0x9D4023
 
 
 def scene_aim_resolution_patches(resolution):
     patches = list(PERFORMANCE_RESOLUTIONS[resolution])
-    width, height = LOW_RES_SCENE[resolution]
-    for i, (at, old, replacement) in enumerate(patches):
-        if at != AIM_NORMALIZATION_ADDRESS:
-            continue
-        insn = bytearray.fromhex(replacement)
-        # mov esi, imm32; vmovq xmm0, rsi; mov edx, imm32; vmovq xmm1, rdx
-        if (len(insn) < 18 or insn[0] != 0xBE or
-                insn[5:10] != bytes.fromhex("c5f96ec6ba") or
-                insn[14:18] != bytes.fromhex("c5f96eca")):
-            raise ValueError("Instruções de escala de mira desconhecidas")
-        insn[1:5] = struct.pack("<f", 1.0 / height)
-        insn[10:14] = struct.pack("<f", 1.0 / width)
-        patches[i] = (at, old, insn.hex())
-        break
-    else:
-        raise ValueError("Escala de mira não encontrada no perfil " + resolution)
+    matches = [(old, replacement) for at, old, replacement in patches
+               if at == AIM_NORMALIZATION_ADDRESS]
+    if len(matches) != 1:
+        raise ValueError("Escala nativa da interface não encontrada no perfil " + resolution)
+    old, replacement = matches[0]
+    insn = bytes.fromhex(replacement)
+    # mov esi, f32(1/1080); vmovd xmm0,esi;
+    # mov edx, f32(1/1920); vmovd xmm1,edx.
+    if (len(insn) < 18 or insn[0] != 0xBE or
+            insn[5:10] != bytes.fromhex("c5f96ec6ba") or
+            insn[14:18] != bytes.fromhex("c5f96eca")):
+        raise ValueError("Instruções de escala do HUD desconhecidas")
+    vertical, horizontal = struct.unpack_from("<f", insn, 1)[0], struct.unpack_from("<f", insn, 10)[0]
+    if abs(vertical - 1.0 / 1080.0) > 1e-9 or abs(horizontal - 1.0 / 1920.0) > 1e-9:
+        raise ValueError("O perfil perdeu a escala nativa da mira/interface")
     return patches
 
 
