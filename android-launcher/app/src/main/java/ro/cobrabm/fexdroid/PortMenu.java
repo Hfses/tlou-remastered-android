@@ -204,6 +204,12 @@ final class PortMenu {
                     new String[]{"30 FPS","60 FPS"},
                     new String[]{"30","60"},"60");
                 toggle("vsync","VSync",true);
+                choice("geometry_sync","Sincronização da geometria",
+                    new String[]{"Rápido (mais FPS; pode deformar)",
+                                 "Equilibrado (recomendado)",
+                                 "Completo (menos FPS)"},
+                    new String[]{"fast","balanced","full"},"balanced");
+                note("Reinicie o jogo para aplicar. A mira e a resolução não mudam.");
                 break;
             case "patches":
                 heading("PATCHES");
