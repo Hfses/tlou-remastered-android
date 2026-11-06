@@ -244,8 +244,8 @@ public final class MainActivity extends Activity {
                 new String[]{"Unificado: jogo, interface e mira na resolução escolhida",
                              "Compatibilidade: interface 1080p (proxies Vulkan)"},
                 new String[]{"guest","proxy"},"guest");
-            video.addView(text("O modo Unificado mantém cena e interface na mesma resolução; vídeos preservam a resolução original. "
-                +"Compatibilidade mantém a composição de interface em 1080p.",12,MUTED));
+            video.addView(text("O modo Unificado mantém cena e interface na mesma resolução; a decodificação dos vídeos não muda. "
+                +"Compatibilidade mantém a composição da interface em 1080p.",12,MUTED));
             video.addView(text("Sincronização da geometria: Completo (único modo). "
                 +"Correção de deformações mantida sem opções que não melhoraram o FPS.",12,MUTED));
             LinearLayout drivers=card(root,"DRIVER VULKAN");
