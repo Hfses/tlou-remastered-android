@@ -95,10 +95,14 @@ grep -Fq '(active || spatial_session) ? preset : 0' gow3_pc/gpu/shadps4/video_co
 grep -Fq '(spatial_session && scene_targets.Reduced())' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
 grep -Fq 'RunUiOnly(color, depth);' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
 grep -Fq 'vk::Filter::eLinear' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
-grep -Fq 'env.put("TLOU_AUTO_SMALL_CS_READBACK",geometryMode);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
-grep -Fq 'final String geometry=p.getString("geometry_sync","balanced");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
-grep -Fq 'env.remove("GOW3_ASYNC_READBACK");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
-grep -Fq 'EligibleBalanced(' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_rasterizer.cpp
+# The user tested Full geometry sync in both direct 720p and native 1080p:
+# retain it alone. Guard against silently restoring Fast/Balanced fallbacks.
+grep -Fq 'env.put("TLOU_AUTO_SMALL_CS_READBACK","2");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'const bool automatic_result =' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_rasterizer.cpp
+if grep -Fq 'EligibleBalanced(' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_rasterizer.cpp; then
+    echo 'ERROR: discarded Balanced geometry synchronization was reintroduced' >&2
+    exit 1
+fi
 grep -Fq 'env.put("GOW3_ASYNC_READBACK","1");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 
 # CUSA00552 01.00: do not regress to the PC-only hash/stride fallback or
