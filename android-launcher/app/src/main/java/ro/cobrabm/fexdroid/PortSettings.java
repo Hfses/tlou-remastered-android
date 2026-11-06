@@ -90,6 +90,7 @@ final class PortSettings {
             if(proxy) {
                 env.remove("GOW3_RENDER_RES");
                 env.remove("TLOU_UNIFIED_GUEST_UI");
+                env.remove("GOW3_MOVIE_SIZE");
                 env.put("GOW3_UPSCALE_PRESET",scaledPreset);
                 env.put("TLOU_SPATIAL_SCENE","1");
                 env.put("TLOU_HOST_SCENE_MODE","1");
@@ -104,10 +105,15 @@ final class PortSettings {
                 env.remove("TLOU_HOST_SCENE_MODE");
                 env.put("TLOU_UNIFIED_GUEST_UI","1");
                 env.put("TLOU_EXPECT_SCENE_SIZE",actualSize);
+                // Video-only NV12 adaptation: decoder stays native 1080p,
+                // while the movie's Y+UV sampling planes use the display's
+                // 720p layout. This flag is ignored by every gameplay shader.
+                env.put("GOW3_MOVIE_SIZE",actualSize);
             }
         } else {
             env.remove("GOW3_RENDER_RES");
             env.remove("TLOU_UNIFIED_GUEST_UI");
+            env.remove("GOW3_MOVIE_SIZE");
             env.remove("TLOU_SPATIAL_SCENE");
             env.remove("TLOU_HOST_SCENE_MODE");
             env.remove("TLOU_EXPECT_HOST_SCENE");
@@ -180,7 +186,9 @@ final class PortSettings {
               .append(env.containsKey("TLOU_UNIFIED_GUEST_UI")
                       ?env.getOrDefault("TLOU_EXPECT_SCENE_SIZE","1920x1080")
                       :"1920x1080");
-        result.append("; video-decoding=original; host-scene=")
+        result.append("; video-decoding=original; movie-plane-layout=")
+              .append(env.getOrDefault("GOW3_MOVIE_SIZE","native"));
+        result.append("; host-scene=")
               .append(env.getOrDefault("TLOU_EXPECT_HOST_SCENE","native"));
         result.append("; scene-composite=")
               .append(env.containsKey("TLOU_UNIFIED_GUEST_UI")?"unified-direct-no-ui-blit":
