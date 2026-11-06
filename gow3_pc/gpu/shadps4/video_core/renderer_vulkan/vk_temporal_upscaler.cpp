@@ -193,6 +193,14 @@ TemporalUpscaler::TemporalUpscaler(const Instance& instance_, Scheduler& schedul
     // Explicit resolution overrides retain the old compatibility path. Normal presets
     // keep guest allocations/UI native and change only host raster targets at frame boundaries.
     scaled_session = std::getenv("GOW3_RENDER_RES") && std::getenv("GOW3_RENDER_RES")[0];
+    // Independently select spatial-only scaling without activating a temporal
+    // reconstruction provider. Retain guest camera/aim/UI coordinates at 1080p.
+    const char* spatial_env = std::getenv("TLOU_SPATIAL_SCENE");
+    spatial_session = !scaled_session && spatial_env && spatial_env[0] == '1';
+    if (spatial_session) {
+        std::printf("TLOU spatial scene: no FSR, Vulkan scene proxy -> linear UI blit at 1080p\n");
+        std::fflush(stdout);
+    }
     render_width = 1920;
     render_height = 1080;
     if (const char* res = std::getenv("GOW3_RENDER_RES")) {
@@ -208,11 +216,12 @@ TemporalUpscaler::TemporalUpscaler(const Instance& instance_, Scheduler& schedul
                               .optimalTilingFeatures;
     depth_blit = (features & vk::FormatFeatureFlagBits::eBlitSrc) &&
                  (features & vk::FormatFeatureFlagBits::eBlitDst);
-    if (enabled && !instance.IsStorageImageWriteWithoutFormatEnabled()) {
+    // A spatial blit needs neither FSR storage-image writes nor temporal history.
+    if (enabled && !spatial_session && !instance.IsStorageImageWriteWithoutFormatEnabled()) {
         std::printf("Upscaler: shaderStorageImageWriteWithoutFormat unsupported, FSR 3 off\n");
         enabled = false;
     }
-    Gow3Settings::Get().temporal_aa_available = enabled && trigger_hash != 0;
+    Gow3Settings::Get().temporal_aa_available = enabled && !spatial_session && trigger_hash != 0;
     // Games drawn below the output size (see OnComposite).
     if (const char* ps = std::getenv("GOW3_UI_COMPOSITE_PS")) {
         composite_ps = u32(std::strtoull(ps, nullptr, 16));
@@ -327,7 +336,8 @@ bool TemporalUpscaler::OnFrameStart() {
     // the scale: 1.5 Quality, 1.7 Balanced, 2 Performance, more Ultra Performance.
     // By the height: ultrawide widths are rounded to steps of 8.
     const float scale = float(target_height) / float(std::max(1u, render_height));
-    const int preset = composite_frames ? (scale <= 1.01f ? 0 : scale <= 1.51f ? 1 : scale <= 1.71f ? 2
+    const int preset = spatial_session ? settings.preset.load()
+                       : composite_frames ? (scale <= 1.01f ? 0 : scale <= 1.51f ? 1 : scale <= 1.71f ? 2
                                                           : scale <= 2.01f ? 3 : 4)
                        : camera_motion.VelocityMode() ? 0 : Gow3Settings::RenderPreset();
     if (applied_preset != preset || settings.upscaler == Gow3Settings::UpscalerOff) failed = false;
@@ -358,7 +368,10 @@ bool TemporalUpscaler::OnFrameStart() {
     // Dynamic scene resolution scaling (live preset switching) works on all GPUs.
     // On GPUs without D32S8 blit support, UI depth is cleared instead of copied from scene.
     if (!scaled_session) {
-        scene_targets.SetSize(SceneResolution::ForPreset(active ? preset : 0,
+        // Spatial-only TLOU uses reduced render proxies even with FSR explicitly
+        // disabled. Retaining the original 1080p guest allocations keeps the
+        // aiming coordinates and UI aligned.
+        scene_targets.SetSize(SceneResolution::ForPreset((active || spatial_session) ? preset : 0,
                                                         {target_width, target_height}));
         render_width = scene_targets.Size().width;
         render_height = scene_targets.Size().height;
@@ -1355,7 +1368,10 @@ float TemporalUpscaler::SceneMipBias() const {
 }
 
 bool TemporalUpscaler::Scaled() const {
-    return scaled_session || target_width != 1920 || target_height != 1080;
+    // Reduced host raster proxies need the native-size UI composition path
+    // even when no temporal upscaler is active (TLOU spatial-only mode).
+    return scaled_session || (spatial_session && scene_targets.Reduced()) ||
+           target_width != 1920 || target_height != 1080;
 }
 
 void TemporalUpscaler::OnColorTarget(VideoCore::ImageId color) {
