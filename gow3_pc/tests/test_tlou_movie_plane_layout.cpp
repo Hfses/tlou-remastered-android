@@ -3,6 +3,7 @@
 // scratch movie planes. The game and its HUD remain unchanged.
 #include <cassert>
 #include <cstdint>
+#include <initializer_list>
 #include <type_traits>
 #include "../gpu/shim/gow3_movie_bridge.h"
 
