@@ -1386,10 +1386,20 @@ void TemporalUpscaler::OnColorTarget(VideoCore::ImageId color) {
         }
         return;
     }
-    if (ui_phase || !camera_motion.Depth()) {
+    if (ui_phase) return;
+    const auto& image = texture_cache.GetImage(color);
+    // CUSA00552 01.00 direct 720p/540p/360p path: the game's postprocess
+    // produces an RGBA8 frame without depth, followed by a separate 1080p
+    // HUD target. A depth-only LDR detector can miss this frame entirely,
+    // preventing spatial composition (as seen in the device log).
+    if (scaled_session && !composite_frames &&
+        image.info.pixel_format == vk::Format::eR8G8B8A8Unorm &&
+        RenderTarget(image.info.size.width, image.info.size.height) &&
+        !FrameCapture::IsDisplayBuffer(image.info.guest_address)) {
+        ldr_target = color;
         return;
     }
-    const auto& image = texture_cache.GetImage(color);
+    if (!camera_motion.Depth()) return;
     const auto& depth = texture_cache.GetImage(camera_motion.Depth());
     if (image.info.pixel_format == vk::Format::eR8G8B8A8Unorm &&
         image.info.size.width == depth.info.size.width &&
