@@ -7,6 +7,7 @@
 #include <string.h>
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
+#include "../gpu/shim/gow3_movie_bridge.h"
 
 #define ERR_API_FAIL ((int32_t)0x80C10000)
 #define ERR_STRUCT_SIZE ((int32_t)0x80C10002)
@@ -127,15 +128,38 @@ static int32_t picture(Decoder *d, FrameBuffer *buffer, PictureInfo *info) {
             printf("Runtime: Videodec2 frame %ux%u pitch %u rows %u into %p (buffer %llu bytes)\n", width, height,
                    pitch, rows, (void *)luma, (unsigned long long)buffer->frame_buffer_size);
     }
+    // Video-only bridge. The game and its HUD are 720p, but the movie
+    // decoder correctly outputs native 1920x1080 NV12. Previously the
+    // conversion shaders assumed a 720p UV offset within that 1080p buffer,
+    // producing green and oversized movies. Keep the *native decoded buffer*
+    // intact, copy a 720p NV12 picture into movie-only scratch guest memory,
+    // and expose scaled plane descriptors via Gow3Movie::Remap.
+    // If scaling fails, retain the original frame metadata as a fallback.
+    uint32_t shown_width=width, shown_height=height;
+    const int scaled=gow3_movie_scale_nv12(
+        (uint64_t)(uintptr_t)luma, f->data[0], f->data[1],
+        width, height, f->linesize[0], f->linesize[1],
+        &shown_width, &shown_height);
+    if (scaled) {
+        static int logged_scaled=0;
+        if (logged_scaled++<4)
+            printf("Runtime: Videodec2 movie planes %ux%u -> %ux%u "
+                   "(native decoded frame preserved)\n",
+                   width, height, shown_width, shown_height);
+        pitch=align(shown_width,64);
+        rows=align(shown_height,16);
+    }
     info->is_valid=1; info->codec_type=0;
-    info->frame_width=align(width,16); info->frame_pitch=pitch; info->frame_height=rows;
+    info->frame_width=align(shown_width,16);
+    info->frame_pitch=pitch;
+    info->frame_height=rows;
     info->is_error_pic=0;
     info->pts_data=(uint64_t)d->frame->pts;
     info->attached_data=(uint64_t)(uintptr_t)d->frame->opaque;
     memset(&info->codec,0,sizeof(info->codec));
     info->codec.avc.colour_primaries=(uint8_t)d->frame->color_primaries;
-    info->codec.avc.crop_right=pitch-width;
-    info->codec.avc.crop_bottom=rows-height;
+    info->codec.avc.crop_right=pitch-shown_width;
+    info->codec.avc.crop_bottom=rows-shown_height;
     return 0;
 }
 static int32_t receive(Decoder *d, FrameBuffer *buffer, PictureInfo *info) {
