@@ -243,16 +243,11 @@ public final class MainActivity extends Activity {
             choice(video,"render_path","Método de resolução (requer reiniciar o jogo)",
                 new String[]{"Desempenho: renderização real 720p/540p/360p, UI 1080p",
                              "Compatibilidade: alvos Vulkan reduzidos (mais GPU)"},
-                new String[]{"guest","proxy"},"guest");
+                new String[]{"guest","proxy"},"proxy");
             video.addView(text("O modo Desempenho evita cópias de buffers intermediários em 1080p. "
                 +"Compatibilidade mantém o método anterior de alinhamento da mira caso seja necessário.",12,MUTED));
-            choice(video,"geometry_sync","Sincronização da geometria",
-                new String[]{"Rápido (mais FPS; pode deformar personagens)",
-                             "Equilibrado (recomendado)",
-                             "Completo (mais compatibilidade; menos FPS)"},
-                new String[]{"fast","balanced","full"},"balanced");
-            video.addView(text("A sincronização é aplicada na próxima inicialização do jogo. "
-                +"O modo Equilibrado protege os buffers de física identificáveis sem sincronizar todos os shaders.",12,MUTED));
+            video.addView(text("Sincronização da geometria: Completo (único modo). "
+                +"Correção de deformações mantida sem opções que não melhoraram o FPS.",12,MUTED));
             LinearLayout drivers=card(root,"DRIVER VULKAN");
             driverInfo=text("",12,MUTED);drivers.addView(driverInfo);
             add(drivers,"Selecionar driver Vulkan",false,this::selectDriver);
