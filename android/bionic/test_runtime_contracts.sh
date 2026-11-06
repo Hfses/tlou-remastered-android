@@ -77,6 +77,9 @@ grep -Fq 'env.put("GOW3_UPSCALER","off");' android-launcher/app/src/main/java/ro
 grep -Fq 'GAME_UI_NATIVE_OVERRIDES' android/tlou_patches.py
 grep -Fq 'POSTPROCESS_FULL_SITES' android/tlou_patches.py
 grep -Fq 'POSTPROCESS_HALF_SITES' android/tlou_patches.py
+grep -Fq 'half_width = struct.pack("<I", width // 2).hex()' android/tlou_patches.py
+grep -Fq 'half_height = struct.pack("<I", height // 2).hex()' android/tlou_patches.py
+grep -Fq 'Perfil de resolução unificada incompleto' android/tlou_patches.py
 grep -Fq '0x92EF1A, 0x92EFC0' android/tlou_patches.py
 grep -Fq '0x92EF7D, 0x92F00D' android/tlou_patches.py
 grep -Fq 'env.put("TLOU_EXPECT_SCENE_SIZE",actualSize);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
