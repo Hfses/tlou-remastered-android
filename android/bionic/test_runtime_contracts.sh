@@ -87,6 +87,24 @@ grep -Fq 'env.remove("TLOU_SPATIAL_SCENE");' android-launcher/app/src/main/java/
 grep -Fq 'struct.pack_into("<f", insn, 1, 1.0 / height)' android/tlou_patches.py
 grep -Fq 'struct.pack_into("<f", insn, 10, 1.0 / width)' android/tlou_patches.py
 
+# TLOU's Android executable calls the *C* Videodec2 runtime. Ensure it
+# reaches the isolated Vulkan movie scaler/remapper; the C++ Videodec2 shim
+# alone does not receive the real game's decoded frames.
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+    gow3_pc/tests/test_tlou_movie_plane_layout.cpp -o "$test_dir/tlou-movie-layout"
+"$test_dir/tlou-movie-layout"
+cc -std=c11 -Wall -Wextra -Werror -x c -fsyntax-only \
+    -include gow3_pc/gpu/shim/gow3_movie_bridge.h /dev/null
+grep -Fq 'env.put("GOW3_MOVIE_SIZE",actualSize);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.remove("GOW3_MOVIE_SIZE");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'gow3_movie_scale_nv12(' gow3_pc/src/runtime_videodec.c
+grep -Fq 'extern "C" int gow3_movie_scale_nv12(' gow3_pc/gpu/shim/gow3_movie.cpp
+grep -Fq 'Gow3Movie::RecordFrame(guest_base, src_width, src_height' gow3_pc/gpu/shim/gow3_movie.cpp
+grep -Fq 'Gow3Movie::Remap(' gow3_pc/gpu/shadps4/video_core/texture_cache/image_info.cpp
+grep -Fq 'Gow3Movie::MovieShaderConstant(' gow3_pc/gpu/shadps4/shader_recompiler/recompiler.cpp
+grep -Fq 'TLOU movie NV12:' gow3_pc/gpu/shim/gow3_movie.cpp
+
+
 # The previously tested spatial proxy mode remains an explicitly selected
 # compatibility fallback, not a hidden default.
 # Native 1080p aim with reduced scene proxies does not need temporal FSR.
