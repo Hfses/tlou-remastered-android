@@ -256,6 +256,16 @@ def write_selected(source, prepared, options):
                 return elf[offset + at-start:offset + at-start+length]
         return b""
     patches = dict(BASE_PATCHES)
+    # The 01.00 job-sleep patch forces three formerly conditional wake paths.
+    # Snapdragon 7+ Gen 2 had a persistent job-counter deadlock while the
+    # presentation thread kept flipping; retain the original game branches
+    # on this device instead of globally disabling the job watchdog.
+    job_sleep = (options or {}).get("job_sleep", True)
+    if type(job_sleep) is not bool:
+        raise ValueError("Opção de workers inválida")
+    if not job_sleep:
+        patches.pop("job-sleep")
+        print("TLOU jobs: sleep override OFF; original guest wake logic", flush=True)
     patches.update(requested)
     for name, changes in patches.items():
         for at, expected, _ in changes:
