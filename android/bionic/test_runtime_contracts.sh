@@ -84,6 +84,10 @@ grep -Fq 'env.remove("TLOU_SPATIAL_SCENE");' android-launcher/app/src/main/java/
 grep -Fq '"guest-raster-single-ui-copy"' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'TLOU guest raster UI spatial copy:' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
 grep -Fq 'TLOU native HUD compositor ACTIVE:' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
+# The 720p/540p/360p executable keeps HUD uniforms normalized to the
+# real 1080p UI output; reject reintroduction of the incorrect scene-scale.
+grep -Fq '1.0 / 1080.0' android/tlou_patches.py
+grep -Fq '1.0 / 1920.0' android/tlou_patches.py
 grep -Fq 'UiComposition::NativeUiTransition(' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
 grep -Fq 'RunUiOnly(ldr_target, {});' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
 grep -Fq 'ui_color = color;' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
