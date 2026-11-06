@@ -114,6 +114,8 @@ final class PortSettings {
         StringBuilder result=new StringBuilder("TLOU launch settings: resolution=")
             .append(prefs(context).getString("resolution","original"));
         result.append("; renderer=Vulkan; CPU=FEX ARM64");
+        result.append("; guest-job-worker-wake=")
+              .append(conservativeJobWorkers()?"original":"patched-sleep");
         return result.toString();
     }
 
