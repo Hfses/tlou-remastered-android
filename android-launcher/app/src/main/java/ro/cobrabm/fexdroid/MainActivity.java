@@ -240,6 +240,12 @@ public final class MainActivity extends Activity {
                 new String[]{"30 FPS","60 FPS"},
                 new String[]{"30","60"},"60");
             toggleSetting(video,"vsync","VSync",true);
+            choice(video,"render_path","Método de resolução (requer reiniciar o jogo)",
+                new String[]{"Desempenho: renderização real 720p/540p/360p, UI 1080p",
+                             "Compatibilidade: alvos Vulkan reduzidos (mais GPU)"},
+                new String[]{"guest","proxy"},"guest");
+            video.addView(text("O modo Desempenho evita cópias de buffers intermediários em 1080p. "
+                +"Compatibilidade mantém o método anterior de alinhamento da mira caso seja necessário.",12,MUTED));
             choice(video,"geometry_sync","Sincronização da geometria",
                 new String[]{"Rápido (mais FPS; pode deformar personagens)",
                              "Equilibrado (recomendado)",
