@@ -67,7 +67,10 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror \
 # lower only the host Vulkan scene target via the existing upscaler.
 grep -Fq 'options.put("resolution","original");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'env.put("GOW3_UPSCALER","fsr3");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
-grep -Fq 'env.put("TLOU_AUTO_SMALL_CS_READBACK","1");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.put("TLOU_AUTO_SMALL_CS_READBACK",geometryMode);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'final String geometry=p.getString("geometry_sync","balanced");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.remove("GOW3_ASYNC_READBACK");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'EligibleBalanced(' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_rasterizer.cpp
 grep -Fq 'env.put("GOW3_ASYNC_READBACK","1");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 
 # CUSA00552 01.00: do not regress to the PC-only hash/stride fallback or
