@@ -97,7 +97,7 @@ class TestTLOUBionic(unittest.TestCase):
             base = make_game(t/"game", ver="01.00")
             update = make_game(t/"patch", ver="01.11", include_libc=False)
             (update / "eboot.bin").write_bytes(b"update eboot")
-            (base / "dvdroot_ps4").mkdir()
+            (base / "dvdroot_ps4").mkdir(exist_ok=True)
             (base / "dvdroot_ps4/resource.bin").write_bytes(b"resource")
             view = m.build_view(base, update, t/"work")
             self.assertEqual((view/"eboot.bin").read_bytes(), b"update eboot")

@@ -198,7 +198,7 @@ def prepare(source: Path, game: Path, update: Path | None, out: Path,
     patch_file.unlink(missing_ok=True)
     patched = from_module.image_patches(out / "eboot.elf", patch_file, patches)
     return {
-        "title_id": TITLE_ID,
+        "title_id": base.get("TITLE_ID", TITLE_ID),
         "base_version": base.get("APP_VER"),
         "update_version": new.get("APP_VER") if new else None,
         "prepared_view": str(game_view),

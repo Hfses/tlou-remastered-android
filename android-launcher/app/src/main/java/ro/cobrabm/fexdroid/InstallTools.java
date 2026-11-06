@@ -88,9 +88,12 @@ final class InstallTools {
         progress.accept("Lendo informações do PKG…");
         String info=run(Arrays.asList(helper,"info",pkg.getCanonicalPath()),null);
         java.util.regex.Matcher title=java.util.regex.Pattern.compile("(?im)^\\s*Title ID:\\s*(CUSA[0-9]{5})\\s*$").matcher(info);
-        if (!title.find() || !title.group(1).equals("CUSA00552"))
-            throw new IOException("Este port precisa do PKG CUSA00552 do The Last of Us Remastered");
-        File destination=new File(parent,"CUSA00552").getCanonicalFile();
+        if (!title.find())
+            throw new IOException("Não foi possível identificar o CUSA do PKG PS4");
+        final String cusa=title.group(1);
+        if (!Arrays.asList("CUSA00552","CUSA00556","CUSA00557","CUSA00559").contains(cusa))
+            throw new IOException("Título PS4 não suportado: "+cusa);
+        File destination=new File(parent,cusa).getCanonicalFile();
         if (destination.exists()) throw new IOException("A pasta "+destination+" já existe. Se o jogo já está extraído, use Escolher pasta do jogo.");
         if (pkg.getCanonicalFile().toPath().startsWith(destination.toPath())) throw new IOException("PKG dentro do destino");
         if (!parent.canWrite() || !destination.mkdir()) throw new IOException("Sem acesso de escrita ao destino");
