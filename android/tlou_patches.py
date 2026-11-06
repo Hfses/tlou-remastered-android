@@ -198,14 +198,16 @@ PERFORMANCE_RESOLUTIONS = {
 }
 
 
-# CUSA00552 01.00: unify the in-game scene and HUD viewport in the
-# selected 720p/540p/360p resolution. The previous direct-resolution build
-# left three UI-space constructors at 1920x1080, causing real GPU passes with
-# 1080p color and 720p depth (see TLOU-Android-Logs (8)(2).zip).
+# CUSA00552 01.00: give the in-game scene, depth, HUD, reticle and
+# full/half-size postprocessing a SINGLE resolution domain.
+# The 2026-11-06 Android log proved 720p depth alongside 1080p color.
+# Disassembly of the user's original ELF at 0x92EF1A..0x92F00D confirms
+# these are paired full/half framebuffer creations (0x9CC310 calls):
+# the old performance profile incorrectly pinned them to 1920x1080
+# and 960x540, independent of the selected 720/540/360 resolution.
 #
-# Do NOT change 0x92EF1A and 0x92EFC0: those 1920x1080 allocation branches
-# are deliberately left native for the movie/video path. The other three
-# 1920x1080 overrides are in the game/UI path and share the guest resolution.
+# This profile does NOT modify video content, movie decoder, codecs or source
+# frame dimensions. The video path may still present a native-size frame.
 LOW_RES_SCENE = {"720": (1280, 720), "540": (960, 540), "360": (640, 360)}
 AIM_NORMALIZATION_ADDRESS = 0x9D4023
 GAME_UI_NATIVE_OVERRIDES = {
@@ -213,13 +215,16 @@ GAME_UI_NATIVE_OVERRIDES = {
     0x910580: "be80070000ba38040000e9610e0800",
     0x91A37A: "b980070000c4e1fa2ad1b838040000c4e1fa2ad8909090",
 }
-MOVIE_NATIVE_ALLOCATION_SITES = (0x92EF1A, 0x92EFC0)
+POSTPROCESS_FULL_SITES = (0x92EF1A, 0x92EFC0)
+POSTPROCESS_HALF_SITES = (0x92EF7D, 0x92F00D)
 
 
 def scene_aim_resolution_patches(resolution):
-    """One resolution for gameplay, HUD, aim and depth; movies remain native."""
+    """Guarded CUSA00552 1.00 scene/UI/post unified resolution profile."""
     width, height = LOW_RES_SCENE[resolution]
     scene_width, scene_height = struct.pack("<I", width).hex(), struct.pack("<I", height).hex()
+    half_width = struct.pack("<I", width // 2).hex()
+    half_height = struct.pack("<I", height // 2).hex()
     patches = []
     visited = set()
     for at, original, raw in PERFORMANCE_RESOLUTIONS[resolution]:
@@ -227,11 +232,21 @@ def scene_aim_resolution_patches(resolution):
         if at in GAME_UI_NATIVE_OVERRIDES:
             if raw != GAME_UI_NATIVE_OVERRIDES[at]:
                 raise ValueError("Patch UI/resolução fora do perfil CUSA00552 verificado")
-            # Only the two guarded mov-immediates are changed. No call targets,
-            # NOP boundaries, movie source dimensions, or other patches move.
             if raw.count("80070000") != 1 or raw.count("38040000") != 1:
                 raise ValueError("Constantes de viewport da UI não reconhecidas")
             replacement = raw.replace("80070000", scene_width).replace("38040000", scene_height)
+            visited.add(at)
+        elif at in POSTPROCESS_FULL_SITES or at in POSTPROCESS_HALF_SITES:
+            # Replace just the mov ecx,width / mov r8d,height argument pair
+            # to the frame allocator. Preserve call displacement and all
+            # alignment/flags/target format arguments byte for byte.
+            full = at in POSTPROCESS_FULL_SITES
+            expected = "b98007000041b838040000" if full else "b9c003000041b81c020000"
+            scaled = ("b9" + (scene_width if full else half_width) +
+                      "41b8" + (scene_height if full else half_height))
+            if raw.count(expected) != 1:
+                raise ValueError("Alocação de framebuffer full/half fora do perfil verificado")
+            replacement = raw.replace(expected, scaled)
             visited.add(at)
         elif at == AIM_NORMALIZATION_ADDRESS:
             insn = bytearray.fromhex(raw)
@@ -246,16 +261,13 @@ def scene_aim_resolution_patches(resolution):
             struct.pack_into("<f", insn, 10, 1.0 / width)
             replacement = insn.hex()
             visited.add(at)
+        if len(replacement) != len(raw):
+            raise ValueError("Tamanho do patch de resolução modificado")
         patches.append((at, original, replacement))
-    if visited != {*GAME_UI_NATIVE_OVERRIDES, AIM_NORMALIZATION_ADDRESS}:
-        raise ValueError("Perfil unificado incompleto: não modificar resolução")
-    # No movie allocations are touched, even if the UI is configured at 720p.
-    for at in MOVIE_NATIVE_ALLOCATION_SITES:
-        source = next((raw for where, _, raw in PERFORMANCE_RESOLUTIONS[resolution]
-                       if where == at), None)
-        updated = next((raw for where, _, raw in patches if where == at), None)
-        if source is None or source != updated:
-            raise ValueError("Patch de vídeo original não pode ser alterado")
+    required = {*GAME_UI_NATIVE_OVERRIDES, *POSTPROCESS_FULL_SITES,
+                *POSTPROCESS_HALF_SITES, AIM_NORMALIZATION_ADDRESS}
+    if visited != required:
+        raise ValueError("Perfil de resolução unificada incompleto")
     return patches
 
 
