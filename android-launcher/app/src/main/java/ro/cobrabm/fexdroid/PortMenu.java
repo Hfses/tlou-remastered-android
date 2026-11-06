@@ -207,14 +207,11 @@ final class PortMenu {
                 choice("render_path","Método de resolução",
                     new String[]{"Desempenho: raster real + UI 1080p",
                                  "Compatibilidade: Vulkan proxies (mais GPU)"},
-                    new String[]{"guest","proxy"},"guest");
+                    new String[]{"guest","proxy"},"proxy");
                 note("Reinicie o jogo para aplicar o método de resolução.");
-                choice("geometry_sync","Sincronização da geometria",
-                    new String[]{"Rápido (mais FPS; pode deformar)",
-                                 "Equilibrado (recomendado)",
-                                 "Completo (menos FPS)"},
-                    new String[]{"fast","balanced","full"},"balanced");
-                note("Reinicie o jogo para aplicar. A mira e a resolução não mudam.");
+                note("Sincronização da geometria: Completo (único modo). "
+                     +"Preserva a correção das deformações.");
+                note("Reinicie o jogo para aplicar o método de resolução.");
                 break;
             case "patches":
                 heading("PATCHES");
