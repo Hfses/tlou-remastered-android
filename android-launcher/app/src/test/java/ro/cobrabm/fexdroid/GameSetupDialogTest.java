@@ -53,7 +53,7 @@ public class GameSetupDialogTest {
             }
         }
     }
-    @Test public void releaseProfileDisablesDiagnosticOverheadAndPreservesTestedDefaults() {
+    @Test public void releaseProfileDisablesHeavyDiagnosticsAndPreservesBoundedCpuSamples() {
         try(var controller=Robolectric.buildActivity(Activity.class).setup()) {
             Activity activity=controller.get();
             PortSettings.prefs(activity).edit().putBoolean("gpu_profile",true)
@@ -65,7 +65,9 @@ public class GameSetupDialogTest {
             env.put("TLOU_CPU_PHASE_SAMPLES","1");env.put("GOW3_GPU_PROFILE","1");
             env.put("GOW3_FRAME_STATS","1");env.put("GOW3_PERF_DIAG","1");
             PortSettings.environment(activity,env);
-            assertEquals("0",env.get("TLOU_CPU_PHASE_SAMPLES"));
+            // Eight bounded samples per second expose draw/dispatch CPU phase
+            // costs without enabling verbose frame/GPU diagnostics.
+            assertEquals("1",env.get("TLOU_CPU_PHASE_SAMPLES"));
             assertEquals("0",env.get("GOW3_PREP_WORKERS"));
             for(String name:new String[]{"GOW3_GPU_PROFILE","GOW3_FRAME_STATS","GOW3_PERF_DIAG"})
                 assertFalse(env.containsKey(name));
