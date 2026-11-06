@@ -103,6 +103,8 @@ grep -Fq 'Gow3Movie::RecordFrame(guest_base, src_width, src_height' gow3_pc/gpu/
 grep -Fq 'Gow3Movie::Remap(' gow3_pc/gpu/shadps4/video_core/texture_cache/image_info.cpp
 grep -Fq 'Gow3Movie::MovieShaderConstant(' gow3_pc/gpu/shadps4/shader_recompiler/recompiler.cpp
 grep -Fq 'TLOU movie NV12:' gow3_pc/gpu/shim/gow3_movie.cpp
+grep -Fq 'TLOU movie NV12 shader:' gow3_pc/gpu/shim/gow3_movie.cpp
+grep -Fq 'TLOU movie NV12 texture:' gow3_pc/gpu/shim/gow3_movie.cpp
 
 
 # The previously tested spatial proxy mode remains an explicitly selected
