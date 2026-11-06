@@ -36,11 +36,15 @@ final class PortSettings {
     static File patchOptions(Context context) throws Exception {
         SharedPreferences p=prefs(context);
         JSONObject options=new JSONObject();
-        // Keep the PS4's logical camera, aim and HUD at 1920x1080.
-        // The renderer (not guest eboot patches) will scale only scene targets.
-        // This prevents the game rendering its aim in one coordinate system
-        // while drawing the HUD in another at 720p or lower.
-        options.put("resolution","original");
+        // GPU-heavy proxy scaling kept the game native at 1080p and resolved
+        // intermediate targets repeatedly. Direct 01.00 executable scaling
+        // reduces ALL scene/post allocations; the existing Vulkan UI composer
+        // expands the completed LDR background before drawing the HUD at 1080p.
+        // "proxy" is a compatibility fallback for devices whose aim/UI cannot
+        // use that compositor. Never silently change the saved resolution.
+        final String resolution=p.getString("resolution","original");
+        final boolean proxy="proxy".equals(p.getString("render_path","guest"));
+        options.put("resolution",proxy?"original":resolution);
         // CUSA00552 01.00 on Xiaomi 23049PCD8G (Snapdragon 7+ Gen 2)
         // hit a game job-system deadlock after 806 s. The forced job-sleep
         // patch replaces two conditional branches with unconditional waits;
@@ -65,29 +69,42 @@ final class PortSettings {
     static void environment(Context context,Map<String,String> env) {
         SharedPreferences p=prefs(context);
         String resolution=p.getString("resolution","original");
-        // Dynamic Vulkan scene-target scaling: native logical 1920x1080 for
-        // camera, hit testing and UI; lower GPU raster size is internal.
+        // Both backends avoid FSR. Native guest raster minimizes GPU bandwidth:
+        // the game owns real 720/540/360 render targets and runs post at that
+        // resolution. Vulkan performs ONE linear scene-to-HUD spatial copy.
+        // Proxy fallback preserves the previously verified aiming behavior but
+        // resolves native-size intermediate targets (expensive on Adreno).
         final String scaledPreset=resolution.equals("720")?"1":
             resolution.equals("540")?"3":resolution.equals("360")?"4":null;
+        final String renderPath=p.getString("render_path","guest");
+        final boolean proxy="proxy".equals(renderPath);
         env.put("TLOU_EXPECT_SCENE_SIZE","1920x1080");
+        env.put("GOW3_UPSCALER","off");
+        env.put("GOW3_OUTPUT_RES","1920x1080");
         if(scaledPreset!=null) {
-            // The camera, hit tests and HUD stay at the game's native 1080p.
-            // Reduce ONLY the host Vulkan scene targets; composite with a
-            // linear spatial blit before the unchanged native-size UI.
-            // FSR 3.1 is deliberately OFF: its temporal dispatch and history
-            // were an expensive regression even with physics sync disabled.
-            env.put("GOW3_UPSCALER","off");
-            env.put("GOW3_UPSCALE_PRESET",scaledPreset);
-            env.put("TLOU_SPATIAL_SCENE","1");
-            env.put("TLOU_HOST_SCENE_MODE","1");
-            env.put("TLOU_EXPECT_HOST_SCENE",resolution.equals("720")?"1280x720":
-                resolution.equals("540")?"960x540":"640x360");
+            final String actualSize=resolution.equals("720")?"1280x720":
+                resolution.equals("540")?"960x540":"640x360";
+            env.put("TLOU_EXPECT_HOST_SCENE",actualSize);
+            if(proxy) {
+                env.remove("GOW3_RENDER_RES");
+                env.put("GOW3_UPSCALE_PRESET",scaledPreset);
+                env.put("TLOU_SPATIAL_SCENE","1");
+                env.put("TLOU_HOST_SCENE_MODE","1");
+            } else {
+                // The existing scaled_session/RunUiOnly path owns the native
+                // UI composition; no SceneTargets proxy allocation or resolves.
+                env.put("GOW3_RENDER_RES",actualSize);
+                env.remove("GOW3_UPSCALE_PRESET");
+                env.remove("TLOU_SPATIAL_SCENE");
+                env.remove("TLOU_HOST_SCENE_MODE");
+                env.put("TLOU_EXPECT_SCENE_SIZE",actualSize);
+            }
         } else {
+            env.remove("GOW3_RENDER_RES");
             env.remove("TLOU_SPATIAL_SCENE");
             env.remove("TLOU_HOST_SCENE_MODE");
             env.remove("TLOU_EXPECT_HOST_SCENE");
             env.remove("GOW3_UPSCALE_PRESET");
-            env.remove("GOW3_UPSCALER");
         }
 
         // Exact flags observed in launch.log of TLOU-Android-Logs (32).zip.
@@ -156,10 +173,13 @@ final class PortSettings {
         StringBuilder result=new StringBuilder("TLOU launch settings: resolution=")
             .append(prefs(context).getString("resolution","original"));
         result.append("; renderer=Vulkan; CPU=FEX ARM64");
-        result.append("; aim-coordinate-space=guest-1080p; host-scene=")
+        result.append("; game-raster=").append(env.getOrDefault("TLOU_EXPECT_SCENE_SIZE","1920x1080"));
+        result.append("; output-ui=1920x1080; host-scene=")
               .append(env.getOrDefault("TLOU_EXPECT_HOST_SCENE","native"));
         result.append("; scene-composite=")
-              .append(env.containsKey("TLOU_SPATIAL_SCENE")?"spatial-linear-no-fsr":"native");
+              .append(env.containsKey("GOW3_RENDER_RES")?"guest-raster-single-ui-copy":
+                      env.containsKey("TLOU_SPATIAL_SCENE")?"proxy-spatial-compat":"native");
+        result.append("; temporal-fsr=off");
         result.append("; geometry-sync=").append(env.getOrDefault("TLOU_AUTO_SMALL_CS_READBACK","1"));
         result.append("; async-global-protect=").append(env.containsKey("GOW3_ASYNC_READBACK")?"on":"off");
         result.append("; geometry-sync policy=0 known physics only / 1 balanced physics-class / 2 broad compatibility");
