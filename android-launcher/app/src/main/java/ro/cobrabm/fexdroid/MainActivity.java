@@ -240,6 +240,13 @@ public final class MainActivity extends Activity {
                 new String[]{"30 FPS","60 FPS"},
                 new String[]{"30","60"},"60");
             toggleSetting(video,"vsync","VSync",true);
+            choice(video,"geometry_sync","Sincronização da geometria",
+                new String[]{"Rápido (mais FPS; pode deformar personagens)",
+                             "Equilibrado (recomendado)",
+                             "Completo (mais compatibilidade; menos FPS)"},
+                new String[]{"fast","balanced","full"},"balanced");
+            video.addView(text("A sincronização é aplicada na próxima inicialização do jogo. "
+                +"O modo Equilibrado protege os buffers de física identificáveis sem sincronizar todos os shaders.",12,MUTED));
             LinearLayout drivers=card(root,"DRIVER VULKAN");
             driverInfo=text("",12,MUTED);drivers.addView(driverInfo);
             add(drivers,"Selecionar driver Vulkan",false,this::selectDriver);
