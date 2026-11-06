@@ -149,7 +149,7 @@ class TestTLOUBionic(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base = make_game(Path(tmp)/"game")
             update = make_game(Path(tmp)/"patch", include_libc=False)
-            (update/"dvdroot_ps4").mkdir()
+            (update/"dvdroot_ps4").mkdir(exist_ok=True)
             with self.assertRaisesRegex(m.PortError, "native app0 overlay"):
                 m.prepare(Path(tmp), base, update, Path(tmp)/"out")
 
