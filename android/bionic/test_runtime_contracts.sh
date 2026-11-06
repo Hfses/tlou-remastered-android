@@ -63,35 +63,24 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror \
   gow3_pc/tests/test_tlou_auto_readback.cpp -o "$test_dir/tlou-auto-readback"
 "$test_dir/tlou-auto-readback"
 
-# All 720/540/360 render choices preserve native 1080p logical aim/HUD
-# and lower only host Vulkan scene targets; no temporal FSR.
-# Verify native HUD coordinates and 720p-only final game raster, without
-# requiring a FSR shader dispatch or another resolution compatibility mode.
+# The *default* game mode uses a single scene/HUD resolution including aim
+# normalization; native movie/video allocation sites remain untouched.
 g++ -std=c++20 -O2 -Wall -Wextra -Werror -I gow3_pc \
   gow3_pc/tests/test_ui_composition.cpp -o "$test_dir/tlou-ui-composition"
 "$test_dir/tlou-ui-composition"
-
-# Fast backend must really apply the requested game eboot resolution,
-# not silently force native 1080p and allocate two Vulkan target sizes.
 grep -Fq 'options.put("resolution",proxy?"original":resolution);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
-grep -Fq 'env.put("GOW3_RENDER_RES",actualSize);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'final boolean proxy="proxy".equals(p.getString("render_path","guest"));' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
-grep -Fq 'env.put("GOW3_UPSCALER","off");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.put("TLOU_UNIFIED_GUEST_UI","1");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'env.remove("GOW3_RENDER_RES");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
-grep -Fq 'scaled_session ||' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
-grep -Fq 'env.put("GOW3_OUTPUT_RES","1920x1080");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
-grep -Fq 'env.remove("TLOU_SPATIAL_SCENE");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
-grep -Fq '"guest-raster-single-ui-copy"' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
-grep -Fq 'TLOU guest raster UI spatial copy:' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
-grep -Fq 'TLOU native HUD compositor ACTIVE:' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
-# The 720p/540p/360p executable keeps HUD uniforms normalized to the
-# real 1080p UI output; reject reintroduction of the incorrect scene-scale.
-grep -Fq '1.0 / 1080.0' android/tlou_patches.py
-grep -Fq '1.0 / 1920.0' android/tlou_patches.py
-grep -Fq 'UiComposition::NativeUiTransition(' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
-grep -Fq 'const bool ui_draw = rgba8 && (old_movie_target || native_hud_transition);' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
-grep -Fq 'RunUiOnly(ldr_target, {});' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
-grep -Fq 'ui_color = color;' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
+grep -Fq '"unified-direct-no-ui-blit"' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.put("GOW3_UPSCALER","off");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'GAME_UI_NATIVE_OVERRIDES' android/tlou_patches.py
+grep -Fq 'MOVIE_NATIVE_ALLOCATION_SITES' android/tlou_patches.py
+grep -Fq 'struct.pack_into("<f", insn, 1, 1.0 / height)' android/tlou_patches.py
+grep -Fq 'struct.pack_into("<f", insn, 10, 1.0 / width)' android/tlou_patches.py
+
+# The previously tested spatial proxy mode remains an explicitly selected
+# compatibility fallback, not a hidden default.
 # Native 1080p aim with reduced scene proxies does not need temporal FSR.
 g++ -std=c++20 -O2 -Wall -Wextra -Werror -I gow3_pc \
   gow3_pc/tests/test_tlou_spatial_scene.cpp -o "$test_dir/tlou-spatial-scene"
