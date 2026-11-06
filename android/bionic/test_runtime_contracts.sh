@@ -102,7 +102,9 @@ grep -Fq 'buffer->frame_buffer_size, f->data[0], f->data[1]' gow3_pc/src/runtime
 grep -Fq 'gow3_movie_can_scale_in_place(' gow3_pc/gpu/shim/gow3_movie.cpp
 grep -Fq 'in_place ? width : src_width' gow3_pc/gpu/shim/gow3_movie.cpp
 grep -Fq 'extern "C" int gow3_movie_scale_nv12(' gow3_pc/gpu/shim/gow3_movie.cpp
-grep -Fq 'Gow3Movie::RecordFrame(guest_base, src_width, src_height' gow3_pc/gpu/shim/gow3_movie.cpp
+grep -Fq 'Gow3Movie::RecordFrame(' gow3_pc/gpu/shim/gow3_movie.cpp
+# In-place destination must update actual luma/chroma dimensions rather than stale source layout.
+grep -Fq 'guest_base, in_place ? width : src_width' gow3_pc/gpu/shim/gow3_movie.cpp
 grep -Fq 'Gow3Movie::Remap(' gow3_pc/gpu/shadps4/video_core/texture_cache/image_info.cpp
 grep -Fq 'Gow3Movie::MovieShaderConstant(' gow3_pc/gpu/shadps4/shader_recompiler/recompiler.cpp
 grep -Fq 'TLOU movie NV12:' gow3_pc/gpu/shim/gow3_movie.cpp
