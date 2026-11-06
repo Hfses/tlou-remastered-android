@@ -72,9 +72,9 @@ final class PortSettings {
         SharedPreferences p=prefs(context);
         String resolution=p.getString("resolution","original");
         // Direct game mode: scene, gameplay HUD, crosshair and depth all
-        // use the selected resolution. 1080p movie allocations are unchanged
-        // in the guest profile. No Vulkan scene proxies or 720p->1080p HUD
-        // composition are inserted. The Android presenter handles output.
+        // use the selected resolution. The game's full/half post targets
+        // also follow this resolution, while the source movie decoding stays
+        // untouched. No extra Vulkan 720p->1080p HUD composition is inserted.
         // "proxy" remains a separate optional compatibility method.
         final String scaledPreset=resolution.equals("720")?"1":
             resolution.equals("540")?"3":resolution.equals("360")?"4":null;
@@ -180,7 +180,7 @@ final class PortSettings {
               .append(env.containsKey("TLOU_UNIFIED_GUEST_UI")
                       ?env.getOrDefault("TLOU_EXPECT_SCENE_SIZE","1920x1080")
                       :"1920x1080");
-        result.append("; movie-buffers=native; host-scene=")
+        result.append("; video-decoding=original; host-scene=")
               .append(env.getOrDefault("TLOU_EXPECT_HOST_SCENE","native"));
         result.append("; scene-composite=")
               .append(env.containsKey("TLOU_UNIFIED_GUEST_UI")?"unified-direct-no-ui-blit":
