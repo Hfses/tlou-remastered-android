@@ -204,6 +204,11 @@ final class PortMenu {
                     new String[]{"30 FPS","60 FPS"},
                     new String[]{"30","60"},"60");
                 toggle("vsync","VSync",true);
+                choice("render_path","Método de resolução",
+                    new String[]{"Desempenho: raster real + UI 1080p",
+                                 "Compatibilidade: Vulkan proxies (mais GPU)"},
+                    new String[]{"guest","proxy"},"guest");
+                note("Reinicie o jogo para aplicar o método de resolução.");
                 choice("geometry_sync","Sincronização da geometria",
                     new String[]{"Rápido (mais FPS; pode deformar)",
                                  "Equilibrado (recomendado)",
