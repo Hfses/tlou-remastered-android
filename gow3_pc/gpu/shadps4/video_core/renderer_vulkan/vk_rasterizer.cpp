@@ -5843,44 +5843,29 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                     // regardless of their shader hash. Existing EOPs retain half
                     // the event's slots, avoiding starvation and global Readback 2.
 #ifdef __ANDROID__
-                    // 0 fast: existing known hashes only
-                    // 1 balanced (default): physics-class buffers by V# descriptor
-                    // 2 full compatibility: legacy broad 256 B - 8 KiB compute writes
-                    static const int auto_small_results = [] {
-                        const char* env = std::getenv("TLOU_AUTO_SMALL_CS_READBACK");
-                        return !env ? 1 : env[0] == '2' ? 2 : env[0] == '1' ? 1 : 0;
-                    }();
+                    // User-verified Full policy only. It keeps the known exact
+                    // EOP physics results and covers small GPU-written compute
+                    // outputs regardless of shader identity. Fast and Balanced
+                    // were removed; both 720p and 1080p logs used Full.
                     const u32 queued = u32(eop_readbacks.size() + eop_open_readbacks.size());
                     const bool automatic_result =
-                        auto_small_results && EopReadbackMode() == 1 &&
-                        (auto_small_results == 1
-                            ? TlouAutoReadback::EligibleBalanced(
-                                compute_stage, desc.is_written, exact_result, binding.buffer,
-                                vsharp.stride, vsharp.num_records, size, queued)
-                            : TlouAutoReadback::Eligible(
-                                compute_stage, desc.is_written, exact_result,
-                                vsharp.stride, vsharp.num_records, size, queued));
-                    // Report actual copy candidates, not the number of completed
-                    // downloads. In Balanced, compare with the broad Full predicate
-                    // to quantify how much work was avoided on this scene.
-                    if (auto_small_results && compute_stage && desc.is_written) {
-                        static std::atomic<u32> accepted{0}, broad_candidates{0};
+                        EopReadbackMode() == 1 &&
+                        TlouAutoReadback::Eligible(
+                            compute_stage, desc.is_written, exact_result,
+                            vsharp.stride, vsharp.num_records, size, queued);
+                    if (compute_stage && desc.is_written) {
+                        static std::atomic<u32> accepted{0};
                         static std::atomic<s64> last_report{0};
-                        if (automatic_result) accepted.fetch_add(1, std::memory_order_relaxed);
-                        if (TlouAutoReadback::Eligible(compute_stage, desc.is_written,
-                                exact_result, vsharp.stride, vsharp.num_records, size, queued))
-                            broad_candidates.fetch_add(1, std::memory_order_relaxed);
                         static std::atomic<u32> report_probes{0};
+                        if (automatic_result) accepted.fetch_add(1, std::memory_order_relaxed);
                         if ((report_probes.fetch_add(1, std::memory_order_relaxed) & 511u) == 0u) {
                             const s64 now = std::chrono::duration_cast<std::chrono::seconds>(
                                 std::chrono::steady_clock::now().time_since_epoch()).count();
                             if (s64 last = last_report.load(std::memory_order_relaxed);
                                 now - last >= 5 && last_report.compare_exchange_strong(last, now)) {
-                                std::printf("TLOU automatic small compute readbacks (5 s): %u accepted, "
-                                            "%u full-mode eligible; mode=%d\n",
-                                            accepted.exchange(0, std::memory_order_relaxed),
-                                            broad_candidates.exchange(0, std::memory_order_relaxed),
-                                            auto_small_results);
+                                std::printf("TLOU automatic small compute readbacks (5 s): %u "
+                                            "accepted; mode=full\n",
+                                            accepted.exchange(0, std::memory_order_relaxed));
                                 std::fflush(stdout);
                             }
                         }
