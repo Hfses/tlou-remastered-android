@@ -243,7 +243,7 @@ public final class MainActivity extends Activity {
             choice(video,"render_path","Método de resolução (requer reiniciar o jogo)",
                 new String[]{"Desempenho: renderização real 720p/540p/360p, UI 1080p",
                              "Compatibilidade: alvos Vulkan reduzidos (mais GPU)"},
-                new String[]{"guest","proxy"},"proxy");
+                new String[]{"guest","proxy"},"guest");
             video.addView(text("O modo Desempenho evita cópias de buffers intermediários em 1080p. "
                 +"Compatibilidade mantém o método anterior de alinhamento da mira caso seja necessário.",12,MUTED));
             video.addView(text("Sincronização da geometria: Completo (único modo). "
