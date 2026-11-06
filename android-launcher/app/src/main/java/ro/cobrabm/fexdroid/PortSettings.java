@@ -1,6 +1,8 @@
 package ro.cobrabm.fexdroid;
 
 import android.content.Context;
+import android.os.Build;
+import java.util.Locale;
 import android.content.SharedPreferences;
 import org.json.JSONObject;
 import java.io.File;
@@ -35,10 +37,25 @@ final class PortSettings {
         SharedPreferences p=prefs(context);
         JSONObject options=new JSONObject();
         options.put("resolution",p.getString("resolution","original"));
+        // CUSA00552 01.00 on Xiaomi 23049PCD8G (Snapdragon 7+ Gen 2)
+        // hit a game job-system deadlock after 806 s. The forced job-sleep
+        // patch replaces two conditional branches with unconditional waits;
+        // preserve the game's original worker-wake decisions on this SOC.
+        // Other device profiles (including Adreno 830) remain unchanged.
+        options.put("job_sleep",!conservativeJobWorkers());
         for(String key:EFFECTS) options.put(key,p.getBoolean(key,false));
         File file=new File(context.getFilesDir(),"patch-options.json");
         Files.write(file.toPath(),options.toString().getBytes(StandardCharsets.UTF_8));
         return file;
+    }
+
+    static boolean conservativeJobWorkers() {
+        final String model=Build.MODEL==null?"":Build.MODEL.toUpperCase(Locale.ROOT);
+        final String soc=Build.VERSION.SDK_INT>=31 && Build.SOC_MODEL!=null
+            ?Build.SOC_MODEL.toUpperCase(Locale.ROOT):"";
+        // SM7475 = Snapdragon 7+ Gen 2; 23049PCD8G is the exact phone in
+        // TLOU-Android-Logs(5).zip. Do not assume other Adreno 7xx are affected.
+        return soc.contains("SM7475") || model.equals("23049PCD8G");
     }
 
     static void environment(Context context,Map<String,String> env) {
