@@ -83,6 +83,10 @@ grep -Fq 'env.put("GOW3_OUTPUT_RES","1920x1080");' android-launcher/app/src/main
 grep -Fq 'env.remove("TLOU_SPATIAL_SCENE");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq '"guest-raster-single-ui-copy"' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'TLOU guest raster UI spatial copy:' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
+grep -Fq 'TLOU native HUD compositor ACTIVE:' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
+grep -Fq 'UiComposition::NativeUiTransition(' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
+grep -Fq 'RunUiOnly(ldr_target, {});' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
+grep -Fq 'ui_color = color;' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
 # Native 1080p aim with reduced scene proxies does not need temporal FSR.
 g++ -std=c++20 -O2 -Wall -Wextra -Werror -I gow3_pc \
   gow3_pc/tests/test_tlou_spatial_scene.cpp -o "$test_dir/tlou-spatial-scene"
