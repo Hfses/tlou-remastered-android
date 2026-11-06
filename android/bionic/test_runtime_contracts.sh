@@ -65,6 +65,12 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror \
 
 # All 720/540/360 render choices preserve native 1080p logical aim/HUD
 # and lower only host Vulkan scene targets; no temporal FSR.
+# Verify native HUD coordinates and 720p-only final game raster, without
+# requiring a FSR shader dispatch or another resolution compatibility mode.
+g++ -std=c++20 -O2 -Wall -Wextra -Werror -I gow3_pc \
+  gow3_pc/tests/test_ui_composition.cpp -o "$test_dir/tlou-ui-composition"
+"$test_dir/tlou-ui-composition"
+
 # Fast backend must really apply the requested game eboot resolution,
 # not silently force native 1080p and allocate two Vulkan target sizes.
 grep -Fq 'options.put("resolution",proxy?"original":resolution);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
