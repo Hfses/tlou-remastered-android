@@ -71,15 +71,23 @@ final class PortSettings {
             resolution.equals("540")?"3":resolution.equals("360")?"4":null;
         env.put("TLOU_EXPECT_SCENE_SIZE","1920x1080");
         if(scaledPreset!=null) {
-            env.put("GOW3_UPSCALER","fsr3");
+            // The camera, hit tests and HUD stay at the game's native 1080p.
+            // Reduce ONLY the host Vulkan scene targets; composite with a
+            // linear spatial blit before the unchanged native-size UI.
+            // FSR 3.1 is deliberately OFF: its temporal dispatch and history
+            // were an expensive regression even with physics sync disabled.
+            env.put("GOW3_UPSCALER","off");
             env.put("GOW3_UPSCALE_PRESET",scaledPreset);
+            env.put("TLOU_SPATIAL_SCENE","1");
             env.put("TLOU_HOST_SCENE_MODE","1");
             env.put("TLOU_EXPECT_HOST_SCENE",resolution.equals("720")?"1280x720":
                 resolution.equals("540")?"960x540":"640x360");
         } else {
+            env.remove("TLOU_SPATIAL_SCENE");
             env.remove("TLOU_HOST_SCENE_MODE");
             env.remove("TLOU_EXPECT_HOST_SCENE");
             env.remove("GOW3_UPSCALE_PRESET");
+            env.remove("GOW3_UPSCALER");
         }
 
         // Exact flags observed in launch.log of TLOU-Android-Logs (32).zip.
@@ -150,6 +158,8 @@ final class PortSettings {
         result.append("; renderer=Vulkan; CPU=FEX ARM64");
         result.append("; aim-coordinate-space=guest-1080p; host-scene=")
               .append(env.getOrDefault("TLOU_EXPECT_HOST_SCENE","native"));
+        result.append("; scene-composite=")
+              .append(env.containsKey("TLOU_SPATIAL_SCENE")?"spatial-linear-no-fsr":"native");
         result.append("; geometry-sync=").append(env.getOrDefault("TLOU_AUTO_SMALL_CS_READBACK","1"));
         result.append("; async-global-protect=").append(env.containsKey("GOW3_ASYNC_READBACK")?"on":"off");
         result.append("; geometry-sync policy=0 known physics only / 1 balanced physics-class / 2 broad compatibility");
