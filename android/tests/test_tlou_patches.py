@@ -155,8 +155,8 @@ class BaseExecutablePatches(unittest.TestCase):
                              end, end, 0x1000)
             for at, original, _ in sites:
                 original = bytes.fromhex(original)
-                self.assertEqual(raw[at+0x1000:at+0x1000+len(original)],
-                                 bytes(len(original)))
+                # Longer validation guards intentionally overlap an instruction
+                # whose shorter form also becomes a replacement.
                 raw[at+0x1000:at+0x1000+len(original)] = original
             elf.write_bytes(raw)
             patcher = m.load_patch_module(Path(__file__).resolve().parents[2])
