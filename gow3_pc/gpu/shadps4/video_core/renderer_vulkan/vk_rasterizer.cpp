@@ -939,20 +939,21 @@ static bool TlouResultShader(u64 hash) {
                                [hash](const auto& b) { return b.first == hash; });
 }
 
-// Android game revisions can use a different GCN program hash for the same
-// physics output. Accept ONLY the two observed 48-byte-record result shapes.
+// Android 01.00 emits the same 4272/6480-byte compute result sizes with a
+// different shader hash (697cfcc4), slot 6 and raw 4-byte V# stride.
+// Only that observed hash AND its exact layouts qualify for fallback.
 // This is not Precise/Readback 2: the normal EOP path queues a range-limited
 // asynchronous readback, and its watched pages wait only for their producer.
 // When disabled or on desktop, hashes remain the sole recognition method.
-static bool TlouAndroidPhysicsShape(u32 slot, u32 stride, u32 records, u64 bytes) {
+static bool TlouAndroidPhysicsShape(u64 hash, u32 slot, u32 stride, u32 records, u64 bytes) {
 #ifdef __ANDROID__
     static const bool enabled = [] {
         const char* env = std::getenv("TLOU_PHYSICS_SHAPE_READBACK");
         return !env || env[0] != '0';
     }();
-    return enabled && TlouPhysicsReadback::Shape(slot, stride, records, bytes);
+    return enabled && TlouPhysicsReadback::Shape(hash, slot, stride, records, bytes);
 #else
-    (void)slot; (void)stride; (void)records; (void)bytes;
+    (void)hash; (void)slot; (void)stride; (void)records; (void)bytes;
     return false;
 #endif
 }
@@ -5831,12 +5832,12 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                     const bool physics_shape_fallback =
                         compute_stage && EopReadbackMode() != 0 &&
                         !TlouEopReadbackBinding(stage.pgm_hash, binding.buffer) &&
-                        TlouAndroidPhysicsShape(binding.buffer, vsharp.stride,
+                        TlouAndroidPhysicsShape(stage.pgm_hash, binding.buffer, vsharp.stride,
                                                 vsharp.num_records, size);
                     // One bounded diagnostic window for the Android game: the PC
                     // hash pair may differ from the CUSA00552 01.00 guest shader.
                     // Record candidate compute outputs even when the known hashes
-                    // and the exact 48-byte record shape do NOT match. No GPU
+                    // and the exact Android shader/binding signature do NOT match. No GPU
                     // copies, waits or extra barriers are introduced here.
 #ifdef __ANDROID__
                     static const bool trace_physics_coverage = [] {
