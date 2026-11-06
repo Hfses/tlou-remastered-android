@@ -150,6 +150,14 @@ grep -Fq 'env.put("GOW3_READBACKS","1");' android-launcher/app/src/main/java/ro/
 g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_srt_cost.cpp -o "$test_dir/tlou-srt-cost"
 "$test_dir/tlou-srt-cost"
 
+# GPU-range tracking: the new indexed subtraction must invalidate exactly the
+# same cached entries as a full 512-slot scan under interleaved add/subtract.
+# Run both equivalence and host-cost comparison; do not infer FPS from cost.
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+  -I gow3_pc/gpu/shadps4 \
+  gow3_pc/tests/test_tlou_gpu_range_cache_index.cpp -o "$test_dir/gpu-range-index"
+"$test_dir/gpu-range-index"
+
 g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread gow3_pc/tests/test_cpu_phase_sample.cpp -o "$test_dir/cpu-phase-sample"
 "$test_dir/cpu-phase-sample" --correctness-only
 

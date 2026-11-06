@@ -29,6 +29,7 @@
 #include "video_core/buffer_cache/buffer.h"
 #include "video_core/buffer_cache/fault_manager.h"
 #include "video_core/buffer_cache/range_set.h"
+#include "video_core/buffer_cache/gpu_range_cache_index.h"
 #include "video_core/renderer_vulkan/vk_semaphore.h"
 
 namespace AmdGpu {
@@ -496,7 +497,8 @@ private:
         }();
         const u64 tick = size && range_cache ? RangeTick() : 0;
         if (range_cache && size) {
-            auto& entry = gpu_add_cache[((address >> 6) ^ (address >> 18) ^ size) & (GpuAddCacheSize - 1)];
+            const size_t slot = ((address >> 6) ^ (address >> 18) ^ size) & (GpuAddCacheSize - 1);
+            auto& entry = gpu_add_cache[slot];
             if (entry.address == address && entry.size == size) {
                 if (entry.tick != tick) {
                     entry.tick = tick;
@@ -504,6 +506,9 @@ private:
                 }
                 return;
             }
+            // A cache MISS updates the spatial index. The common repeated-add
+            // path stays unchanged; a subtraction no longer scans all 512 slots.
+            gpu_add_index.Replace(slot, address, size);
             entry = {address, size, tick};
         }
         gpu_modified_ranges.Add(address, size);
@@ -520,6 +525,7 @@ private:
     };
     static constexpr u32 GpuAddCacheSize = 512;
     std::array<GpuAddCacheEntry, GpuAddCacheSize> gpu_add_cache{};
+    Detail::GpuRangeCacheIndex<GpuAddCacheSize> gpu_add_index{};
     void NoteGpuWriteWindows(VAddr address, u64 size);
     /// gow3: the scheduler tick NoteGpuWriteWindows records (out of line: Scheduler is
     /// incomplete here).
@@ -557,13 +563,18 @@ private:
     void GpuRangesSubtract(VAddr address, u64 size) {
         std::unique_lock lock{gpu_ranges_mutex};
         gpu_modified_ranges.Subtract(address, size);
-        // gow3 20 Oct 2026: cached adds overlapping the range are no longer whole in the set.
+        // Cached adds that overlap the subtracted range are no longer whole.
+        // The 1 MiB bucket index only returns POSSIBLE overlaps: perform the
+        // original exact interval check, then remove the slot from all its
+        // buckets. The index lives under gpu_ranges_mutex with the RangeSet.
         const VAddr end = address + size;
-        for (auto& entry : gpu_add_cache) {
+        gpu_add_index.ForCandidates(address, size, [&](size_t slot) {
+            auto& entry = gpu_add_cache[slot];
             if (entry.size && entry.address < end && address < entry.address + entry.size) {
                 entry = {};
+                gpu_add_index.Clear(slot);
             }
-        }
+        });
     }
 
     std::unique_ptr<FaultManager> fault_manager;
