@@ -94,8 +94,16 @@ class TestTLOUBionic(unittest.TestCase):
                 m.validate_game_assets(valid)
             archive.unlink()
             (valid/"dvdroot_ps4/build/ps4/main/boot.txt").unlink()
-            with self.assertRaisesRegex(m.PortError, "vazio"):
-                m.validate_game_assets(valid)
+            # Optional directory content is not proof of bad game dumps: the
+            # previously working Redmagic installation has no dvdroot_ps4.
+            m.validate_game_assets(valid)
+            (valid/"dvdroot_ps4/build/ps4/main").rmdir()
+            m.validate_game_assets(valid)
+            (valid/"dvdroot_ps4/build/ps4").rmdir()
+            (valid/"dvdroot_ps4/build").rmdir()
+            (valid/"dvdroot_ps4").rmdir()
+            m.validate_game_assets(valid)
+            self.assertEqual(m.require_game(valid)["TITLE_ID"], "CUSA00552")
 
     def test_update_overlay_never_mutates_game(self):
         with tempfile.TemporaryDirectory() as tmp:

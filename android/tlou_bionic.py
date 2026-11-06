@@ -82,19 +82,28 @@ def require_game(folder: Path, *, is_update: bool = False) -> dict[str, str]:
 
 
 def validate_game_assets(folder: Path) -> None:
-    """Catch visibly truncated game data, including after failed PKG extraction.
+    """Inspect available PSARC files without rejecting valid installed layouts.
 
-    Resources may legitimately be unpacked. Do not demand PSARC files or
-    hash gigabytes of player data just to prepare the executable.
+    In the user's working 01.00 installation, /app0 assets are already mounted
+    without a physical dvdroot_ps4 directory under the selected game folder.
+    The native runtime resolves them at launch. This preflight therefore
+    cannot infer installation corruption from a missing optional directory.
+    Never hash or rewrite game data.
     """
     root = folder / "dvdroot_ps4"
     if not root.is_dir():
-        raise PortError("Jogo incompleto: falta dvdroot_ps4. Confira a extração do PKG.")
+        print("Aviso: dvdroot_ps4 ausente no diretório selecionado; "
+              "mantendo layout de jogo anteriormente suportado.", flush=True)
+        return
     main = root / "build/ps4/main"
     if not main.is_dir():
-        raise PortError("Jogo incompleto: falta dvdroot_ps4/build/ps4/main.")
+        print("Aviso: build/ps4/main não existe sob dvdroot_ps4; "
+              "sem verificação PSARC opcional.", flush=True)
+        return
     if not any(main.iterdir()):
-        raise PortError("Jogo incompleto: build/ps4/main está vazio.")
+        print("Aviso: diretório build/ps4/main vazio; "
+              "não impedindo a preparação do jogo.", flush=True)
+        return
     archives = 0
     for archive in main.glob("*.psarc"):
         if not archive.is_file():
