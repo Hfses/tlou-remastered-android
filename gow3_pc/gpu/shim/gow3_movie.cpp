@@ -266,8 +266,9 @@ extern "C" int gow3_movie_scale_nv12(
         (src_width == width && src_height == height))
         return 0;
 
-    Gow3Movie::RecordFrame(guest_base, src_width, src_height,
-                           (src_width + 63u) & ~63u, (src_height + 15u) & ~15u);
+    // Allocate first, but publish no remap until the complete resized frame
+    // has been written successfully; a failed swscale must not expose stale
+    // luma/UV bytes to the Vulkan movie conversion shader.
     std::uint8_t* scratch = Gow3Movie::ScratchFrame(guest_base);
     if (!scratch) return 0;
 
@@ -318,7 +319,8 @@ extern "C" int gow3_movie_scale_nv12(
     if (!memory->TryWriteBacking(scratch, converter.output.data(), bytes))
         std::memcpy(scratch, converter.output.data(), bytes);
     memory->InvalidateMemory(address, bytes);
-
+    Gow3Movie::RecordFrame(guest_base, src_width, src_height,
+                           (src_width + 63u) & ~63u, (src_height + 15u) & ~15u);
     *display_width = width;
     *display_height = height;
     static std::atomic<unsigned> recorded{0};
