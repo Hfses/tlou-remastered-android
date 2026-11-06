@@ -135,6 +135,47 @@ class BaseExecutablePatches(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"01.11 ainda não validado"):
                 profiles.selected_options({"resolution":r},"01.11")
 
+    def test_011_all_patch_groups_emit_only_verified_replacements(self):
+        """Exercise the actual patch writer with an ELF carrying 01.11 guards.
+
+        The supplied copyrighted SELF files are intentionally NOT committed.
+        Their exact instruction guards were checked separately in both files.
+        """
+        groups = profiles.base_patches_for({"job_sleep": True}, "01.11")
+        groups.update(profiles.selected_options({name: True
+                      for name in profiles.PERFORMANCE_EFFECTS_111}, "01.11"))
+        sites = [item for changes in groups.values() for item in changes]
+        end = max(at + len(original) // 2 for at, original, _ in sites)
+        with tempfile.TemporaryDirectory() as temp:
+            elf, out = Path(temp) / "eboot.elf", Path(temp) / "patches.bin"
+            raw = bytearray(end + 0x1000)
+            struct.pack_into("<Q", raw, 0x20, 0x40)
+            struct.pack_into("<HH", raw, 0x36, 56, 1)
+            struct.pack_into("<IIQQQQQQ", raw, 0x40, 1, 5, 0x1000, 0, 0,
+                             end, end, 0x1000)
+            for at, original, _ in sites:
+                original = bytes.fromhex(original)
+                self.assertEqual(raw[at+0x1000:at+0x1000+len(original)],
+                                 bytes(len(original)))
+                raw[at+0x1000:at+0x1000+len(original)] = original
+            elf.write_bytes(raw)
+            patcher = m.load_patch_module(Path(__file__).resolve().parents[2])
+            patcher.image_patches(elf, out, groups)
+            expected = sum(replacement is not None
+                           for _, _, replacement in sites)
+            self.assertEqual(struct.unpack_from("<Q", out.read_bytes(), 16)[0],
+                             expected)
+            # A mismatched 01.11 graphics group must be rejected in its entirety.
+            invalid = groups["disable-motion_blur"][0][0] + 0x1000
+            raw[invalid] ^= 1
+            elf.write_bytes(raw)
+            out.unlink()
+            patcher.image_patches(elf, out, groups)
+            reduced = expected - sum(replacement is not None for _, _, replacement
+                                     in groups["disable-motion_blur"])
+            self.assertEqual(struct.unpack_from("<Q", out.read_bytes(), 16)[0],
+                             reduced)
+
     def test_unknown_executable_keeps_existing_version_guards(self):
         with tempfile.TemporaryDirectory() as temp:
             eboot = Path(temp)/"eboot.bin"
