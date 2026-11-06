@@ -75,6 +75,10 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror -I gow3_pc \
 # not silently force native 1080p and allocate two Vulkan target sizes.
 grep -Fq 'options.put("resolution",proxy?"original":resolution);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'env.put("GOW3_RENDER_RES",actualSize);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'final boolean proxy="proxy".equals(p.getString("render_path","guest"));' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.put("GOW3_UPSCALER","off");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.remove("GOW3_RENDER_RES");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'scaled_session ||' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
 grep -Fq 'env.put("GOW3_OUTPUT_RES","1920x1080");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'env.remove("TLOU_SPATIAL_SCENE");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq '"guest-raster-single-ui-copy"' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
