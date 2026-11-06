@@ -19,6 +19,17 @@ int main() {
     assert(MovieShader(0x34e8a281) && MovieShader(0x24042a9b));
     assert(!MovieShader(0x0b0acf50)); // fullscreen post/tonemap also has a native viewport
     assert(!MovieShader(0x6c62a79f)); // shadow geometry
+    // Logs show 720p scene plus a separate 1080p reticle/UI pass. The
+    // compositor must begin on this 1080p pass, not only on a 720p movie.
+    assert(NativeUiTransition(true, true, false, 1920,1080, 1280,720));
+    assert(NativeUiTransition(true, true, false, 1920,1080, 960,540));
+    assert(NativeUiTransition(true, true, false, 1920,1080, 640,360));
+    assert(!NativeUiTransition(false,true,false,1920,1080,1280,720));
+    assert(!NativeUiTransition(true,false,false,1920,1080,1280,720));
+    assert(!NativeUiTransition(true,true,true,1920,1080,1280,720));
+    assert(!NativeUiTransition(true,true,false,1280,720,1280,720));
+    assert(!NativeUiTransition(true,true,false,1920,1080,1920,1080));
+    assert(Choose(true,true,false,false)==Background::Copy);
     const auto display = Scale(960, 540, 1920, 1080, false);
     assert(display[0] == 2 && display[1] == 2);
     const auto ui = Scale(960, 540, 1920, 1080, true);
