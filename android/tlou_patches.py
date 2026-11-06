@@ -247,6 +247,20 @@ def selected_options(options):
     return selected
 
 
+def base_patches_for(options):
+    patches = dict(BASE_PATCHES)
+    # The 01.00 job-sleep patch forces three formerly conditional wake paths.
+    # Snapdragon 7+ Gen 2 had a persistent job-counter deadlock while the
+    # presentation thread kept flipping; retain the original game branches
+    # on this device instead of globally disabling the job watchdog.
+    job_sleep = (options or {}).get("job_sleep", True)
+    if type(job_sleep) is not bool:
+        raise ValueError("Opção de workers inválida")
+    if not job_sleep:
+        patches.pop("job-sleep")
+    return patches
+
+
 def write_selected(source, prepared, options):
     """Atomically publish launch patches; never change the player's SELF or linked image."""
     import importlib.util
@@ -286,17 +300,7 @@ def write_selected(source, prepared, options):
             if kind == 1 and start <= at and at + length <= start + filesz:
                 return elf[offset + at-start:offset + at-start+length]
         return b""
-    patches = dict(BASE_PATCHES)
-    # The 01.00 job-sleep patch forces three formerly conditional wake paths.
-    # Snapdragon 7+ Gen 2 had a persistent job-counter deadlock while the
-    # presentation thread kept flipping; retain the original game branches
-    # on this device instead of globally disabling the job watchdog.
-    job_sleep = (options or {}).get("job_sleep", True)
-    if type(job_sleep) is not bool:
-        raise ValueError("Opção de workers inválida")
-    if not job_sleep:
-        patches.pop("job-sleep")
-        print("TLOU jobs: sleep override OFF; original guest wake logic", flush=True)
+    patches = base_patches_for(options)
     patches.update(requested)
     for name, changes in patches.items():
         for at, expected, _ in changes:
