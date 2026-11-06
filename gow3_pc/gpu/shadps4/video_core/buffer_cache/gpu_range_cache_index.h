@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -9,6 +11,29 @@
 #include <utility>
 
 namespace VideoCore::Detail {
+
+// Conservative monotonic bitmap of 64 KiB guest windows that the GPU has
+// ever written. Never clears bits. A cached *identical* interval can skip this
+// call: its first insertion marked all of these windows. Kept as a helper so
+// the readback regression test exercises exactly the production bit writes.
+inline void MarkGpuWriteWindows(std::atomic<std::uint64_t>* words,
+                                std::uint64_t window_bits,
+                                std::uint64_t address,
+                                std::uint64_t size) noexcept {
+    if (!size) return;
+    const std::uint64_t first = address >> 16;
+    if (first >= window_bits) return;
+    const std::uint64_t end = size - 1 > UINT64_MAX - address
+        ? UINT64_MAX : address + size - 1;
+    const std::uint64_t last = std::min(end >> 16, window_bits - 1);
+    for (std::uint64_t w = first; w <= last; ++w) {
+        auto& word = words[w >> 6];
+        const std::uint64_t bit = std::uint64_t{1} << (w & 63);
+        if (!(word.load(std::memory_order_relaxed) & bit)) {
+            word.fetch_or(bit, std::memory_order_relaxed);
+        }
+    }
+}
 
 // Exact candidate index for a small direct-mapped range cache. An overlapping
 // pair must touch at least one common WindowShift-sized guest address window;

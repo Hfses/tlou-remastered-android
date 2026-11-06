@@ -136,8 +136,12 @@ final class PortSettings {
         env.put("TLOU_SPLIT_CS64","1");
         env.put("TLOU_MAPPED_FAULT_READBACKS","1");
         env.put("TLOU_MAPPED_READBACKS","1");
+        // Eight bounded CPU samples per second per draw/dispatch role. The latest
+        // gameplay log has 95% command and 84% draw CPU, but not the phase
+        // breakdown needed to avoid another speculative APK. This sampler
+        // uses CPU-thread clocks only and remains disableable by an env override.
         // The native Android default is ON unless explicitly disabled.
-        env.put("TLOU_CPU_PHASE_SAMPLES","0");
+        env.put("TLOU_CPU_PHASE_SAMPLES","1");
         // Leave profiling truly disabled. Some native switches check presence,
         // so setting "0" instead of removing is incorrect.
         for(String name:new String[]{"GOW3_GPU_PROFILE","GOW3_FRAME_STATS","GOW3_PERF_DIAG"})

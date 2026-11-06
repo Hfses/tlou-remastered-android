@@ -157,6 +157,10 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror \
   -I gow3_pc/gpu/shadps4 \
   gow3_pc/tests/test_tlou_gpu_range_cache_index.cpp -o "$test_dir/gpu-range-index"
 "$test_dir/gpu-range-index"
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+  -I gow3_pc/gpu/shadps4 \
+  gow3_pc/tests/test_tlou_gpu_write_window_cost.cpp -o "$test_dir/gpu-window-cost"
+"$test_dir/gpu-window-cost"
 
 g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread gow3_pc/tests/test_cpu_phase_sample.cpp -o "$test_dir/cpu-phase-sample"
 "$test_dir/cpu-phase-sample" --correctness-only
