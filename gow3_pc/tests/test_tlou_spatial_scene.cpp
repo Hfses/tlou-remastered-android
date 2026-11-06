@@ -4,6 +4,7 @@
 // Vulkan linear blit instead of a temporal FSR dispatch.
 #include <cassert>
 #include <cstdio>
+#include <initializer_list>
 #include "gpu/shadps4/video_core/renderer_vulkan/scene_resolution.h"
 #include "gpu/shadps4/video_core/renderer_vulkan/ui_composition.h"
 
@@ -13,7 +14,7 @@ int main() {
     using Vulkan::UiComposition::Background;
     using Vulkan::UiComposition::Choose;
     using Vulkan::UiComposition::Scale;
-    static_assert(ForPreset(0).width == 1920 && ForPreset(0).height == 1080);
+    assert((ForPreset(0) == Size{1920,1080}));
     const auto p720 = ForPreset(1);
     const auto p540 = ForPreset(3);
     const auto p360 = ForPreset(4);
