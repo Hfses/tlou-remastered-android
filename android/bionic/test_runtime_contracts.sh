@@ -57,6 +57,19 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_hot_srt_readbac
 g++ -std=c++20 -O2 -Wall -Wextra -Werror \
   gow3_pc/tests/test_tlou_physics_readback.cpp -o "$test_dir/tlou-physics-readback"
 
+# Exercise all small GPU-writable compute shapes, without shader-specific
+# identity and without falling back to global precise readbacks.
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+  gow3_pc/tests/test_tlou_auto_readback.cpp -o "$test_dir/tlou-auto-readback"
+"$test_dir/tlou-auto-readback"
+
+# All 720/540/360 render choices preserve the 1080p logical aim/HUD and
+# lower only the host Vulkan scene target via the existing upscaler.
+grep -Fq 'options.put("resolution","original");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.put("GOW3_UPSCALER","fsr3");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.put("TLOU_AUTO_SMALL_CS_READBACK","1");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.put("GOW3_ASYNC_READBACK","1");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+
 # CUSA00552 01.00: do not regress to the PC-only hash/stride fallback or
 # accidentally enable Readback 2 to compensate for stale physics results.
 grep -Fq '0x697cfcc4ull' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/tlou_physics_readback.h
