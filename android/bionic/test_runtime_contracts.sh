@@ -65,12 +65,21 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror \
 
 # All 720/540/360 render choices preserve native 1080p logical aim/HUD
 # and lower only host Vulkan scene targets; no temporal FSR.
-grep -Fq 'options.put("resolution","original");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+# Fast backend must really apply the requested game eboot resolution,
+# not silently force native 1080p and allocate two Vulkan target sizes.
+grep -Fq 'options.put("resolution",proxy?"original":resolution);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.put("GOW3_RENDER_RES",actualSize);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.put("GOW3_OUTPUT_RES","1920x1080");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'env.remove("TLOU_SPATIAL_SCENE");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq '"guest-raster-single-ui-copy"' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+grep -Fq 'TLOU guest raster UI spatial copy:' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
 # Native 1080p aim with reduced scene proxies does not need temporal FSR.
 g++ -std=c++20 -O2 -Wall -Wextra -Werror -I gow3_pc \
   gow3_pc/tests/test_tlou_spatial_scene.cpp -o "$test_dir/tlou-spatial-scene"
 "$test_dir/tlou-spatial-scene"
 grep -Fq 'env.put("GOW3_UPSCALER","off");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+# Compatibility path kept, but no longer default; the working mira can be
+# recovered without reinstalling if guest-raster movie HUD is incompatible.
 grep -Fq 'env.put("TLOU_SPATIAL_SCENE","1");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq '(active || spatial_session) ? preset : 0' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
 grep -Fq '(spatial_session && scene_targets.Reduced())' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
