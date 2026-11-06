@@ -99,10 +99,19 @@ def validate_game_assets(folder: Path) -> None:
     for archive in main.glob("*.psarc"):
         if not archive.is_file():
             continue
+        # PSARC: fixed 32-byte big-endian header, then a bounded TOC. Just
+        # checking "PSAR" accepts files that are truncated immediately after
+        # the signature (and produces a misleading "prepared" success).
         with archive.open("rb") as data:
-            magic = data.read(4)
-        if archive.stat().st_size < 32 or magic != b"PSAR":
+            header = data.read(32)
+        size = archive.stat().st_size
+        if len(header) != 32 or header[:4] != b"PSAR":
             raise PortError(f"Arquivo PSARC inválido ou truncado: {archive.name}. Reextraia o PKG.")
+        toc_size, entry_size, file_count, block_size = struct.unpack_from(">4I", header, 12)
+        if (not 30 <= entry_size <= 256 or file_count == 0 or file_count > 1_000_000 or
+            block_size == 0 or block_size > 16 * 1024 * 1024 or
+            toc_size < 32 + entry_size * file_count or toc_size > size):
+            raise PortError(f"PSARC com índice incompleto ou inconsistente: {archive.name}. Reextraia o PKG.")
         archives += 1
     if not archives:
         print("Aviso: nenhum PSARC na raiz; recursos podem estar extraídos. Não é prova de instalação íntegra.", flush=True)

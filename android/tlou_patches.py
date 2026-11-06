@@ -370,7 +370,11 @@ def write_selected(source, prepared, options):
             (options or {}).get(name, False) for name in PERFORMANCE_EFFECTS
         ):
             raise ValueError("Eboot não reconhecido: patches exigem SHA-256 validado")
-        print("Eboot sem perfil Android de patches conhecido; preservando arquivo.", flush=True)
+        # A prepared directory may be manually reused after replacing the game:
+        # never leave a stale patches.bin from a different executable active.
+        (prepared / "patches.bin").unlink(missing_ok=True)
+        (prepared / "patch-validation.json").unlink(missing_ok=True)
+        print("Eboot sem perfil Android de patches conhecido; removidos patches antigos.", flush=True)
         return
     requested = selected_options(options, profile)
     spec = importlib.util.spec_from_file_location("tlou_patch_writer", source / "tools/probe_tlou.py")

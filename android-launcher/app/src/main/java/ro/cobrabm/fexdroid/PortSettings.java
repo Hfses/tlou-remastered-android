@@ -47,9 +47,10 @@ final class PortSettings {
         final String resolution=p.getString("resolution","original");
         final boolean proxy="proxy".equals(p.getString("render_path","guest"));
         options.put("resolution",proxy?"original":resolution);
-        // Logs: Xiaomi 23049PCD8G deadlocked after ~806 s; OnePlus CPH2691
-        // after ~205 s. Preserve the original guest worker wake predicates
-        // only on proven affected devices.
+        // Xiaomi 23049PCD8G reported a real HALT after 806 seconds. The
+        // OnePlus CPH2691 reported only a "long job" warning and a later
+        // SIGTERM on user exit; it is NOT evidence of a guest deadlock.
+        // Preserve original wake predicates only for the confirmed Xiaomi SoC.
         options.put("job_sleep",!conservativeJobWorkers());
         for(String key:EFFECTS) options.put(key,p.getBoolean(key,false));
         File file=new File(context.getFilesDir(),"patch-options.json");
@@ -62,8 +63,7 @@ final class PortSettings {
         final String soc=Build.VERSION.SDK_INT>=31 && Build.SOC_MODEL!=null
             ?Build.SOC_MODEL.toUpperCase(Locale.ROOT):"";
         // Do not apply this device-specific workaround globally to all Adreno.
-        return soc.contains("SM7475") || model.equals("23049PCD8G") ||
-               model.equals("CPH2691");
+        return soc.contains("SM7475") || model.equals("23049PCD8G");
     }
 
     static void environment(Context context,Map<String,String> env) {

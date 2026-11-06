@@ -84,8 +84,14 @@ class TestTLOUBionic(unittest.TestCase):
             archive.write_bytes(b"invalid"+bytes(64))
             with self.assertRaisesRegex(m.PortError,"PSARC inválido"):
                 m.validate_game_assets(valid)
-            archive.write_bytes(b"PSAR"+bytes(64))
+            # Valid minimal, internally bounded PSARC TOC without game data.
+            archive.write_bytes(struct.pack(">4sI4sIIIII", b"PSAR", 0x10004, b"zlib",
+                62, 30, 1, 65536, 0) + bytes(30))
             m.validate_game_assets(valid)
+            archive.write_bytes(struct.pack(">4sI4sIIIII", b"PSAR", 0x10004, b"zlib",
+                999999, 30, 1, 65536, 0) + bytes(30))
+            with self.assertRaisesRegex(m.PortError, "índice incompleto"):
+                m.validate_game_assets(valid)
             archive.unlink()
             (valid/"dvdroot_ps4/build/ps4/main/boot.txt").unlink()
             with self.assertRaisesRegex(m.PortError, "vazio"):
