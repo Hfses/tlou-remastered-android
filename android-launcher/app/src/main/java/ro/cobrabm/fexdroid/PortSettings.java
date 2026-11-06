@@ -36,7 +36,11 @@ final class PortSettings {
     static File patchOptions(Context context) throws Exception {
         SharedPreferences p=prefs(context);
         JSONObject options=new JSONObject();
-        options.put("resolution",p.getString("resolution","original"));
+        // Keep the PS4's logical camera, aim and HUD at 1920x1080.
+        // The renderer (not guest eboot patches) will scale only scene targets.
+        // This prevents the game rendering its aim in one coordinate system
+        // while drawing the HUD in another at 720p or lower.
+        options.put("resolution","original");
         // CUSA00552 01.00 on Xiaomi 23049PCD8G (Snapdragon 7+ Gen 2)
         // hit a game job-system deadlock after 806 s. The forced job-sleep
         // patch replaces two conditional branches with unconditional waits;
@@ -61,8 +65,22 @@ final class PortSettings {
     static void environment(Context context,Map<String,String> env) {
         SharedPreferences p=prefs(context);
         String resolution=p.getString("resolution","original");
-        env.put("TLOU_EXPECT_SCENE_SIZE",resolution.equals("540")?"960x540":
-            resolution.equals("720")?"1280x720":resolution.equals("360")?"640x360":"1920x1080");
+        // Dynamic Vulkan scene-target scaling: native logical 1920x1080 for
+        // camera, hit testing and UI; lower GPU raster size is internal.
+        final String scaledPreset=resolution.equals("720")?"1":
+            resolution.equals("540")?"3":resolution.equals("360")?"4":null;
+        env.put("TLOU_EXPECT_SCENE_SIZE","1920x1080");
+        if(scaledPreset!=null) {
+            env.put("GOW3_UPSCALER","fsr3");
+            env.put("GOW3_UPSCALE_PRESET",scaledPreset);
+            env.put("TLOU_HOST_SCENE_MODE","1");
+            env.put("TLOU_EXPECT_HOST_SCENE",resolution.equals("720")?"1280x720":
+                resolution.equals("540")?"960x540":"640x360");
+        } else {
+            env.remove("TLOU_HOST_SCENE_MODE");
+            env.remove("TLOU_EXPECT_HOST_SCENE");
+            env.remove("GOW3_UPSCALE_PRESET");
+        }
 
         // Exact flags observed in launch.log of TLOU-Android-Logs (32).zip.
         // Its preceding launch-previous.log used different v0.31 trial flags:
@@ -91,6 +109,12 @@ final class PortSettings {
 
         env.put("GOW3_READBACKS","1"); // Precise=2 caused artifacts; never resurrect.
         env.put("GOW3_EOP_READBACK","1"); // Selective readbacks, not Precise/Readback 2.
+        // Protect all *pending asynchronous* GPU readback pages. A CPU access
+        // waits for its producer's copy, never an arbitrary older value.
+        env.put("GOW3_ASYNC_READBACK","1");
+        // Bounded CPU-visible small compute outputs, independent of shader hashes.
+        // No global GPU memory download or Readback 2.
+        env.put("TLOU_AUTO_SMALL_CS_READBACK","1");
         // Temporary bounded coverage audit for CUSA00552 01.00. This only logs
         // at most 40 distinct candidate compute bindings; no shader dumps or waits.
         env.put("TLOU_PHYSICS_COVERAGE","1");
@@ -114,6 +138,8 @@ final class PortSettings {
         StringBuilder result=new StringBuilder("TLOU launch settings: resolution=")
             .append(prefs(context).getString("resolution","original"));
         result.append("; renderer=Vulkan; CPU=FEX ARM64");
+        result.append("; aim-coordinate-space=guest-1080p; host-scene=")
+              .append(env.getOrDefault("TLOU_EXPECT_HOST_SCENE","native"));
         result.append("; guest-job-worker-wake=")
               .append(conservativeJobWorkers()?"original":"patched-sleep");
         return result.toString();
