@@ -75,8 +75,10 @@ grep -Fq 'env.remove("GOW3_RENDER_RES");' android-launcher/app/src/main/java/ro/
 grep -Fq '"unified-direct-no-ui-blit"' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'env.put("GOW3_UPSCALER","off");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'GAME_UI_NATIVE_OVERRIDES' android/tlou_patches.py
-grep -Fq 'MOVIE_NATIVE_ALLOCATION_SITES' android/tlou_patches.py
+grep -Fq 'POSTPROCESS_FULL_SITES' android/tlou_patches.py
+grep -Fq 'POSTPROCESS_HALF_SITES' android/tlou_patches.py
 grep -Fq '0x92EF1A, 0x92EFC0' android/tlou_patches.py
+grep -Fq '0x92EF7D, 0x92F00D' android/tlou_patches.py
 grep -Fq 'env.put("TLOU_EXPECT_SCENE_SIZE",actualSize);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'env.remove("TLOU_SPATIAL_SCENE");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'struct.pack_into("<f", insn, 1, 1.0 / height)' android/tlou_patches.py
