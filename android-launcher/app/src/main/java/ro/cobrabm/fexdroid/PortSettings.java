@@ -40,10 +40,12 @@ final class PortSettings {
         // intermediate targets repeatedly. Direct 01.00 executable scaling
         // reduces ALL scene/post allocations; the existing Vulkan UI composer
         // expands the completed LDR background before drawing the HUD at 1080p.
-        // "proxy" is a compatibility fallback for devices whose aim/UI cannot
-        // use that compositor. Never silently change the saved resolution.
+        // "proxy" is the earlier fallback with separately allocated Vulkan
+        // targets. The user has tested the direct-performance method at 720p
+        // and original 1080p, NOT the proxy fallback in this build.
+        // Never silently change the saved resolution.
         final String resolution=p.getString("resolution","original");
-        final boolean proxy="proxy".equals(p.getString("render_path","proxy"));
+        final boolean proxy="proxy".equals(p.getString("render_path","guest"));
         options.put("resolution",proxy?"original":resolution);
         // CUSA00552 01.00 on Xiaomi 23049PCD8G (Snapdragon 7+ Gen 2)
         // hit a game job-system deadlock after 806 s. The forced job-sleep
@@ -76,7 +78,7 @@ final class PortSettings {
         // resolves native-size intermediate targets (expensive on Adreno).
         final String scaledPreset=resolution.equals("720")?"1":
             resolution.equals("540")?"3":resolution.equals("360")?"4":null;
-        final String renderPath=p.getString("render_path","proxy");
+        final String renderPath=p.getString("render_path","guest");
         final boolean proxy="proxy".equals(renderPath);
         env.put("TLOU_EXPECT_SCENE_SIZE","1920x1080");
         env.put("GOW3_UPSCALER","off");
