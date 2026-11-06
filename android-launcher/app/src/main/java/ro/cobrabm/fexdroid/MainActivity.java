@@ -241,11 +241,11 @@ public final class MainActivity extends Activity {
                 new String[]{"30","60"},"60");
             toggleSetting(video,"vsync","VSync",true);
             choice(video,"render_path","Método de resolução (requer reiniciar o jogo)",
-                new String[]{"Desempenho: renderização real 720p/540p/360p, UI 1080p",
-                             "Compatibilidade: alvos Vulkan reduzidos (mais GPU)"},
+                new String[]{"Unificado: jogo, interface e mira na resolução escolhida",
+                             "Compatibilidade: interface 1080p (proxies Vulkan)"},
                 new String[]{"guest","proxy"},"guest");
-            video.addView(text("O modo Desempenho evita cópias de buffers intermediários em 1080p. "
-                +"Compatibilidade mantém o método anterior de alinhamento da mira caso seja necessário.",12,MUTED));
+            video.addView(text("O modo Unificado mantém cena e interface na mesma resolução; vídeos preservam a resolução original. "
+                +"Compatibilidade mantém a composição de interface em 1080p.",12,MUTED));
             video.addView(text("Sincronização da geometria: Completo (único modo). "
                 +"Correção de deformações mantida sem opções que não melhoraram o FPS.",12,MUTED));
             LinearLayout drivers=card(root,"DRIVER VULKAN");
