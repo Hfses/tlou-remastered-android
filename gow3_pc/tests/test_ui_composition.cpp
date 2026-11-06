@@ -23,6 +23,14 @@ int main() {
     assert(display[0] == 2 && display[1] == 2);
     const auto ui = Scale(960, 540, 1920, 1080, true);
     assert(ui[0] == 1 && ui[1] == 1); // don't double an already native UI viewport
+    // TLOU direct-resolution 720p path: the last guest frame gets a
+    // single 1.5x spatial stretch, while native-HUD/aim vertices are not
+    // stretched again. No FSR provider is required to pick Copy.
+    assert(Choose(true, true, false, false) == Background::Copy);
+    const auto guest720 = Scale(1280, 720, 1920, 1080, false);
+    assert(guest720[0] == 1.5f && guest720[1] == 1.5f);
+    const auto hud720 = Scale(1280, 720, 1920, 1080, true);
+    assert(hud720[0] == 1.f && hud720[1] == 1.f);
     const auto larger = Scale(960, 540, 3840, 2160, true);
     assert(larger[0] == 2 && larger[1] == 2);
     std::puts("UI composition: PASS (menu without camera, HUD, FSR off, viewport scaling)");
