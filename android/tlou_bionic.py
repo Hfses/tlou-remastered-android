@@ -21,6 +21,12 @@ TITLE_ID = "CUSA00552"
 # alternative regional SFO identifiers only when the game executable matches
 # byte-for-byte. The patch writer independently validates the same SHA.
 VERIFIED_SELF_SHA256 = "e5f0aa322f60bd90637cc10d83de08c77885b1921084021c630e04ed3d6febf7"
+VERIFIED_SELF_111 = {
+    "3cfa475f88ca68485b6b9230e62b84e195cdbe19e6f7295c110b8dcf8f20884e",
+    "31f3b0d120803878d10a7184d139c545de334394dd7dd6ca6058a7c995e484a7",
+}
+VERIFIED_TLOU_SELFS = frozenset({VERIFIED_SELF_SHA256} | VERIFIED_SELF_111)
+REGIONAL_TITLES = {"CUSA00552", "CUSA00556", "CUSA00557", "CUSA00559"}
 _BOOT_FILES = ("eboot.bin", "sce_sys/param.sfo", "sce_module/libc.prx")
 
 
@@ -66,14 +72,40 @@ def require_game(folder: Path, *, is_update: bool = False) -> dict[str, str]:
     metadata = read_sfo(folder / "sce_sys/param.sfo")
     title = metadata.get("TITLE_ID")
     if title != TITLE_ID:
-        # Never bypass title enforcement for update folders: their overlay
-        # resources must match the base title. For base games, a known binary
-        # signature is stronger evidence than a region-specific TITLE_ID.
-        if is_update or hashlib.sha256((folder / "eboot.bin").read_bytes()).hexdigest() != VERIFIED_SELF_SHA256:
-            raise PortError(f"Wrong PS4 title: {title!r}; expected {TITLE_ID}")
-        metadata["PORT_PROFILE"] = "CUSA00552-SELF-SHA256"
-        print(f"Recognized regional SFO {title!r} via byte-identical verified TLOU SELF.", flush=True)
+        # Regional TITLE_ID alone does not prove compatible execution.
+        if (is_update or title not in REGIONAL_TITLES or
+            hashlib.sha256((folder / "eboot.bin").read_bytes()).hexdigest() not in VERIFIED_TLOU_SELFS):
+            raise PortError(f"Wrong PS4 title: {title!r}; expected verified TLOU region")
+        metadata["PORT_PROFILE"] = "TLOU-VERIFIED-SELF-SHA256"
+        print(f"Recognized TLOU regional SFO {title!r} via verified SELF.", flush=True)
     return metadata
+
+
+def validate_game_assets(folder: Path) -> None:
+    """Catch visibly truncated game data, including after failed PKG extraction.
+
+    Resources may legitimately be unpacked. Do not demand PSARC files or
+    hash gigabytes of player data just to prepare the executable.
+    """
+    root = folder / "dvdroot_ps4"
+    if not root.is_dir():
+        raise PortError("Jogo incompleto: falta dvdroot_ps4. Confira a extração do PKG.")
+    main = root / "build/ps4/main"
+    if not main.is_dir():
+        raise PortError("Jogo incompleto: falta dvdroot_ps4/build/ps4/main.")
+    if not any(main.iterdir()):
+        raise PortError("Jogo incompleto: build/ps4/main está vazio.")
+    archives = 0
+    for archive in main.glob("*.psarc"):
+        if not archive.is_file():
+            continue
+        with archive.open("rb") as data:
+            magic = data.read(4)
+        if archive.stat().st_size < 32 or magic != b"PSAR":
+            raise PortError(f"Arquivo PSARC inválido ou truncado: {archive.name}. Reextraia o PKG.")
+        archives += 1
+    if not archives:
+        print("Aviso: nenhum PSARC na raiz; recursos podem estar extraídos. Não é prova de instalação íntegra.", flush=True)
 
 
 def _link_file(source: Path, dest: Path) -> None:
@@ -134,6 +166,7 @@ def prepare(source: Path, game: Path, update: Path | None, out: Path,
     if out == game or out.is_relative_to(game) or (update and (out == update or out.is_relative_to(update))):
         raise PortError("--out must be outside the game and update folders")
     base = require_game(game)
+    validate_game_assets(game)
     new = require_game(update, is_update=True) if update else None
     # Do not claim that this layout supports update-provided game resources.
     if update and (update / "dvdroot_ps4").exists():

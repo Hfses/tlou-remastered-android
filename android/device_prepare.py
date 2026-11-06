@@ -30,6 +30,10 @@ def ensure(source, game, out, options=None):
     game, out = game.resolve(), out.resolve()
     if out == game or out.is_relative_to(game) or game.is_relative_to(out):
         raise ValueError("Preparation directory must be separate from the game")
+    # A prepared executable can coexist with incomplete extracted assets.
+    # Validate even on cache hits without rehashing gigabytes of gameplay data.
+    from tlou_bionic import validate_game_assets
+    validate_game_assets(game)
     key = fingerprint(game)
     marker = out / "device-ready.json"
     current = {}

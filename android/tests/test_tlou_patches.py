@@ -119,6 +119,22 @@ class BaseExecutablePatches(unittest.TestCase):
         with self.assertRaises(ValueError):
             profiles.base_patches_for({"job_sleep":"false"})
 
+    def test_011_verified_effects_and_resolution_safety(self):
+        self.assertEqual(len(profiles.SELF_SHA256_111), 2)
+        for digest in profiles.SELF_SHA256_111:
+            self.assertEqual(profiles.known_profile(digest), "01.11")
+        self.assertEqual(profiles.known_profile(profiles.BASE_SELF_SHA256), "01.00")
+        self.assertNotIn("job-sleep", profiles.base_patches_for({"job_sleep":False}, "01.11"))
+        self.assertIn("job-sleep", profiles.base_patches_for({"job_sleep":True}, "01.11"))
+        for name, changes in profiles.PERFORMANCE_EFFECTS_111.items():
+            self.assertEqual(profiles.selected_options({name:True}, "01.11")["disable-"+name], changes)
+            for address, before, after in changes:
+                self.assertTrue(address > 0 and len(before)%2 == 0)
+                if after: self.assertEqual(len(before),len(after))
+        for r in ("720","540","360"):
+            with self.assertRaisesRegex(ValueError,"01.11 ainda não validado"):
+                profiles.selected_options({"resolution":r},"01.11")
+
     def test_unknown_executable_keeps_existing_version_guards(self):
         with tempfile.TemporaryDirectory() as temp:
             eboot = Path(temp)/"eboot.bin"

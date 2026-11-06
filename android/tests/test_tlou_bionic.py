@@ -32,6 +32,9 @@ def make_game(root, *, title="CUSA00552", ver="01.11", include_libc=True):
     root.mkdir(parents=True, exist_ok=True)
     (root / "eboot.bin").write_bytes(b"test game")
     make_sfo(root / "sce_sys/param.sfo", title, ver)
+    content = root / "dvdroot_ps4/build/ps4/main"
+    content.mkdir(parents=True)
+    (content / "boot.txt").write_text("unpacked resources fixture")
     if include_libc:
         (root / "sce_module").mkdir(exist_ok=True)
         (root / "sce_module/libc.prx").write_bytes(b"libc")
@@ -57,9 +60,36 @@ class TestTLOUBionic(unittest.TestCase):
             with patch.object(m.hashlib, "sha256") as digest:
                 digest.return_value.hexdigest.return_value = m.VERIFIED_SELF_SHA256
                 profile = m.require_game(base)
-                self.assertEqual(profile["PORT_PROFILE"], "CUSA00552-SELF-SHA256")
+                self.assertEqual(profile["PORT_PROFILE"], "TLOU-VERIFIED-SELF-SHA256")
                 with self.assertRaisesRegex(m.PortError, "Wrong PS4 title"):
                     m.require_game(base, is_update=True)
+
+    def test_verified_011_regions_and_early_content_integrity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for title in sorted(m.REGIONAL_TITLES - {m.TITLE_ID}):
+                game = make_game(Path(tmp)/title, title=title)
+                with self.assertRaises(m.PortError):
+                    m.require_game(game)
+                with patch.object(m.hashlib, "sha256") as digest:
+                    digest.return_value.hexdigest.return_value = next(iter(m.VERIFIED_SELF_111))
+                    self.assertEqual(m.require_game(game)["PORT_PROFILE"], "TLOU-VERIFIED-SELF-SHA256")
+            wrong = make_game(Path(tmp)/"wrong", title="CUSA99999")
+            with patch.object(m.hashlib, "sha256") as digest:
+                digest.return_value.hexdigest.return_value = next(iter(m.VERIFIED_SELF_111))
+                with self.assertRaises(m.PortError): m.require_game(wrong)
+            valid = make_game(Path(tmp)/"game")
+            m.validate_game_assets(valid)
+            root = valid/"dvdroot_ps4/build/ps4/main"
+            archive = root/"core.psarc"
+            archive.write_bytes(b"invalid"+bytes(64))
+            with self.assertRaisesRegex(m.PortError,"PSARC inválido"):
+                m.validate_game_assets(valid)
+            archive.write_bytes(b"PSAR"+bytes(64))
+            m.validate_game_assets(valid)
+            archive.unlink()
+            (valid/"dvdroot_ps4/build/ps4/main/boot.txt").unlink()
+            with self.assertRaisesRegex(m.PortError, "vazio"):
+                m.validate_game_assets(valid)
 
     def test_update_overlay_never_mutates_game(self):
         with tempfile.TemporaryDirectory() as tmp:

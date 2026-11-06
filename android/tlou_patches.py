@@ -66,11 +66,57 @@ BASE_PATCHES = {
 }
 
 
+# Profiles validated against the original 24,220,371-byte user-provided SELF files.
+# The second hash is an independently patched variant; file size is NOT an identity.
+SELF_SHA256_111 = {
+    "3cfa475f88ca68485b6b9230e62b84e195cdbe19e6f7295c110b8dcf8f20884e",
+    "31f3b0d120803878d10a7184d139c545de334394dd7dd6ca6058a7c995e484a7",
+}
+KNOWN_SELF_SHA256 = frozenset({BASE_SELF_SHA256} | SELF_SHA256_111)
+
+BASE_PATCHES_111 = {
+    "frame-timeout": [
+        (0xB3D887, "c5f82e05819f6300", "c5f82e05194d5c00"),
+        (0xB3D92F, "c5fb1005f19e6300", "c5fb1005a13d5900"),
+        (0x11025A8, "0000a041", None),
+        (0x10D16D8, "0000000000003440", None),
+    ],
+    "job-sleep": [
+        (0xC87D63, "7304", "eb04"),
+        (0xC87D96, "741b", "9090"),
+        (0xC873E1, "742d", "9090"),
+    ],
+}
+# Original-byte guards checked independently in BOTH supplied 01.11 ELFs.
+PERFORMANCE_EFFECTS_111 = {
+    "ssao": [(0xAEB0CC,"c7834b01000001010101","c7834b01000000010101")],
+    "motion_blur": [
+        (0xAEB14B,"c6836d01000001","c6836d01000000"),
+        (0x758691,"c6830e04000001","c6830e04000000"),
+    ],
+    "depth_of_field": [(0xAEB167,"c6837101000001","c6837101000000")],
+    "bloom": [(0xAEB202,"c783b401000001010101","c783b401000001000101")],
+    "sunlight_shadows": [
+        (0xA905B5,"0f85f6010000","e9f701000090"),
+        (0xA905AE,"80b89c000000000f85f6010000",None),
+    ],
+    "subsurface": [
+        (0xA9250A,"0f840c060000","e90d06000090"),
+        (0xA92500,"488b0080b8942e0000000f840c060000",None),
+    ],
+}
+
+def known_profile(digest):
+    return "01.00" if digest == BASE_SELF_SHA256 else "01.11" if digest in SELF_SHA256_111 else None
+
 def select(eboot, fallback):
     digest = hashlib.sha256(eboot.read_bytes()).hexdigest()
     if digest == BASE_SELF_SHA256:
-        print("Perfil TLOU verificado: entrada 0x56d9f0; patches próprios do executável.", flush=True)
+        print("Perfil TLOU 01.00 validado por SHA-256.", flush=True)
         return dict(BASE_PATCHES)
+    if digest in SELF_SHA256_111:
+        print("Perfil TLOU 01.11 validado por SHA-256.", flush=True)
+        return dict(BASE_PATCHES_111)
     return fallback
 
 # Adapted from Bachata S4+ P36 performance XMLs. Addresses are ELF-relative
@@ -271,7 +317,7 @@ def scene_aim_resolution_patches(resolution):
     return patches
 
 
-def selected_options(options):
+def selected_options(options, profile="01.00"):
     options = options or {}
     if not isinstance(options, dict):
         raise ValueError("Configuração de patches inválida")
@@ -280,8 +326,13 @@ def selected_options(options):
         raise ValueError("Resolução não suportada")
     selected = {}
     if resolution != "original":
+        if profile != "01.00":
+            # 01.11 scene/UI/post-process/aim offsets are different. Guard
+            # against accidentally applying the verified 01.00 layout.
+            raise ValueError("Patch de resolução 01.11 ainda não validado; selecione Original")
         selected["resolution-" + resolution] = scene_aim_resolution_patches(resolution)
-    for name, changes in PERFORMANCE_EFFECTS.items():
+    effects = PERFORMANCE_EFFECTS if profile == "01.00" else PERFORMANCE_EFFECTS_111
+    for name, changes in effects.items():
         if type(options.get(name, False)) is not bool:
             raise ValueError("Opção de patch inválida: " + name)
         if options.get(name, False):
@@ -289,8 +340,8 @@ def selected_options(options):
     return selected
 
 
-def base_patches_for(options):
-    patches = dict(BASE_PATCHES)
+def base_patches_for(options, profile="01.00"):
+    patches = dict(BASE_PATCHES if profile == "01.00" else BASE_PATCHES_111)
     # The 01.00 job-sleep patch forces three formerly conditional wake paths.
     # Snapdragon 7+ Gen 2 had a persistent job-counter deadlock while the
     # presentation thread kept flipping; retain the original game branches
@@ -309,16 +360,19 @@ def write_selected(source, prepared, options):
     import json
     from pathlib import Path
     prepared, source = Path(prepared), Path(source)
-    requested = selected_options(options)
     game_self = prepared / "tlou-view/eboot.bin"
     if not game_self.is_file():
-        if requested:
-            raise ValueError("Esta pasta preparada não contém o eboot original para validar os patches")
+        raise ValueError("Esta pasta preparada não contém eboot original")
+    digest = hashlib.sha256(game_self.read_bytes()).hexdigest()
+    profile = known_profile(digest)
+    if profile is None:
+        if (options or {}).get("resolution", "original") != "original" or any(
+            (options or {}).get(name, False) for name in PERFORMANCE_EFFECTS
+        ):
+            raise ValueError("Eboot não reconhecido: patches exigem SHA-256 validado")
+        print("Eboot sem perfil Android de patches conhecido; preservando arquivo.", flush=True)
         return
-    if hashlib.sha256(game_self.read_bytes()).hexdigest() != BASE_SELF_SHA256:
-        if requested:
-            raise ValueError("Patches disponíveis apenas para o eboot CUSA00552 1.00 validado; restaure o perfil Original")
-        return
+    requested = selected_options(options, profile)
     spec = importlib.util.spec_from_file_location("tlou_patch_writer", source / "tools/probe_tlou.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -342,7 +396,7 @@ def write_selected(source, prepared, options):
             if kind == 1 and start <= at and at + length <= start + filesz:
                 return elf[offset + at-start:offset + at-start+length]
         return b""
-    patches = base_patches_for(options)
+    patches = base_patches_for(options, profile)
     patches.update(requested)
     for name, changes in patches.items():
         for at, expected, _ in changes:
@@ -351,7 +405,7 @@ def write_selected(source, prepared, options):
     temp = prepared / "patches.bin.new"
     module.image_patches(elf_path, temp, patches)
     temp.replace(prepared / "patches.bin")
-    report = {"profile": BASE_SELF_SHA256, "selected": list(requested),
+    report = {"profile": digest, "game_version": profile, "selected": list(requested),
               "resolution": (options or {}).get("resolution", "original"), "validated": True}
     (prepared / "patch-validation.json").write_text(json.dumps(report, indent=2)+"\n")
     print("Patches validados: " + (", ".join(requested) or "Original; correções de estabilidade"), flush=True)
