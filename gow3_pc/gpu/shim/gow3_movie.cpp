@@ -169,6 +169,13 @@ std::uint64_t ShaderKey(std::uint64_t hash, const std::uint32_t* code, std::size
     std::uint64_t key = hash;
     if (IsMovieShader(code, words)) {
         key ^= (std::uint64_t(Display().width) << 32 | Display().height) * 0x9e3779b97f4a7c15ull;
+        static std::atomic<unsigned> matched{0};
+        if (matched.fetch_add(1, std::memory_order_relaxed) < 4) {
+            std::printf("TLOU movie NV12 shader: rescaled 1920x1088 Y/UV coordinates "
+                        "for %ux%u; shader=%llx\n", Display().width, Display().height,
+                        static_cast<unsigned long long>(hash));
+            std::fflush(stdout);
+        }
     }
     keys.emplace(hash, key);
     return key;
@@ -220,6 +227,14 @@ bool Remap(std::uint64_t& address, std::uint32_t& width, std::uint32_t& height, 
         if (const std::uint64_t copy = FindScratch(base)) {
             address = luma ? copy : copy + std::uint64_t(ScaledPitch()) * ScaledRows();
             pitch = luma ? ScaledPitch() : ScaledChromaPitch() / 2;
+            static std::atomic<unsigned> remapped{0};
+            if (remapped.fetch_add(1, std::memory_order_relaxed) < 8) {
+                std::printf("TLOU movie NV12 texture: %s remapped to scratch "
+                            "%#llx %ux%u pitch=%u (no gameplay texture changes)\n",
+                            luma ? "Y" : "UV", static_cast<unsigned long long>(address),
+                            width, height, pitch);
+                std::fflush(stdout);
+            }
             return true;
         }
         const std::uint64_t layout = frame.layout.load(std::memory_order_acquire);
