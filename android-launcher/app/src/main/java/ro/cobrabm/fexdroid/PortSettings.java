@@ -152,6 +152,7 @@ final class PortSettings {
               .append(env.getOrDefault("TLOU_EXPECT_HOST_SCENE","native"));
         result.append("; geometry-sync=").append(env.getOrDefault("TLOU_AUTO_SMALL_CS_READBACK","1"));
         result.append("; async-global-protect=").append(env.containsKey("GOW3_ASYNC_READBACK")?"on":"off");
+        result.append("; geometry-sync policy=0 known physics only / 1 balanced physics-class / 2 broad compatibility");
         result.append("; guest-job-worker-wake=")
               .append(conservativeJobWorkers()?"original":"patched-sleep");
         return result.toString();
