@@ -56,6 +56,12 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror gow3_pc/tests/test_tlou_hot_srt_readbac
 # The full APK build must fail if this changes or accidentally matches skinning.
 g++ -std=c++20 -O2 -Wall -Wextra -Werror \
   gow3_pc/tests/test_tlou_physics_readback.cpp -o "$test_dir/tlou-physics-readback"
+
+# CUSA00552 01.00: do not regress to the PC-only hash/stride fallback or
+# accidentally enable Readback 2 to compensate for stale physics results.
+grep -Fq '0x697cfcc4ull' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/tlou_physics_readback.h
+grep -Fq 'TlouAndroidPhysicsShape(stage.pgm_hash' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_rasterizer.cpp
+grep -Fq 'env.put("GOW3_READBACKS","1");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 "$test_dir/tlou-physics-readback"
 "$test_dir/tlou-hot-srt"
 
