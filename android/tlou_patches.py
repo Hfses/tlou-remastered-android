@@ -198,37 +198,64 @@ PERFORMANCE_RESOLUTIONS = {
 }
 
 
-# CUSA00552 01.00: the game's low-resolution patch changes scene
-# allocations, but the device's 720p target audit shows a separate 1920x1080
-# HUD/movie surface. The 1080p baseline uses native inverse dimensions for
-# the 32-byte pixel-coordinate uniform at 0x9D4023.
+# CUSA00552 01.00: unify the in-game scene and HUD viewport in the
+# selected 720p/540p/360p resolution. The previous direct-resolution build
+# left three UI-space constructors at 1920x1080, causing real GPU passes with
+# 1080p color and 720p depth (see TLOU-Android-Logs (8)(2).zip).
 #
-# Earlier code replaced that uniform with 1/720 and 1/1280 in 720p (and
-# analogous values at 540p/360p). It put a scene-space normalizer into an
-# output-space HUD surface and was part of the crosshair misalignment.
-# The guarded Bachata-derived low-res profiles *already* preserve native
-# 1/1080 and 1/1920 at this instruction; do not override those constants.
+# Do NOT change 0x92EF1A and 0x92EFC0: those 1920x1080 allocation branches
+# are deliberately left native for the movie/video path. The other three
+# 1920x1080 overrides are in the game/UI path and share the guest resolution.
 LOW_RES_SCENE = {"720": (1280, 720), "540": (960, 540), "360": (640, 360)}
 AIM_NORMALIZATION_ADDRESS = 0x9D4023
+GAME_UI_NATIVE_OVERRIDES = {
+    0x91F6E8: "41bf8007000041bc38040000909090",
+    0x910580: "be80070000ba38040000e9610e0800",
+    0x91A37A: "b980070000c4e1fa2ad1b838040000c4e1fa2ad8909090",
+}
+MOVIE_NATIVE_ALLOCATION_SITES = (0x92EF1A, 0x92EFC0)
 
 
 def scene_aim_resolution_patches(resolution):
-    patches = list(PERFORMANCE_RESOLUTIONS[resolution])
-    matches = [(old, replacement) for at, old, replacement in patches
-               if at == AIM_NORMALIZATION_ADDRESS]
-    if len(matches) != 1:
-        raise ValueError("Escala nativa da interface não encontrada no perfil " + resolution)
-    old, replacement = matches[0]
-    insn = bytes.fromhex(replacement)
-    # mov esi, f32(1/1080); vmovd xmm0,esi;
-    # mov edx, f32(1/1920); vmovd xmm1,edx.
-    if (len(insn) < 18 or insn[0] != 0xBE or
-            insn[5:10] != bytes.fromhex("c5f96ec6ba") or
-            insn[14:18] != bytes.fromhex("c5f96eca")):
-        raise ValueError("Instruções de escala do HUD desconhecidas")
-    vertical, horizontal = struct.unpack_from("<f", insn, 1)[0], struct.unpack_from("<f", insn, 10)[0]
-    if abs(vertical - 1.0 / 1080.0) > 1e-9 or abs(horizontal - 1.0 / 1920.0) > 1e-9:
-        raise ValueError("O perfil perdeu a escala nativa da mira/interface")
+    """One resolution for gameplay, HUD, aim and depth; movies remain native."""
+    width, height = LOW_RES_SCENE[resolution]
+    scene_width, scene_height = struct.pack("<I", width).hex(), struct.pack("<I", height).hex()
+    patches = []
+    visited = set()
+    for at, original, raw in PERFORMANCE_RESOLUTIONS[resolution]:
+        replacement = raw
+        if at in GAME_UI_NATIVE_OVERRIDES:
+            if raw != GAME_UI_NATIVE_OVERRIDES[at]:
+                raise ValueError("Patch UI/resolução fora do perfil CUSA00552 verificado")
+            # Only the two guarded mov-immediates are changed. No call targets,
+            # NOP boundaries, movie source dimensions, or other patches move.
+            if raw.count("80070000") != 1 or raw.count("38040000") != 1:
+                raise ValueError("Constantes de viewport da UI não reconhecidas")
+            replacement = raw.replace("80070000", scene_width).replace("38040000", scene_height)
+            visited.add(at)
+        elif at == AIM_NORMALIZATION_ADDRESS:
+            insn = bytearray.fromhex(raw)
+            if (len(insn) < 18 or insn[0] != 0xBE or
+                    insn[5:10] != bytes.fromhex("c5f96ec6ba") or
+                    insn[14:18] != bytes.fromhex("c5f96eca")):
+                raise ValueError("Instruções de normalização da mira desconhecidas")
+            y, x = struct.unpack_from("<f", insn, 1)[0], struct.unpack_from("<f", insn, 10)[0]
+            if abs(y - 1.0 / 1080.0) > 1e-9 or abs(x - 1.0 / 1920.0) > 1e-9:
+                raise ValueError("Constantes anteriores da mira são diferentes do esperado")
+            struct.pack_into("<f", insn, 1, 1.0 / height)
+            struct.pack_into("<f", insn, 10, 1.0 / width)
+            replacement = insn.hex()
+            visited.add(at)
+        patches.append((at, original, replacement))
+    if visited != {*GAME_UI_NATIVE_OVERRIDES, AIM_NORMALIZATION_ADDRESS}:
+        raise ValueError("Perfil unificado incompleto: não modificar resolução")
+    # No movie allocations are touched, even if the UI is configured at 720p.
+    for at in MOVIE_NATIVE_ALLOCATION_SITES:
+        source = next((raw for where, _, raw in PERFORMANCE_RESOLUTIONS[resolution]
+                       if where == at), None)
+        updated = next((raw for where, _, raw in patches if where == at), None)
+        if source is None or source != updated:
+            raise ValueError("Patch de vídeo original não pode ser alterado")
     return patches
 
 
