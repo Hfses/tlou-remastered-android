@@ -89,6 +89,7 @@ grep -Fq 'TLOU native HUD compositor ACTIVE:' gow3_pc/gpu/shadps4/video_core/ren
 grep -Fq '1.0 / 1080.0' android/tlou_patches.py
 grep -Fq '1.0 / 1920.0' android/tlou_patches.py
 grep -Fq 'UiComposition::NativeUiTransition(' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
+grep -Fq 'const bool ui_draw = rgba8 && (old_movie_target || native_hud_transition);' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
 grep -Fq 'RunUiOnly(ldr_target, {});' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
 grep -Fq 'ui_color = color;' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_temporal_upscaler.cpp
 # Native 1080p aim with reduced scene proxies does not need temporal FSR.
