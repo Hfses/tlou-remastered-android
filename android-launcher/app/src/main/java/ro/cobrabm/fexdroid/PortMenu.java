@@ -207,7 +207,7 @@ final class PortMenu {
                 choice("render_path","Método de resolução",
                     new String[]{"Desempenho: raster real + UI 1080p",
                                  "Compatibilidade: Vulkan proxies (mais GPU)"},
-                    new String[]{"guest","proxy"},"proxy");
+                    new String[]{"guest","proxy"},"guest");
                 note("Reinicie o jogo para aplicar o método de resolução.");
                 note("Sincronização da geometria: Completo (único modo). "
                      +"Preserva a correção das deformações.");
