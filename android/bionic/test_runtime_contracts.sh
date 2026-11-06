@@ -98,6 +98,9 @@ cc -std=c11 -Wall -Wextra -Werror -x c -fsyntax-only \
 grep -Fq 'env.put("GOW3_MOVIE_SIZE",actualSize);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'env.remove("GOW3_MOVIE_SIZE");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
 grep -Fq 'gow3_movie_scale_nv12(' gow3_pc/src/runtime_videodec.c
+grep -Fq 'buffer->frame_buffer_size, f->data[0], f->data[1]' gow3_pc/src/runtime_videodec.c
+grep -Fq 'gow3_movie_can_scale_in_place(' gow3_pc/gpu/shim/gow3_movie.cpp
+grep -Fq 'in_place ? width : src_width' gow3_pc/gpu/shim/gow3_movie.cpp
 grep -Fq 'extern "C" int gow3_movie_scale_nv12(' gow3_pc/gpu/shim/gow3_movie.cpp
 grep -Fq 'Gow3Movie::RecordFrame(guest_base, src_width, src_height' gow3_pc/gpu/shim/gow3_movie.cpp
 grep -Fq 'Gow3Movie::Remap(' gow3_pc/gpu/shadps4/video_core/texture_cache/image_info.cpp

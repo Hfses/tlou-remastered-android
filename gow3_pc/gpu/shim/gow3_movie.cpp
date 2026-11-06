@@ -224,6 +224,24 @@ bool Remap(std::uint64_t& address, std::uint32_t& width, std::uint32_t& height, 
         if (!base || address != (luma ? base : base + chroma_offset)) {
             continue;
         }
+        const std::uint64_t layout = frame.layout.load(std::memory_order_acquire);
+        const std::uint32_t w = layout & 0xffff, h = (layout >> 16) & 0xffff;
+        const std::uint32_t p = (layout >> 32) & 0xffff, rows = (layout >> 48) & 0xffff;
+        // The actual Android C decoder downscales into its existing guest buffer if
+        // the result fits. Detect that layout before searching for an older scratch
+        // entry; Y begins at base and UV begins at base + scaled Y plane bytes.
+        if (w == display.width && h == display.height &&
+            p == ScaledPitch() && rows == ScaledRows()) {
+            pitch = luma ? p : ScaledChromaPitch() / 2;
+            static std::atomic<unsigned> inplace_remaps{0};
+            if (inplace_remaps.fetch_add(1, std::memory_order_relaxed) < 8) {
+                std::printf("TLOU movie NV12 texture: in-place %s %#llx %ux%u pitch=%u\n",
+                            luma ? "Y" : "UV", static_cast<unsigned long long>(address),
+                            width, height, pitch);
+                std::fflush(stdout);
+            }
+            return true;
+        }
         if (const std::uint64_t copy = FindScratch(base)) {
             address = luma ? copy : copy + std::uint64_t(ScaledPitch()) * ScaledRows();
             pitch = luma ? ScaledPitch() : ScaledChromaPitch() / 2;
@@ -237,9 +255,6 @@ bool Remap(std::uint64_t& address, std::uint32_t& width, std::uint32_t& height, 
             }
             return true;
         }
-        const std::uint64_t layout = frame.layout.load(std::memory_order_acquire);
-        const std::uint32_t w = layout & 0xffff, h = (layout >> 16) & 0xffff;
-        const std::uint32_t p = (layout >> 32) & 0xffff, rows = (layout >> 48) & 0xffff;
         if (luma) {
             width = w;
             height = h;
@@ -265,10 +280,10 @@ bool Remap(std::uint64_t& address, std::uint32_t& width, std::uint32_t& height, 
 //
 // This function is called only from the video decoder thread and only when
 // GOW3_MOVIE_SIZE is explicitly enabled by the unified-resolution launcher.
-// The original decoded guest 1920x1080 NV12 data stays intact. Only a private
-// converted guest-memory scratch is exposed to movie shader image descriptors.
+// FFmpeg decoded source data stays intact. A reduced 720p movie instead uses the already
+// allocated guest frame buffer; only larger targets need private guest scratch memory.
 extern "C" int gow3_movie_scale_nv12(
-    std::uint64_t guest_base, const std::uint8_t* src_y,
+    std::uint64_t guest_base, std::uint64_t guest_capacity, const std::uint8_t* src_y,
     const std::uint8_t* src_uv, std::uint32_t src_width,
     std::uint32_t src_height, int src_y_stride, int src_uv_stride,
     std::uint32_t* display_width, std::uint32_t* display_height) {
@@ -281,11 +296,20 @@ extern "C" int gow3_movie_scale_nv12(
         (src_width == width && src_height == height))
         return 0;
 
-    // Allocate first, but publish no remap until the complete resized frame
-    // has been written successfully; a failed swscale must not expose stale
-    // luma/UV bytes to the Vulkan movie conversion shader.
-    std::uint8_t* scratch = Gow3Movie::ScratchFrame(guest_base);
-    if (!scratch) return 0;
+    // For downscales, reuse the decoded buffer's existing guest memory instead of
+    // allocating another 1.47 MiB per frame. The source pointers belong to FFmpeg,
+    // not to guest_base. Preserve a scratch fallback for oversized target frames.
+    const std::uint32_t pitch = Gow3Movie::ScaledPitch();
+    const std::uint32_t chroma_pitch = Gow3Movie::ScaledChromaPitch();
+    const std::uint32_t rows = Gow3Movie::ScaledRows();
+    const std::uint64_t bytes = Gow3Movie::ScaledFrameBytes();
+    if (!bytes || bytes > 128ull * 1024 * 1024) return 0;
+    const bool in_place = gow3_movie_can_scale_in_place(src_width, src_height, width, height,
+                                                       bytes, guest_capacity) != 0;
+    std::uint8_t* target = in_place
+        ? reinterpret_cast<std::uint8_t*>(static_cast<std::uintptr_t>(guest_base))
+        : Gow3Movie::ScratchFrame(guest_base);
+    if (!target) return 0;
 
     struct Conversion {
         SwsContext* sws = nullptr;
@@ -299,11 +323,6 @@ extern "C" int gow3_movie_scale_nv12(
         nullptr, nullptr, nullptr);
     if (!converter.sws) return 0;
 
-    const std::uint32_t pitch = Gow3Movie::ScaledPitch();
-    const std::uint32_t chroma_pitch = Gow3Movie::ScaledChromaPitch();
-    const std::uint32_t rows = Gow3Movie::ScaledRows();
-    const std::uint64_t bytes = Gow3Movie::ScaledFrameBytes();
-    if (!bytes || bytes > 128ull * 1024 * 1024) return 0;
     converter.output.resize(static_cast<std::size_t>(bytes));
     std::uint8_t* y_out = converter.output.data();
     std::uint8_t* uv_out = y_out + std::uint64_t(pitch) * rows;
@@ -327,24 +346,29 @@ extern "C" int gow3_movie_scale_nv12(
         std::memcpy(uv_out + std::uint64_t(y) * chroma_pitch,
                     uv_out + std::uint64_t(height / 2 - 1) * chroma_pitch, chroma_pitch);
 
-    const auto address = static_cast<VAddr>(reinterpret_cast<std::uintptr_t>(scratch));
+    const auto address = static_cast<VAddr>(reinterpret_cast<std::uintptr_t>(target));
     auto* memory = Core::Memory::Instance();
     if (!memory) return 0;
     memory->InvalidateMemory(address, bytes);
-    if (!memory->TryWriteBacking(scratch, converter.output.data(), bytes))
-        std::memcpy(scratch, converter.output.data(), bytes);
+    if (!memory->TryWriteBacking(target, converter.output.data(), bytes))
+        std::memcpy(target, converter.output.data(), bytes);
     memory->InvalidateMemory(address, bytes);
-    Gow3Movie::RecordFrame(guest_base, src_width, src_height,
-                           (src_width + 63u) & ~63u, (src_height + 15u) & ~15u);
+    // Do not report the source 1920x1088 layout after overwriting it with 720p NV12:
+    // otherwise Remap fetches UV from the old offset and turns the picture green.
+    // The entry is published only after swscale and both Y/UV writes complete.
+    Gow3Movie::RecordFrame(
+        guest_base, in_place ? width : src_width, in_place ? height : src_height,
+        in_place ? pitch : (src_width + 63u) & ~63u,
+        in_place ? rows : (src_height + 15u) & ~15u);
     *display_width = width;
     *display_height = height;
     static std::atomic<unsigned> recorded{0};
     if (recorded.fetch_add(1, std::memory_order_relaxed) < 4) {
-        std::printf("TLOU movie NV12: decoded %ux%u -> %ux%u scratch %#llx; "
-                    "Y pitch %u rows %u UV pitch %u; gameplay unchanged\n",
-                    src_width, src_height, width, height,
+        std::printf("TLOU movie NV12: decoded %ux%u -> %ux%u %s %#llx; "
+                    "Y pitch %u rows %u UV pitch %u bytes %llu; gameplay unchanged\n",
+                    src_width, src_height, width, height, in_place ? "in-place" : "scratch",
                     static_cast<unsigned long long>(address), pitch, rows,
-                    chroma_pitch);
+                    chroma_pitch, static_cast<unsigned long long>(bytes));
         std::fflush(stdout);
     }
     return 1;

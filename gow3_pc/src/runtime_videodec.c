@@ -128,23 +128,21 @@ static int32_t picture(Decoder *d, FrameBuffer *buffer, PictureInfo *info) {
             printf("Runtime: Videodec2 frame %ux%u pitch %u rows %u into %p (buffer %llu bytes)\n", width, height,
                    pitch, rows, (void *)luma, (unsigned long long)buffer->frame_buffer_size);
     }
-    // Video-only bridge. The game and its HUD are 720p, but the movie
-    // decoder correctly outputs native 1920x1080 NV12. Previously the
-    // conversion shaders assumed a 720p UV offset within that 1080p buffer,
-    // producing green and oversized movies. Keep the *native decoded buffer*
-    // intact, copy a 720p NV12 picture into movie-only scratch guest memory,
-    // and expose scaled plane descriptors via Gow3Movie::Remap.
-    // If scaling fails, retain the original frame metadata as a fallback.
+    // Video-only bridge. Keep FFmpeg's decoded 1920x1080 NV12 source unchanged,
+    // but downscale the already allocated guest frame buffer in place when it fits.
+    // Original 1080p guest data is not needed after this frame is converted.
+    // The texture cache must see new Y/UV layout via Gow3Movie::Remap.
+    // On conversion failure, keep original guest data and metadata.
     uint32_t shown_width=width, shown_height=height;
     const int scaled=gow3_movie_scale_nv12(
-        (uint64_t)(uintptr_t)luma, f->data[0], f->data[1],
+        (uint64_t)(uintptr_t)luma, buffer->frame_buffer_size, f->data[0], f->data[1],
         width, height, f->linesize[0], f->linesize[1],
         &shown_width, &shown_height);
     if (scaled) {
         static int logged_scaled=0;
         if (logged_scaled++<4)
             printf("Runtime: Videodec2 movie planes %ux%u -> %ux%u "
-                   "(native decoded frame preserved)\n",
+                   "(converted video-only guest buffer)\n",
                    width, height, shown_width, shown_height);
         pitch=align(shown_width,64);
         rows=align(shown_height,16);
