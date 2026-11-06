@@ -5843,27 +5843,45 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                     // regardless of their shader hash. Existing EOPs retain half
                     // the event's slots, avoiding starvation and global Readback 2.
 #ifdef __ANDROID__
-                    static const bool auto_small_results = [] {
+                    // 0 fast: existing known hashes only
+                    // 1 balanced (default): physics-class buffers by V# descriptor
+                    // 2 full compatibility: legacy broad 256 B - 8 KiB compute writes
+                    static const int auto_small_results = [] {
                         const char* env = std::getenv("TLOU_AUTO_SMALL_CS_READBACK");
-                        return env && env[0] == '1';
+                        return !env ? 1 : env[0] == '2' ? 2 : env[0] == '1' ? 1 : 0;
                     }();
+                    const u32 queued = u32(eop_readbacks.size() + eop_open_readbacks.size());
                     const bool automatic_result =
                         auto_small_results && EopReadbackMode() == 1 &&
-                        TlouAutoReadback::Eligible(compute_stage, desc.is_written,
-                            exact_result, vsharp.stride, vsharp.num_records, size,
-                            u32(eop_readbacks.size() + eop_open_readbacks.size()));
-                    if (automatic_result) {
-                        static std::atomic<u32> accepted{0};
+                        (auto_small_results == 1
+                            ? TlouAutoReadback::EligibleBalanced(
+                                compute_stage, desc.is_written, exact_result, binding.buffer,
+                                vsharp.stride, vsharp.num_records, size, queued)
+                            : TlouAutoReadback::Eligible(
+                                compute_stage, desc.is_written, exact_result,
+                                vsharp.stride, vsharp.num_records, size, queued));
+                    // Report actual copy candidates, not the number of completed
+                    // downloads. In Balanced, compare with the broad Full predicate
+                    // to quantify how much work was avoided on this scene.
+                    if (auto_small_results && compute_stage && desc.is_written) {
+                        static std::atomic<u32> accepted{0}, broad_candidates{0};
                         static std::atomic<s64> last_report{0};
-                        accepted.fetch_add(1, std::memory_order_relaxed);
-                        const s64 now = std::chrono::duration_cast<std::chrono::seconds>(
-                            std::chrono::steady_clock::now().time_since_epoch()).count();
-                        if (s64 last = last_report.load(std::memory_order_relaxed);
-                            now - last >= 5 && last_report.compare_exchange_strong(last, now)) {
-                            std::printf("TLOU automatic small compute readbacks (5 s): %u accepted; "
-                                        "hash independent, max 8 KiB/output, <=128/event\n",
-                                        accepted.exchange(0, std::memory_order_relaxed));
-                            std::fflush(stdout);
+                        if (automatic_result) accepted.fetch_add(1, std::memory_order_relaxed);
+                        if (TlouAutoReadback::Eligible(compute_stage, desc.is_written,
+                                exact_result, vsharp.stride, vsharp.num_records, size, queued))
+                            broad_candidates.fetch_add(1, std::memory_order_relaxed);
+                        if ((broad_candidates.load(std::memory_order_relaxed) & 1023u) == 0u) {
+                            const s64 now = std::chrono::duration_cast<std::chrono::seconds>(
+                                std::chrono::steady_clock::now().time_since_epoch()).count();
+                            if (s64 last = last_report.load(std::memory_order_relaxed);
+                                now - last >= 5 && last_report.compare_exchange_strong(last, now)) {
+                                std::printf("TLOU automatic small compute readbacks (5 s): %u accepted, "
+                                            "%u full-mode eligible; mode=%d\n",
+                                            accepted.exchange(0, std::memory_order_relaxed),
+                                            broad_candidates.exchange(0, std::memory_order_relaxed),
+                                            auto_small_results);
+                                std::fflush(stdout);
+                            }
                         }
                     }
 #else
