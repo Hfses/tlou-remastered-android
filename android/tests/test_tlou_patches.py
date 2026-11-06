@@ -58,25 +58,25 @@ class BaseExecutablePatches(unittest.TestCase):
             patcher.image_patches(elf, out, profiles.BASE_PATCHES)
             self.assertEqual(struct.unpack_from("<Q", out.read_bytes(), 16)[0], 6)
 
-    def test_low_resolution_aim_normalization_matches_scene_pixels(self):
-        # The scene uses 720p / 540p / 360p, not 1920x1080. Assert the
-        # patched SSE constants keep their size and exact byte guard.
+    def test_low_resolution_aim_preserves_native_hud_normalization(self):
+        # CUSA00552 01.00 renders the scene in 720/540/360 but also draws a
+        # native 1920x1080 HUD. Keep inverse pixel-size constants native in
+        # its 32-byte uniform, while all scene allocation patches stay intact.
         for profile, (width, height) in profiles.LOW_RES_SCENE.items():
-            patches=profiles.scene_aim_resolution_patches(profile)
-            before=dict((at, (old, replacement)) for at,old,replacement
-                        in profiles.PERFORMANCE_RESOLUTIONS[profile])
-            changed=[(at, old, new) for at,old,new in patches
-                     if new != before[at][1]]
-            self.assertEqual([at for at,_,_ in changed], [0x9D4023])
-            at, original, replacement=changed[0]
-            self.assertEqual(original, before[at][0])
-            self.assertEqual(len(replacement), len(before[at][1]))
-            b=bytes.fromhex(replacement)
-            self.assertAlmostEqual(struct.unpack_from("<f",b,1)[0],1/height,places=8)
-            self.assertAlmostEqual(struct.unpack_from("<f",b,10)[0],1/width,places=8)
-            selected=profiles.selected_options({"resolution":profile})
-            self.assertEqual(selected["resolution-"+profile],patches)
-        self.assertNotIn("resolution-original",profiles.selected_options({"resolution":"original"}))
+            patches = profiles.scene_aim_resolution_patches(profile)
+            self.assertEqual(patches, profiles.PERFORMANCE_RESOLUTIONS[profile])
+            at, original, replacement = next(
+                (at, old, new) for at, old, new in patches
+                if at == profiles.AIM_NORMALIZATION_ADDRESS)
+            self.assertEqual(at, 0x9D4023)
+            self.assertTrue(len(bytes.fromhex(replacement)) >= 18)
+            b = bytes.fromhex(replacement)
+            self.assertAlmostEqual(struct.unpack_from("<f", b, 1)[0], 1/1080, places=8)
+            self.assertAlmostEqual(struct.unpack_from("<f", b, 10)[0], 1/1920, places=8)
+            self.assertNotAlmostEqual(struct.unpack_from("<f", b, 1)[0], 1/height, places=8)
+            selected = profiles.selected_options({"resolution": profile})
+            self.assertEqual(selected["resolution-"+profile], patches)
+        self.assertNotIn("resolution-original", profiles.selected_options({"resolution": "original"}))
 
     def test_job_worker_wait_regression_is_device_scoped(self):
         default=profiles.base_patches_for({})
