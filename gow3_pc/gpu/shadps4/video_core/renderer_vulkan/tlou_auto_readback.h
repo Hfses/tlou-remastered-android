@@ -23,21 +23,4 @@ constexpr bool Eligible(bool compute, bool gpu_written, bool known_result,
     // that, but never accept a descriptor whose declared range is shorter.
     return records <= UINT64_MAX / stride && records * stride >= bytes;
 }
-
-// TLOU CUSA00552 v1.00, Adreno 830 logs Nov 6:
-//   producers at slot 5/6, raw DWORD output, stride 4 and 4272/4368/6480
-//   bytes. Both hash-identified and not-yet-identified physics results have
-//   this *descriptor family*. Use the layout, not an ever-growing shader list.
-// Unlike Full, Balanced does NOT queue unrelated 256 B - 8 KiB compute
-// outputs and leaves unrelated async readbacks unprotected.
-// The known exact shader results stay handled by the existing readback path.
-constexpr bool EligibleBalanced(bool compute, bool gpu_written, bool known_result,
-                                std::uint32_t slot, std::uint32_t stride,
-                                std::uint64_t records, std::uint64_t bytes,
-                                std::uint32_t event_slots) noexcept {
-    return (slot == 5 || slot == 6) && stride == 4 &&
-           bytes == records * 4 && bytes >= 4096 && bytes <= 8192 &&
-           Eligible(compute, gpu_written, known_result, stride, records, bytes,
-                    event_slots) && event_slots < 64;
-}
 }
