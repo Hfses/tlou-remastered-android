@@ -64,9 +64,9 @@ jobs:
           python-version: '3.12'
       - name: Test clocks, job fiber migration, services and automatic preparation
         run: |
+          python3 -m pip install unicorn==2.1.4
           bash android/bionic/test_runtime_contracts.sh
           python3 -m unittest discover -s android/tests -v
-          python3 -m pip install unicorn==2.1.4
           python3 gow3_pc/tests/test_srt_arm64.py -v
       # Fail fast on Java/resources/manifest issues before expensive native builds.
       - uses: actions/setup-java@v4
@@ -235,6 +235,7 @@ jobs:
           cache-read-only: false
       - name: Preparation, native reuse guards, FPS and save tests
         run: |
+          python3 -m pip install unicorn==2.1.4
           python3 -m unittest discover -s android/tests -v
           bash android/bionic/test_fps.sh
           python3 gow3_pc/tests/test_android_save_choice.py
@@ -246,7 +247,7 @@ jobs:
           name: TheLastOfUsRemastered-Android-v0.1-arm64
           path: out/source-apk
           github-token: ${{ github.token }}
-          run-id: 42119665740
+          run-id: 42136621594
       - name: Validate source compatibility and extract native payload
         run: python3 android/bionic/reuse_apk.py out/source-apk/TheLastOfUsRemastered-Android-v0.1-arm64.apk
       - name: Restore existing signing identity; never create a replacement key
@@ -282,8 +283,15 @@ jobs:
           with zipfile.ZipFile('out/source-apk/TheLastOfUsRemastered-Android-v0.1-arm64.apk') as old, zipfile.ZipFile('out/release/TheLastOfUsRemastered-Android-v0.1-arm64.apk') as new:
               names=[n for n in old.namelist() if reuse.payload(n) is not None and not n.endswith('/')]
               assert names
-              for n in names: assert old.read(n)==new.read(n), n
-              print('Identical native/runtime/installer/driver payload:',len(names),'files')
+              for n in names:
+                  if n!='assets/tools.zip': assert old.read(n)==new.read(n), n
+              import io
+              with zipfile.ZipFile(io.BytesIO(old.read('assets/tools.zip'))) as old_tools, zipfile.ZipFile(io.BytesIO(new.read('assets/tools.zip'))) as new_tools:
+                  assert old_tools.namelist()==new_tools.namelist()
+                  for n in old_tools.namelist():
+                      expected=(Path(n.removeprefix('source/')).read_bytes() if n in {'source/'+p for p in reuse.PREPARER_SOURCES} else old_tools.read(n))
+                      assert new_tools.read(n)==expected,n
+              print('Identical native/runtime/driver payload; only verified preparer sources updated')
           PYCODE
       - uses: actions/upload-artifact@v4
         with:

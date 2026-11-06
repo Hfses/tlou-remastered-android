@@ -29,7 +29,7 @@ class BaseExecutablePatches(unittest.TestCase):
             self.elf(elf)
             patcher = m.load_patch_module(Path(__file__).resolve().parents[2])
             patcher.image_patches(elf, out, profiles.BASE_PATCHES)
-            self.assertEqual(struct.unpack_from("<Q", out.read_bytes(), 16)[0], 7)
+            self.assertEqual(struct.unpack_from("<Q", out.read_bytes(), 16)[0], 9)
             for at, _, replacement in profiles.BASE_PATCHES["frame-timeout"][:2]:
                 value = bytes.fromhex(replacement)
                 target = at + 8 + struct.unpack_from("<i", value, 4)[0]
@@ -56,7 +56,7 @@ class BaseExecutablePatches(unittest.TestCase):
                 f.write(b"\x90")
             patcher = m.load_patch_module(Path(__file__).resolve().parents[2])
             patcher.image_patches(elf, out, profiles.BASE_PATCHES)
-            self.assertEqual(struct.unpack_from("<Q", out.read_bytes(), 16)[0], 4)
+            self.assertEqual(struct.unpack_from("<Q", out.read_bytes(), 16)[0], 6)
 
     def test_unknown_executable_keeps_existing_version_guards(self):
         with tempfile.TemporaryDirectory() as temp:

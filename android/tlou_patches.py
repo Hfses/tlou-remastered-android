@@ -26,6 +26,21 @@ BASE_PATCHES = {
         (0xF6BEB0, "8b3383feff4c89f8", None),
         (0x92C942, "488b5330488b8a800000004883c260", None),
     ],
+    # Static ray-hit processing lacks the invalid-submesh skip already present
+    # in the dynamic-mesh path at 0xF753BE. Reject an unavailable/static mesh's
+    # hit before computing its submesh address; continue with the next result.
+    # Keep every valid hit on the original path. Do not suppress global asserts.
+    "static-ray-hit-submesh-bounds": [
+        (0xF7516C, "0f849e020000", "0f8e9e020000"),
+        (0xF7517F, "39c87f33e81865b3ff", "39c87733e988020000"),
+        (0xF7512F, "438b8435d80d00004c69e0f0030000", None),
+        (0xF75162, "428b8423f002000085c0", None),
+        (0xF75172, "4b638c35dc0d000048894c2418", None),
+        (0xF751B6, "4869442418900300004a038423f8020000", None),
+        (0xF753BE, "39c3734e", None),
+        (0xF75410, "488b5c242848ffc3413b5d100f8cbefbffff", None),
+        (0xF7665F, "e85ce8ffff", None),
+    ],
     # WaitOnContextDone's compare and diagnostic both read 20 seconds rather than
     # 2. Reuse existing immutable constants; do not alter a shared constant pool.
     "frame-timeout": [
