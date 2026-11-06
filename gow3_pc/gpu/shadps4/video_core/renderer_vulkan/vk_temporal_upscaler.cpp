@@ -1418,13 +1418,23 @@ void TemporalUpscaler::OnDraw(u64 vs_hash, VideoCore::ImageId color,
         return;
     }
     const auto& image = texture_cache.GetImage(color);
+    // CUSA00552 direct low-resolution patches create a separate 1920x1080
+    // interface surface. The previous UI trigger required RenderTarget() at
+    // the guest's 720p size, so it *never* ran the 720p -> 1080p background
+    // copy before the game drew its aim. The device logs confirmed this.
+    const bool native_hud_transition =
+        UiComposition::NativeUiTransition(
+            scaled_session && !spatial_session && !composite_frames,
+            bool(ldr_target), ldr_target == color,
+            image.info.size.width, image.info.size.height,
+            render_width, render_height);
     const bool movie = vs_hash == ui_trigger_vs || UiComposition::MovieShader(vs_hash) ||
                        (scaled_session && native_viewport);
-    const bool ui_draw = movie &&
-        (image.info.pixel_format == vk::Format::eR8G8B8A8Unorm ||
-         image.info.pixel_format == vk::Format::eR8G8B8A8Srgb) &&
-        RenderTarget(image.info.size.width, image.info.size.height) &&
-        !FrameCapture::IsDisplayBuffer(image.info.guest_address);
+    const bool rgba8 = image.info.pixel_format == vk::Format::eR8G8B8A8Unorm ||
+                       image.info.pixel_format == vk::Format::eR8G8B8A8Srgb;
+    const bool ui_draw = (movie && RenderTarget(image.info.size.width, image.info.size.height) ||
+                          native_hud_transition) && rgba8 &&
+                         !FrameCapture::IsDisplayBuffer(image.info.guest_address);
     switch (UiComposition::Choose(Scaled(), ui_draw,
                                   camera_motion.Ready() && ldr_target == color,
                                   Active() && !failed)) {
@@ -1438,7 +1448,28 @@ void TemporalUpscaler::OnDraw(u64 vs_hash, VideoCore::ImageId color,
         // A failed FSR dispatch must not force UI text back to the scene resolution.
         [[fallthrough]];
     case UiComposition::Background::Copy:
-        RunUiOnly(color, depth);
+        if (native_hud_transition) {
+            // A single spatial blit of the completed low-resolution scene.
+            // Subsequent 1920x1080 HUD and aim draws use this host UI image
+            // directly; the original 720p scene targets remain untouched.
+            // Keep the destination native UI image identity so RedirectColor
+            // also redirects the game's actual 1080p UI draws.
+            RunUiOnly(ldr_target, {});
+            if (ui_phase) {
+                ui_color = color;
+                ui_depth = depth;
+                display_redirect = true;
+                static std::atomic<bool> printed{false};
+                if (!printed.exchange(true, std::memory_order_relaxed)) {
+                    std::printf("TLOU native HUD compositor ACTIVE: %ux%u scene -> "
+                                "%ux%u native UI, one spatial blit; no FSR\n",
+                                render_width, render_height, ui_width, ui_height);
+                    std::fflush(stdout);
+                }
+            }
+        } else {
+            RunUiOnly(color, depth);
+        }
         return;
     }
 }
