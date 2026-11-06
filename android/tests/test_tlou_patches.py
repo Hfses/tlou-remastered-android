@@ -58,25 +58,47 @@ class BaseExecutablePatches(unittest.TestCase):
             patcher.image_patches(elf, out, profiles.BASE_PATCHES)
             self.assertEqual(struct.unpack_from("<Q", out.read_bytes(), 16)[0], 6)
 
-    def test_low_resolution_aim_preserves_native_hud_normalization(self):
-        # CUSA00552 01.00 renders the scene in 720/540/360 but also draws a
-        # native 1920x1080 HUD. Keep inverse pixel-size constants native in
-        # its 32-byte uniform, while all scene allocation patches stay intact.
+    def test_low_resolution_game_hud_aim_share_one_coordinate_space(self):
+        # All gameplay and HUD constructors use the requested scene size.
+        # Preserve the native 1920x1080 video/movie allocation branches.
         for profile, (width, height) in profiles.LOW_RES_SCENE.items():
+            baseline = dict((at, (original, replacement))
+                            for at, original, replacement in
+                            profiles.PERFORMANCE_RESOLUTIONS[profile])
             patches = profiles.scene_aim_resolution_patches(profile)
-            self.assertEqual(patches, profiles.PERFORMANCE_RESOLUTIONS[profile])
-            at, original, replacement = next(
-                (at, old, new) for at, old, new in patches
-                if at == profiles.AIM_NORMALIZATION_ADDRESS)
-            self.assertEqual(at, 0x9D4023)
-            self.assertTrue(len(bytes.fromhex(replacement)) >= 18)
-            b = bytes.fromhex(replacement)
-            self.assertAlmostEqual(struct.unpack_from("<f", b, 1)[0], 1/1080, places=8)
-            self.assertAlmostEqual(struct.unpack_from("<f", b, 10)[0], 1/1920, places=8)
-            self.assertNotAlmostEqual(struct.unpack_from("<f", b, 1)[0], 1/height, places=8)
-            selected = profiles.selected_options({"resolution": profile})
-            self.assertEqual(selected["resolution-"+profile], patches)
-        self.assertNotIn("resolution-original", profiles.selected_options({"resolution": "original"}))
+            self.assertEqual(len(patches), len(baseline))
+            changed = {at for at, old, new in patches if new != baseline[at][1]}
+            self.assertEqual(changed, {*profiles.GAME_UI_NATIVE_OVERRIDES,
+                                       profiles.AIM_NORMALIZATION_ADDRESS})
+            for at, original, replacement in patches:
+                self.assertEqual(original, baseline[at][0])
+                self.assertEqual(len(replacement), len(original))
+                if at in profiles.GAME_UI_NATIVE_OVERRIDES:
+                    self.assertIn(struct.pack("<I", width).hex(), replacement)
+                    self.assertIn(struct.pack("<I", height).hex(), replacement)
+                    self.assertNotIn("80070000", replacement)
+                    self.assertNotIn("38040000", replacement)
+            b = bytes.fromhex(dict((at, new) for at, _, new in patches)[
+                profiles.AIM_NORMALIZATION_ADDRESS])
+            self.assertAlmostEqual(struct.unpack_from("<f", b, 1)[0], 1/height, places=8)
+            self.assertAlmostEqual(struct.unpack_from("<f", b, 10)[0], 1/width, places=8)
+            for address in profiles.MOVIE_NATIVE_ALLOCATION_SITES:
+                self.assertEqual(dict((at, new) for at, _, new in patches)[address],
+                                 baseline[address][1])
+            self.assertEqual(profiles.selected_options({"resolution":profile})
+                             ["resolution-"+profile], patches)
+        self.assertNotIn("resolution-original", profiles.selected_options({"resolution":"original"}))
+
+    def test_low_resolution_rejects_unrecognized_hud_patch(self):
+        address = next(iter(profiles.GAME_UI_NATIVE_OVERRIDES))
+        original = profiles.GAME_UI_NATIVE_OVERRIDES[address]
+        try:
+            profiles.GAME_UI_NATIVE_OVERRIDES[address] = "9090909090"
+            with self.assertRaises(ValueError):
+                profiles.scene_aim_resolution_patches("720")
+        finally:
+            profiles.GAME_UI_NATIVE_OVERRIDES[address] = original
+
 
     def test_job_worker_wait_regression_is_device_scoped(self):
         default=profiles.base_patches_for({})
