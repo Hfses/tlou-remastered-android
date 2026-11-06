@@ -198,6 +198,37 @@ PERFORMANCE_RESOLUTIONS = {
 }
 
 
+# CUSA00552 01.00: the resolution profiles retain a 1920x1080 UI but
+# 0x9d4023 is a screen-coordinate normalization routine. The Bachata-derived
+# replacement above wrote 1/1920 and 1/1080 at *every* resolution, so a
+# scene-space aim point at 720p/540p/360p was normalized in 1080p pixels.
+# Keep all other UI/viewport patches unchanged; repair only the pair of
+# reciprocal factors at this verified instruction address.
+LOW_RES_SCENE = {"720": (1280, 720), "540": (960, 540), "360": (640, 360)}
+AIM_NORMALIZATION_ADDRESS = 0x9D4023
+
+
+def scene_aim_resolution_patches(resolution):
+    patches = list(PERFORMANCE_RESOLUTIONS[resolution])
+    width, height = LOW_RES_SCENE[resolution]
+    for i, (at, old, replacement) in enumerate(patches):
+        if at != AIM_NORMALIZATION_ADDRESS:
+            continue
+        insn = bytearray.fromhex(replacement)
+        # mov esi, imm32; vmovq xmm0, rsi; mov edx, imm32; vmovq xmm1, rdx
+        if (len(insn) < 18 or insn[0] != 0xBE or
+                insn[5:10] != bytes.fromhex("c5f96ec6ba") or
+                insn[14:18] != bytes.fromhex("c5f96eca")):
+            raise ValueError("Instruções de escala de mira desconhecidas")
+        insn[1:5] = struct.pack("<f", 1.0 / height)
+        insn[10:14] = struct.pack("<f", 1.0 / width)
+        patches[i] = (at, old, insn.hex())
+        break
+    else:
+        raise ValueError("Escala de mira não encontrada no perfil " + resolution)
+    return patches
+
+
 def selected_options(options):
     options = options or {}
     if not isinstance(options, dict):
@@ -207,7 +238,7 @@ def selected_options(options):
         raise ValueError("Resolução não suportada")
     selected = {}
     if resolution != "original":
-        selected["resolution-" + resolution] = PERFORMANCE_RESOLUTIONS[resolution]
+        selected["resolution-" + resolution] = scene_aim_resolution_patches(resolution)
     for name, changes in PERFORMANCE_EFFECTS.items():
         if type(options.get(name, False)) is not bool:
             raise ValueError("Opção de patch inválida: " + name)
