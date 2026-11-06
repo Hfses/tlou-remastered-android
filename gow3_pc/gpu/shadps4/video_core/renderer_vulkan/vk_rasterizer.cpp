@@ -5870,7 +5870,8 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                         if (TlouAutoReadback::Eligible(compute_stage, desc.is_written,
                                 exact_result, vsharp.stride, vsharp.num_records, size, queued))
                             broad_candidates.fetch_add(1, std::memory_order_relaxed);
-                        if ((broad_candidates.load(std::memory_order_relaxed) & 1023u) == 0u) {
+                        static std::atomic<u32> report_probes{0};
+                        if ((report_probes.fetch_add(1, std::memory_order_relaxed) & 511u) == 0u) {
                             const s64 now = std::chrono::duration_cast<std::chrono::seconds>(
                                 std::chrono::steady_clock::now().time_since_epoch()).count();
                             if (s64 last = last_report.load(std::memory_order_relaxed);
