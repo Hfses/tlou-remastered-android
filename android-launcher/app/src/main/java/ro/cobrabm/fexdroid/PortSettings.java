@@ -109,12 +109,22 @@ final class PortSettings {
 
         env.put("GOW3_READBACKS","1"); // Precise=2 caused artifacts; never resurrect.
         env.put("GOW3_EOP_READBACK","1"); // Selective readbacks, not Precise/Readback 2.
-        // Protect all *pending asynchronous* GPU readback pages. A CPU access
-        // waits for its producer's copy, never an arbitrary older value.
-        env.put("GOW3_ASYNC_READBACK","1");
-        // Bounded CPU-visible small compute outputs, independent of shader hashes.
-        // No global GPU memory download or Readback 2.
-        env.put("TLOU_AUTO_SMALL_CS_READBACK","1");
+        // Readback 1 stays on at all levels. Every exact physics EOP result
+        // already calls DownloadRangesAsync(..., protect=true, yield_to_cpu=true),
+        // which read-protects its own pages without a global switch.
+        // Protecting ALL other pending readbacks caused many unrelated page
+        // faults and a sharp performance regression on Adreno 830.
+        final String geometry=p.getString("geometry_sync","balanced");
+        final String geometryMode="fast".equals(geometry)?"0":
+            "full".equals(geometry)?"2":"1";
+        env.put("TLOU_AUTO_SMALL_CS_READBACK",geometryMode);
+        if ("2".equals(geometryMode)) {
+            // Compatibility mode preserves the slower fully protected behavior.
+            env.put("GOW3_ASYNC_READBACK","1");
+        } else {
+            // Balanced/Fast: protect only the explicit EOP result copies.
+            env.remove("GOW3_ASYNC_READBACK");
+        }
         // Temporary bounded coverage audit for CUSA00552 01.00. This only logs
         // at most 40 distinct candidate compute bindings; no shader dumps or waits.
         env.put("TLOU_PHYSICS_COVERAGE","1");
@@ -140,6 +150,8 @@ final class PortSettings {
         result.append("; renderer=Vulkan; CPU=FEX ARM64");
         result.append("; aim-coordinate-space=guest-1080p; host-scene=")
               .append(env.getOrDefault("TLOU_EXPECT_HOST_SCENE","native"));
+        result.append("; geometry-sync=").append(env.getOrDefault("TLOU_AUTO_SMALL_CS_READBACK","1"));
+        result.append("; async-global-protect=").append(env.containsKey("GOW3_ASYNC_READBACK")?"on":"off");
         result.append("; guest-job-worker-wake=")
               .append(conservativeJobWorkers()?"original":"patched-sleep");
         return result.toString();
