@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "../gpu/shadps4/video_core/renderer_vulkan/tlou_auto_readback.h"
 #include <cassert>
+#include <initializer_list>
 using TlouAutoReadback::Eligible;
 
 static_assert(Eligible(true,true,false,4,1068,4272,0));
