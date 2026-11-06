@@ -1442,9 +1442,13 @@ void TemporalUpscaler::OnDraw(u64 vs_hash, VideoCore::ImageId color,
                        (scaled_session && native_viewport);
     const bool rgba8 = image.info.pixel_format == vk::Format::eR8G8B8A8Unorm ||
                        image.info.pixel_format == vk::Format::eR8G8B8A8Srgb;
-    const bool ui_draw = (movie && RenderTarget(image.info.size.width, image.info.size.height) ||
-                          native_hud_transition) && rgba8 &&
-                         !FrameCapture::IsDisplayBuffer(image.info.guest_address);
+    // The native 1080p target can itself be a registered display buffer.
+    // Only the old low-resolution movie path excludes display buffers;
+    // otherwise the missing TLOU HUD transition would still be skipped.
+    const bool old_movie_target =
+        movie && RenderTarget(image.info.size.width, image.info.size.height) &&
+        !FrameCapture::IsDisplayBuffer(image.info.guest_address);
+    const bool ui_draw = rgba8 && (old_movie_target || native_hud_transition);
     switch (UiComposition::Choose(Scaled(), ui_draw,
                                   camera_motion.Ready() && ldr_target == color,
                                   Active() && !failed)) {
