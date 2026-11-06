@@ -3,6 +3,22 @@
 #include <cassert>
 #include <initializer_list>
 using TlouAutoReadback::Eligible;
+using TlouAutoReadback::EligibleBalanced;
+
+// Two already known producers and the two new 4368-byte physics producers
+// reported by the user's 2026-11-06 Adreno 830 log. No shader hash involved.
+static_assert(EligibleBalanced(true,true,false,5,4,1068,4272,0));
+static_assert(EligibleBalanced(true,true,false,6,4,1092,4368,0));
+static_assert(EligibleBalanced(true,true,false,5,4,1092,4368,0));
+static_assert(EligibleBalanced(true,true,false,6,4,1620,6480,63));
+static_assert(!EligibleBalanced(true,true,false,5,4,1092,4368,64));  // preserve EOP budget
+static_assert(!EligibleBalanced(true,true,false,2,4,1092,4368,0));  // unrelated slot
+static_assert(!EligibleBalanced(true,true,false,6,16,273,4368,0)); // unrelated layout
+static_assert(!EligibleBalanced(true,true,false,6,4,512,2048,0)); // unrelated small
+static_assert(!EligibleBalanced(true,true,false,6,4,2100,8400,0)); // outside window
+static_assert(!EligibleBalanced(false,true,false,6,4,1092,4368,0));
+static_assert(!EligibleBalanced(true,true,true,6,4,1092,4368,0)); // known result handled separately
+
 
 static_assert(Eligible(true,true,false,4,1068,4272,0));
 static_assert(Eligible(true,true,false,4,1620,6480,1));
