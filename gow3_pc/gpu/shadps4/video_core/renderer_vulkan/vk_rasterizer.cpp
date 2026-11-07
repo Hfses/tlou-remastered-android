@@ -1568,34 +1568,70 @@ void Rasterizer::NotePendingGpuWrite(VAddr address, u64 size) {
             pending_copy_writes.push_back({address, end, copy_position});
         }
     }
-    // gow3 31 Oct 2026: 9% of the GPU command thread in a heavy area was this walk. A range no
-    // pending write can touch skips it (one that only touches an entry across a granule stays a
-    // new entry, which is harmless), and the walk starts at the entry found last.
-    const u32 count = PendingFilterHit(address, end)
-                          ? static_cast<u32>(pending_writes.size())
-                          : 0;
-    const u32 first = pending_hint < count ? pending_hint : 0;
-    for (u32 step = 0; step < count; ++step) {
-        const u32 i = first + step < count ? first + step : first + step - count;
+    // A pending output range is often repeated by successive compute dispatches.
+    // Reusing a previously found interval avoids the 64 KiB bloom walk and the
+    // search through the pending vector. For multiple overlapping intervals the
+    // indexed lookup must select the SAME cyclic-first candidate as the old scan.
+    // GOW3_PENDING_WRITE_INDEX=0 restores the original algorithm for A/B tests.
+    static const bool indexed = [] {
+        const char* env = std::getenv("GOW3_PENDING_WRITE_INDEX");
+        return !(env && env[0] == '0');
+    }();
+    const auto merge = [&](u32 i) {
         auto& write = pending_writes[i];
-        if (address <= write.end && write.begin <= end) {
-            pending_hint = i;
-            write.begin = std::min(write.begin, address);
-            write.end = std::max(write.end, end);
-            write.position = position;
-            pending_min = std::min(pending_min, address);
-            pending_max = std::max(pending_max, end);
+        const bool covered = Detail::PendingWriteAlreadyCovered(write, address, end);
+        pending_hint = i;
+        write.begin = std::min(write.begin, address);
+        write.end = std::max(write.end, end);
+        write.position = position;
+        pending_min = std::min(pending_min, address);
+        pending_max = std::max(pending_max, end);
+        // If the old range already covered the new one, all its filter bits
+        // are already set (including after a pruning rebuild). Otherwise
+        // publish the expanded spatial membership and filter bits.
+        if (indexed && !covered) {
+            pending_write_index.Set(i, write);
+        }
+        if (!indexed || !covered) {
             FilterPendingRange(address, end);
-            if (uncommitted) {
-                uncommitted_indices.push_back(i);
-            }
+        }
+        if (uncommitted) {
+            uncommitted_indices.push_back(i);
+        }
+    };
+    if (indexed && Detail::PendingWriteHintOverlaps(pending_writes, pending_hint, address, end)) {
+        merge(pending_hint);
+        return;
+    }
+    const u32 count = static_cast<u32>(pending_writes.size());
+    if (indexed && pending_write_index.CanQuery(count)) {
+        if (const auto hit = pending_write_index.FirstOverlap(pending_writes, pending_hint,
+                                                               address, end)) {
+            merge(*hit);
             return;
+        }
+        // With <=2048 entries every interval is in the index: no match means
+        // the original full scan would find none. Hash collisions are harmless.
+    } else {
+        const u32 candidates = PendingFilterHit(address, end) ? count : 0;
+        const u32 first = pending_hint < candidates ? pending_hint : 0;
+        for (u32 step = 0; step < candidates; ++step) {
+            const u32 i = first + step < candidates ? first + step
+                                                    : first + step - candidates;
+            auto& write = pending_writes[i];
+            if (address <= write.end && write.begin <= end) {
+                merge(i);
+                return;
+            }
         }
     }
     if (uncommitted) {
         uncommitted_indices.push_back(static_cast<u32>(pending_writes.size()));
     }
     pending_writes.push_back({address, end, position});
+    if (indexed) {
+        pending_write_index.Set(pending_writes.size() - 1, pending_writes.back());
+    }
     pending_min = std::min(pending_min, address);
     pending_max = std::max(pending_max, end);
     FilterPendingRange(address, end);
@@ -1674,9 +1710,15 @@ bool Rasterizer::PendingWriteOverlaps(VAddr address, u64 size) {
     // Now and then drop entries whose writes the recording thread has done: the bounds shrink.
     // (Not while PostDraw notes a packet: uncommitted_indices point into the vector.)
     if ((++pending_checks & 63) == 0 && uncommitted_indices.empty()) {
+        const size_t before_erase = pending_writes.size();
         std::erase_if(pending_writes, [&](const PendingWrite& write) {
             return draw_pipe->Reached(write.position);
         });
+        // Erasing shifts vector indices. Rebuild only when at least one
+        // interval was removed; a no-op pruning pass must remain cheap.
+        if (before_erase != pending_writes.size()) {
+            pending_write_index.Rebuild(pending_writes);
+        }
         pending_min = ~VAddr{0};
         pending_max = 0;
         pending_filter.fill(0);

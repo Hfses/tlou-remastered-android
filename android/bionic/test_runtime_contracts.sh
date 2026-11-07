@@ -162,6 +162,13 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror \
   gow3_pc/tests/test_tlou_gpu_write_window_cost.cpp -o "$test_dir/gpu-window-cost"
 "$test_dir/gpu-window-cost"
 
+# The busiest GPU command-thread path: index pending write ranges while
+# preserving the original cyclic-first candidate and fence ordering.
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+  -I gow3_pc/gpu/shadps4 \
+  gow3_pc/tests/test_tlou_pending_write_index.cpp -o "$test_dir/pending-write-index"
+"$test_dir/pending-write-index"
+
 g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread gow3_pc/tests/test_cpu_phase_sample.cpp -o "$test_dir/cpu-phase-sample"
 "$test_dir/cpu-phase-sample" --correctness-only
 
