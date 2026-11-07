@@ -126,7 +126,7 @@ final class HudTelemetry {
     private void cpuSource(String state,String message){
         if(!state.equals(cpuSourceState)){cpuSourceState=state;RunLog.write(context,message);}
     }
-        private void sampleGpu() {
+    private void sampleGpu() {
         if(gpuPaths==null || (gpuPaths.length==0 && ++gpuRediscover>=5)) {
             gpuRediscover=0;
             gpuPaths=PerfHudMetrics.discoverGpuPaths(PerfHudMetrics.DEFAULT_GPU_PATHS,PerfHudMetrics.SCAN_ROOTS);

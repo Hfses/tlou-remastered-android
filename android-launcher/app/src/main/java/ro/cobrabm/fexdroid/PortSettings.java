@@ -149,7 +149,7 @@ final class PortSettings {
         // breakdown needed to avoid another speculative APK. This sampler
         // uses CPU-thread clocks only and remains disableable by an env override.
         // The native Android default is ON unless explicitly disabled.
-        env.remove("TLOU_CPU_PHASE_SAMPLES");
+        env.put("TLOU_CPU_PHASE_SAMPLES","1");
         // Leave profiling truly disabled. Some native switches check presence,
         // so setting "0" instead of removing is incorrect.
         for(String name:new String[]{"GOW3_GPU_PROFILE","GOW3_FRAME_STATS","GOW3_PERF_DIAG"})
