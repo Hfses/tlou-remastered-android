@@ -313,6 +313,9 @@ public final class GameActivity extends Activity {
                 if(gameVersion.isEmpty()||"null".equals(gameVersion))
                     gameVersion=profile.optString("version","");
                 if("01.11".equals(gameVersion)){
+                    // Movie-plane compatibility applies only to 01.11 with resized NV12.
+                    if(env.containsKey("GOW3_MOVIE_SIZE"))
+                        env.put("TLOU_MOVIE_111_LAYOUT","1");
                     env.put("GOW3_DMEM_REPORT_MB","4608");
                     RunLog.write(this,"TLOU 01.11: retail direct memory reported=4608 MiB (pool capacity unchanged)");
                 }

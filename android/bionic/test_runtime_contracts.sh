@@ -102,6 +102,11 @@ grep -Fq 'struct.pack_into("<f", insn, 10, 1.0 / width)' android/tlou_patches.py
 g++ -std=c++20 -O2 -Wall -Wextra -Werror \
     gow3_pc/tests/test_tlou_movie_plane_layout.cpp -o "$test_dir/tlou-movie-layout"
 "$test_dir/tlou-movie-layout"
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+    gow3_pc/tests/test_tlou_movie_111_planes.cpp -o "$test_dir/tlou-movie-111-planes"
+"$test_dir/tlou-movie-111-planes"
+grep -Fq 'TLOU_MOVIE_111_LAYOUT' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/GameActivity.java
+grep -Fq 'if(Remap111(address,width,height,pitch,bits))return true;' gow3_pc/gpu/shim/gow3_movie.cpp
 cc -std=c11 -Wall -Wextra -Werror -x c -fsyntax-only \
     -include gow3_pc/gpu/shim/gow3_movie_bridge.h /dev/null
 grep -Fq 'env.put("GOW3_MOVIE_SIZE",actualSize);' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
