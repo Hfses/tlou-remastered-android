@@ -95,8 +95,8 @@ def validate_game_assets(folder: Path) -> None:
     """
     root = folder / "dvdroot_ps4"
     if not root.is_dir():
-        print("Aviso: dvdroot_ps4 ausente no diretório selecionado; "
-              "mantendo layout de jogo anteriormente suportado.", flush=True)
+        # Valid legacy app0 layout; absence is not an error and should not
+        # confuse the player with a recurring warning during normal launch.
         return
     main = root / "build/ps4/main"
     if not main.is_dir():
