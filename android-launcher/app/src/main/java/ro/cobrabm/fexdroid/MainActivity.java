@@ -26,7 +26,8 @@ import java.util.concurrent.Executors;
 
 /** TLOU launcher: PKG or extracted game -> automatic on-device preparation. */
 public final class MainActivity extends Activity {
-    private static final int PICK_GAME=501, PICK_DRIVER=502, PICK_PKG=503, PICK_DEST=504, SAVE_LOGS=505, IMPORT_SAVES=506, EXPORT_SAVES=507;
+    private static final int PICK_GAME=501, PICK_DRIVER=502, PICK_PKG=503, PICK_DEST=504, SAVE_LOGS=505, IMPORT_SAVES=506, EXPORT_SAVES=507,
+        PICK_UPDATE_PKG=508, PICK_UPDATE_FOLDER=509, PICK_UPDATE_DEST=510;
     private static final int BACKGROUND=0xff101613, PANEL=0xff1b2520, TEXT=0xffe7e9df, MUTED=0xffa6b0a4, ACCENT=0xffc2cf96;
     private SharedPreferences prefs;
     private TextView gameInfo, driverInfo, status, permission;
@@ -36,7 +37,7 @@ public final class MainActivity extends Activity {
     private boolean busy;
     private String currentTab="home";
     private Runnable afterPermission;
-    private Uri pendingPkg;
+    private Uri pendingPkg, pendingUpdatePkg;
     private InstallTools tools;
     private boolean directLaunchConsumed;
     private boolean firstRunDialogShown;
@@ -55,6 +56,7 @@ public final class MainActivity extends Activity {
         // Keep paths chosen in the first experimental APK.
         if (!prefs.contains("game_path")) prefs.edit().putString("game_path",getPreferences(0).getString("prepared_path","")).apply();
         if (saved!=null && saved.getString("pending_pkg")!=null) pendingPkg=Uri.parse(saved.getString("pending_pkg"));
+        if (saved!=null && saved.getString("pending_update_pkg")!=null) pendingUpdatePkg=Uri.parse(saved.getString("pending_update_pkg"));
         tools=new InstallTools(this);
         getWindow().setStatusBarColor(BACKGROUND);
         getWindow().setNavigationBarColor(BACKGROUND);
@@ -215,7 +217,10 @@ public final class MainActivity extends Activity {
             TextView manual=text("Informar caminho da pasta",12,ACCENT);
             manual.setOnClickListener(v->{if(!busy)manualPath();});game.addView(manual);
             toggleSetting(game,"launch_direct","Entrar direto no jogo",false);
-            add(game,"Verificar atualizações",false,this::checkForUpdates);
+            LinearLayout updates=card(root,"ATUALIZAÇÃO DO JOGO");
+            updates.addView(text("Aplique um PKG de update ou selecione uma pasta extraída. O jogo base e os saves não serão sobrescritos.",12,MUTED));
+            add(updates,"Atualizar por PKG",false,()->withAccess(()->pickFile(PICK_UPDATE_PKG)));
+            add(updates,"Atualizar por pasta",false,()->withAccess(()->pickFolder(PICK_UPDATE_FOLDER)));
             add(game,"Sair do aplicativo",false,this::finishAffinity);
         } else if(currentTab.equals("patches")) {
             LinearLayout box=card(root,"PATCHES");
@@ -282,8 +287,7 @@ public final class MainActivity extends Activity {
             add(data,"Importar saves ZIP",false,()->pickFile(IMPORT_SAVES));
         } else {
             root.addView(AboutPanel.create(this,this::showLog,this::exportLogs));
-            LinearLayout updates=card(root,"ATUALIZAÇÕES");
-            add(updates,"Verificar atualizações",false,this::checkForUpdates);
+
         }
 
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
@@ -294,35 +298,88 @@ public final class MainActivity extends Activity {
         permission.setOnClickListener(v->withAccess(this::refresh));root.addView(permission);
         setContentView(scroll);refresh();
     }
-    private void checkForUpdates() {
-        if(busy)return;
-        update("Procurando atualização...");
-        worker.execute(()->{
+    /** Updates belong to the selected game's CUSA, never to the Android APK. */
+    private File baseForUpdate() throws Exception {
+        String configured=prefs.getString("game_path","");
+        if(configured.isEmpty())throw new IOException("Selecione a pasta do jogo base antes de instalar a atualização.");
+        File base=new File(configured).getCanonicalFile();
+        if(InstallTools.prepared(base)){
+            File marker=new File(base,"device-ready.json");
+            if(!marker.isFile())throw new IOException("Não foi possível localizar o jogo base nesta pasta preparada.");
+            JSONObject info=new JSONObject(new String(Files.readAllBytes(marker.toPath()),
+                java.nio.charset.StandardCharsets.UTF_8));
+            base=new File(info.getString("game")).getCanonicalFile();
+        }
+        if(!new File(base,"eboot.bin").isFile() ||
+           !new File(base,"sce_sys/param.sfo").isFile())
+            throw new IOException("A pasta selecionada não contém o jogo base completo.");
+        return base;
+    }
+
+    private File updateFolder(File folder) throws Exception {
+        File root=folder.getCanonicalFile();
+        if(new File(root,"sce_sys/param.sfo").isFile())return root;
+        File app0=new File(root,"app0");
+        if(new File(app0,"sce_sys/param.sfo").isFile())return app0.getCanonicalFile();
+        File[] children=root.listFiles(File::isDirectory);
+        if(children!=null && children.length==1){
+            File child=children[0];
+            if(new File(child,"sce_sys/param.sfo").isFile())return child.getCanonicalFile();
+            File nested=new File(child,"app0");
+            if(new File(nested,"sce_sys/param.sfo").isFile())return nested.getCanonicalFile();
+        }
+        throw new IOException("Selecione a pasta extraída da atualização que contém sce_sys/param.sfo.");
+    }
+
+    private void applyGameUpdate(File chosenFolder) {
+        task("Aplicando atualização do jogo…",()->{
+            File game=baseForUpdate();
+            File patch=updateFolder(chosenFolder);
+            if(game.equals(patch))throw new IOException("A pasta de atualização deve ser diferente da pasta do jogo base.");
+            File prepared=tools.prepare(game,patch,this::update);
+            // Only publish the new update after preparation and patch validation
+            // succeed; previously playable output and saves remain untouched.
+            prefs.edit().putString("update_game",game.getAbsolutePath())
+                .putString("update_path",patch.getAbsolutePath())
+                .putString("prepared_path",prepared.getAbsolutePath()).apply();
+            update("Atualização aplicada. Toque em JOGAR.");
+        });
+    }
+
+    private void installGameUpdatePkg(File pkg,File parent) {
+        task("Extraindo e aplicando atualização…",()->{
+            File game=baseForUpdate();
+            File destination=parent.getCanonicalFile();
+            File prepared=new File(getFilesDir(),"tlou-prepared").getCanonicalFile();
+            if(destination.toPath().startsWith(game.toPath()) ||
+               destination.toPath().startsWith(prepared.toPath()))
+                throw new IOException("Escolha um destino fora das pastas do jogo e da preparação.");
+            File container=new File(destination,"TLOU-Update-"+UUID.randomUUID()).getCanonicalFile();
+            if(!container.mkdir())throw new IOException("Não foi possível criar a pasta do update.");
+            boolean installed=false;
             try {
-                final LauncherUpdates.Version newest=LauncherUpdates.check(this);
-                runOnUiThread(()->{
-                    if(isDestroyed() || isFinishing())return;
-                    if(!newest.newer) {
-                        alert("Atualizações","Você já está usando a versão mais recente publicada.");
-                        return;
-                    }
-                    new AlertDialog.Builder(this)
-                        .setTitle(TlouLanguage.t(this,"Nova versão disponível"))
-                        .setMessage("The Last of Us Remastered Android " + newest.tag
-                            + "\\nSeu jogo e seus saves serão preservados ao atualizar.")
-                        .setNegativeButton(TlouLanguage.t(this,"Cancelar"),null)
-                        .setPositiveButton(TlouLanguage.t(this,"Abrir página da versão"),(d,w)->
-                            openReference(newest.releaseUrl))
-                        .show();
-                });
-            } catch(Exception exception) {
-                RunLog.failure(this,"Verificação de atualização",exception);
-                runOnUiThread(()->{
-                    if(!isDestroyed()&&!isFinishing())alert("Atualizações",
-                        "Não foi possível verificar atualizações. Verifique sua conexão.");
-                });
+                File patch=tools.extract(pkg,container,this::update);
+                File updated=tools.prepare(game,patch,this::update);
+                prefs.edit().putString("update_game",game.getAbsolutePath())
+                    .putString("update_path",patch.getAbsolutePath())
+                    .putString("prepared_path",updated.getAbsolutePath()).apply();
+                installed=true;
+                update("PKG de atualização aplicado. Toque em JOGAR.");
+            } finally {
+                if(!installed)InstallTools.delete(container);
             }
         });
+    }
+
+    private File updateForGame(File game) throws Exception {
+        String updateGame=prefs.getString("update_game","");
+        String updatePath=prefs.getString("update_path","");
+        if(updatePath.isEmpty() || updateGame.isEmpty() ||
+           !new File(updateGame).getCanonicalFile().equals(game.getCanonicalFile()))return null;
+        File update=new File(updatePath).getCanonicalFile();
+        if(!new File(update,"sce_sys/param.sfo").isFile())
+            throw new IOException("Os arquivos da atualização foram movidos ou removidos. Selecione a pasta novamente.");
+        return update;
     }
 
     private void exportLogs() {
@@ -398,7 +455,7 @@ public final class MainActivity extends Activity {
             catch(Exception e) { android.util.Log.w("TLOU", "Default Turnip unavailable", e); }
             File folder=selected(); File prepared;
             if(InstallTools.prepared(folder)){prepared=folder;tools.applyPatches(prepared,this::update);}
-            else prepared=tools.prepare(folder,this::update);
+            else prepared=tools.prepare(folder,updateForGame(folder),this::update);
             prefs.edit().putString("prepared_path",prepared.getAbsolutePath()).apply();
             update("Pronto para jogar.");
             if(launch)runOnUiThread(()->{if(!isDestroyed()){try { RunLog.write(this,"Preparação verificada. Abrindo GameActivity: "+prepared); Intent i=new Intent(this,GameActivity.class);i.putExtra("prepared_path",prepared.getAbsolutePath());startActivity(i); } catch(Throwable error) { RunLog.failure(this,"Falha ao abrir GameActivity",error);alert("Inicialização",error.toString()); }}});
@@ -412,7 +469,8 @@ public final class MainActivity extends Activity {
         task("Instalando PKG…",()->{
             File extracted=tools.extract(pkg,parent,this::update);
             // Save extracted folder even if preparation fails; never force another extraction.
-            prefs.edit().putString("game_path",extracted.getAbsolutePath()).apply();
+            prefs.edit().putString("game_path",extracted.getAbsolutePath())
+                .remove("update_path").remove("update_game").apply();
             File prepared=tools.prepare(extracted,this::update);
             prefs.edit().putString("prepared_path",prepared.getAbsolutePath()).apply(); update("Jogo instalado e preparado. Toque em JOGAR.");
         });
@@ -481,9 +539,16 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();refresh();if(afterPermission!=null){Runnable action=afterPermission;afterPermission=null;if(access())action.run();}
         else if(access()&&!prefs.getBoolean("onboarding_seen",false)&&!firstRunDialogShown)showFirstRunSetup();}
-    @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);if(pendingPkg!=null)state.putString("pending_pkg",pendingPkg.toString());}
+    @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);
+        if(pendingPkg!=null)state.putString("pending_pkg",pendingPkg.toString());
+        if(pendingUpdatePkg!=null)state.putString("pending_update_pkg",pendingUpdatePkg.toString());
+    }
     @Override protected void onActivityResult(int code,int result,Intent data){
-        super.onActivityResult(code,result,data);if(result!=RESULT_OK||data==null||data.getData()==null){if(code==PICK_DEST)pendingPkg=null;return;}Uri uri=data.getData();
+        super.onActivityResult(code,result,data);if(result!=RESULT_OK||data==null||data.getData()==null){
+            if(code==PICK_DEST)pendingPkg=null;
+            if(code==PICK_UPDATE_DEST)pendingUpdatePkg=null;
+            return;
+        }Uri uri=data.getData();
         try{getContentResolver().takePersistableUriPermission(uri,data.getFlags()&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION));}catch(Exception ignored){}
         try{
             if(code==SAVE_LOGS){task("Exportando logs…",()->{java.io.OutputStream out=getContentResolver().openOutputStream(uri,"w");if(out==null)throw new IOException("Não foi possível abrir o destino");RunLog.export(this,out);update("Logs ZIP salvos.");});}
@@ -505,6 +570,18 @@ public final class MainActivity extends Activity {
             else if(code==PICK_DRIVER)importDriver(uri);
             else if(code==PICK_PKG){pendingPkg=uri;new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,"Destino do jogo")).setMessage(TlouLanguage.t(this,"Escolha onde criar a pasta CUSA00552. O PKG será extraído diretamente para ela; depois o app prepara o jogo automaticamente.")).setPositiveButton(TlouLanguage.t(this,"Escolher destino"),(d,w)->pickFolder(PICK_DEST)).setNegativeButton(TlouLanguage.t(this,"Cancelar"),(d,w)->pendingPkg=null).show();}
             else if(code==PICK_DEST&&pendingPkg!=null){Uri pkg=pendingPkg;pendingPkg=null;installPkg(local(pkg,false),local(uri,true));}
+            else if(code==PICK_UPDATE_FOLDER){baseForUpdate();applyGameUpdate(local(uri,true));}
+            else if(code==PICK_UPDATE_PKG){
+                baseForUpdate();pendingUpdatePkg=uri;
+                new AlertDialog.Builder(this).setTitle("Destino da atualização")
+                    .setMessage("Escolha onde extrair o PKG, fora da pasta do jogo base. A atualização será montada sem apagar arquivos ou saves.")
+                    .setPositiveButton("Escolher destino",(d,w)->pickFolder(PICK_UPDATE_DEST))
+                    .setNegativeButton(TlouLanguage.t(this,"Cancelar"),(d,w)->pendingUpdatePkg=null).show();
+            }
+            else if(code==PICK_UPDATE_DEST&&pendingUpdatePkg!=null){
+                Uri pkg=pendingUpdatePkg;pendingUpdatePkg=null;
+                installGameUpdatePkg(local(pkg,false),local(uri,true));
+            }
         }catch(Exception e){alert("Seleção",e.getMessage());}
     }
     @Override protected void onDestroy(){worker.shutdown();super.onDestroy();}

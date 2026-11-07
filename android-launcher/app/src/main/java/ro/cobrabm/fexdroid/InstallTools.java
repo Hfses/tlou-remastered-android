@@ -61,12 +61,25 @@ final class InstallTools {
     }
 
     File prepare(File game, Consumer<String> progress) throws Exception {
+        return prepare(game,null,progress);
+    }
+
+    File prepare(File game,File update,Consumer<String> progress) throws Exception {
         install();
         File out=new File(context.getFilesDir(),"tlou-prepared");
-        run(Arrays.asList(new File(root,"python/bin/python3.13").getAbsolutePath(),
+        List<String> command=new ArrayList<>(Arrays.asList(
+            new File(root,"python/bin/python3.13").getAbsolutePath(),
             new File(root,"source/android/device_prepare.py").getAbsolutePath(),
             "--game",game.getCanonicalPath(),"--out",out.getAbsolutePath(),
-            "--options",PortSettings.patchOptions(context).getAbsolutePath()),progress);
+            "--options",PortSettings.patchOptions(context).getAbsolutePath()));
+        if(update!=null){
+            File changed=update.getCanonicalFile();
+            if(!new File(changed,"sce_sys/param.sfo").isFile())
+                throw new IOException("A pasta da atualização não contém sce_sys/param.sfo.");
+            command.add("--update");
+            command.add(changed.getAbsolutePath());
+        }
+        run(command,progress);
         if (!prepared(out)) throw new IOException("Preparação incompleta; consulte o log de instalação");
         return out;
     }
