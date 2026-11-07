@@ -93,6 +93,14 @@ final class InstallTools {
     }
 
     File extract(File pkg, File parent, Consumer<String> progress) throws Exception {
+        return extractPackage(pkg,parent,progress,false);
+    }
+
+    File extractUpdate(File pkg, File parent, Consumer<String> progress) throws Exception {
+        return extractPackage(pkg,parent,progress,true);
+    }
+
+    private File extractPackage(File pkg, File parent, Consumer<String> progress,boolean update) throws Exception {
         install();
         try (DataInputStream input=new DataInputStream(new FileInputStream(pkg))) {
             if (input.readInt()!=0x7f434e54) throw new IOException("Selecione um PKG de PS4 válido");
@@ -113,8 +121,10 @@ final class InstallTools {
         try {
             progress.accept("Extraindo PKG para "+destination+"…");
             run(Arrays.asList(helper,"extract",pkg.getCanonicalPath(),"--output",destination.getAbsolutePath(),"--quiet"),progress);
-            if (!new File(destination,"eboot.bin").isFile() || !new File(destination,"sce_sys/param.sfo").isFile())
-                throw new IOException("PKG extraído sem eboot.bin ou param.sfo");
+            if (!new File(destination,"sce_sys/param.sfo").isFile() ||
+                (!update && !new File(destination,"eboot.bin").isFile()))
+                throw new IOException(update ? "PKG de atualização sem sce_sys/param.sfo"
+                                             : "PKG extraído sem eboot.bin ou param.sfo");
             return destination;
         } catch (Exception failure) { delete(destination); throw failure; }
     }
