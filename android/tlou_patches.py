@@ -376,7 +376,14 @@ def write_selected(source, prepared, options):
         (prepared / "patch-validation.json").unlink(missing_ok=True)
         print("Eboot sem perfil Android de patches conhecido; removidos patches antigos.", flush=True)
         return
-    requested = selected_options(options, profile)
+    effective = dict(options or {})
+    # A valid 01.11 update must not be rejected merely because the previous
+    # 01.00 installation used 720p. These game/UI/aim offsets are different;
+    # launch unscaled until a separate 01.11 resolution profile is verified.
+    if profile == "01.11" and effective.get("resolution", "original") != "original":
+        print("Aviso: resolução reduzida não validada no eboot 01.11; usando Original, sem alterar vídeos.", flush=True)
+        effective["resolution"] = "original"
+    requested = selected_options(effective, profile)
     spec = importlib.util.spec_from_file_location("tlou_patch_writer", source / "tools/probe_tlou.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -400,7 +407,7 @@ def write_selected(source, prepared, options):
             if kind == 1 and start <= at and at + length <= start + filesz:
                 return elf[offset + at-start:offset + at-start+length]
         return b""
-    patches = base_patches_for(options, profile)
+    patches = base_patches_for(effective, profile)
     patches.update(requested)
     for name, changes in patches.items():
         for at, expected, _ in changes:
@@ -410,6 +417,8 @@ def write_selected(source, prepared, options):
     module.image_patches(elf_path, temp, patches)
     temp.replace(prepared / "patches.bin")
     report = {"profile": digest, "game_version": profile, "selected": list(requested),
-              "resolution": (options or {}).get("resolution", "original"), "validated": True}
+              "resolution": effective.get("resolution", "original"),
+              "requested_resolution": (options or {}).get("resolution", "original"),
+              "validated": True}
     (prepared / "patch-validation.json").write_text(json.dumps(report, indent=2)+"\n")
     print("Patches validados: " + (", ".join(requested) or "Original; correções de estabilidade"), flush=True)
