@@ -161,7 +161,12 @@ final class PortSettings {
         // previously suspected performance regression. No more Fast/Balanced
         // profiles which can return character deformation.
         env.put("TLOU_AUTO_SMALL_CS_READBACK","2");
-        env.put("GOW3_ASYNC_READBACK","1");
+        // Full geometry coverage remains enabled. Only the explicit EOP/physics
+        // results are page-protected via DownloadRangesAsync(..., protect=true).
+        // Global async protection also faults unrelated image and soft readbacks,
+        // unlike the other Android ports, and needlessly serializes guest threads.
+        // Important: do NOT disable GOW3_EOP_READBACK or downgrade Full coverage.
+        env.remove("GOW3_ASYNC_READBACK");
         // Coverage audit was completed in earlier device logs. Do not run
         // its atomic identity tracking on the hot compute-binding path during
         // normal gameplay; an explicit native diagnostic can still enable it.
