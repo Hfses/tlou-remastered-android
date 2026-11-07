@@ -184,10 +184,14 @@ public final class GameActivity extends Activity {
     }
 
     private void error(String message) {
+        // Keep the technical reason in the local diagnostic archive. Never
+        // display a stack trace, private storage path or the raw log in-game.
         RunLog.write(this,"ERRO: "+message);
-        handler.post(()->{if(!isFinishing()&&!isDestroyed())new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,"TLOU — erro de inicialização"))
-            .setMessage(message).setNeutralButton(TlouLanguage.t(this,"Ver logs"),(d,w)->showLog())
-            .setPositiveButton(TlouLanguage.t(this,"Voltar ao menu"),(d,w)->stopAndExit()).show();});
+        handler.post(()->{
+            if(isFinishing()||isDestroyed()||closing.get())return;
+            GameFailureMessage reason=GameFailureMessage.classify(message,tailLog());
+            GameFailureScreen.show(this,reason,this::stopAndExit);
+        });
     }
 
     private void refreshFps() {
@@ -320,10 +324,9 @@ public final class GameActivity extends Activity {
             RunLog.write(this,"Processo FEX criado");
             final int result=game.waitFor();
             RunLog.write(this,"Processo FEX finalizado: código "+result);
-            if (!closing.get()) {
-                String message="Runtime finalizado (código "+result+"). Veja o log.";
-                update(message);
-                error(message+"\n"+tailLog());
+            if(!closing.get()) {
+                if(result==0)handler.post(this::stopAndExit);
+                else error("Runtime encerrou com código "+result);
             }
         } catch (Throwable err) {
             RunLog.failure(this,"Falha ao executar FEX",err);

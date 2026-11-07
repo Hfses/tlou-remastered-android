@@ -215,6 +215,7 @@ public final class MainActivity extends Activity {
             TextView manual=text("Informar caminho da pasta",12,ACCENT);
             manual.setOnClickListener(v->{if(!busy)manualPath();});game.addView(manual);
             toggleSetting(game,"launch_direct","Entrar direto no jogo",false);
+            add(game,"Verificar atualizações",false,this::checkForUpdates);
             add(game,"Sair do aplicativo",false,this::finishAffinity);
         } else if(currentTab.equals("patches")) {
             LinearLayout box=card(root,"PATCHES");
@@ -281,6 +282,8 @@ public final class MainActivity extends Activity {
             add(data,"Importar saves ZIP",false,()->pickFile(IMPORT_SAVES));
         } else {
             root.addView(AboutPanel.create(this,this::showLog,this::exportLogs));
+            LinearLayout updates=card(root,"ATUALIZAÇÕES");
+            add(updates,"Verificar atualizações",false,this::checkForUpdates);
         }
 
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
@@ -291,6 +294,37 @@ public final class MainActivity extends Activity {
         permission.setOnClickListener(v->withAccess(this::refresh));root.addView(permission);
         setContentView(scroll);refresh();
     }
+    private void checkForUpdates() {
+        if(busy)return;
+        update("Procurando atualização...");
+        worker.execute(()->{
+            try {
+                final LauncherUpdates.Version newest=LauncherUpdates.check(this);
+                runOnUiThread(()->{
+                    if(isDestroyed() || isFinishing())return;
+                    if(!newest.newer) {
+                        alert("Atualizações","Você já está usando a versão mais recente publicada.");
+                        return;
+                    }
+                    new AlertDialog.Builder(this)
+                        .setTitle(TlouLanguage.t(this,"Nova versão disponível"))
+                        .setMessage("The Last of Us Remastered Android " + newest.tag
+                            + "\\nSeu jogo e seus saves serão preservados ao atualizar.")
+                        .setNegativeButton(TlouLanguage.t(this,"Cancelar"),null)
+                        .setPositiveButton(TlouLanguage.t(this,"Abrir página da versão"),(d,w)->
+                            openReference(newest.releaseUrl))
+                        .show();
+                });
+            } catch(Exception exception) {
+                RunLog.failure(this,"Verificação de atualização",exception);
+                runOnUiThread(()->{
+                    if(!isDestroyed()&&!isFinishing())alert("Atualizações",
+                        "Não foi possível verificar atualizações. Verifique sua conexão.");
+                });
+            }
+        });
+    }
+
     private void exportLogs() {
         Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);save.setType("application/zip");save.addCategory(Intent.CATEGORY_OPENABLE);
         save.putExtra(Intent.EXTRA_TITLE,"TLOU-Android-Logs.zip");startActivityForResult(save,SAVE_LOGS);
