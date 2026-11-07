@@ -27,6 +27,7 @@ final class PortSettings {
             "split_cs64","mapped_fault_readbacks","mapped_readbacks","gpu_profile",
             "prep_pool","cpu_trims","prefetch_pipelines","parallel_pipelines",
             "prep_workers","frames_ahead","descriptor_bulk","readback","sotc_precise_narrow",
+            "hud_gpu","hud_cpu",
             "compute_wait_fast","relaxed_skinning_fp"}) edit.remove(key);
         String limit=prefs(context).getString("fps_limit","60");
         if(!"30".equals(limit) && !"60".equals(limit))edit.putString("fps_limit","60");

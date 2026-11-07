@@ -248,8 +248,7 @@ final class PortMenu {
                         "Centro da tela","Inferior central","Central esquerdo",
                         "Central direito","Personalizada (arrastar)"},
                     new String[]{"0","1","2","3","4","5","6","7","8","-1"},"0");
-                toggle("hud_gpu","Uso da GPU",true);
-                toggle("hud_cpu","Uso da CPU (jogo)",true);
+                // Full HUD always shows GPU and CPU. No duplicate metrics toggles.
                 slider("hud_size","Tamanho do HUD",10,26,12);
                 slider("hud_opacity","Opacidade do fundo (%)",0,100,65);
                 toggle("touch_visible","Controles na tela",true);

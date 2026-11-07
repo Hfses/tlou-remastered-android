@@ -268,8 +268,7 @@ public final class MainActivity extends Activity {
                     "Inferior central","Central esquerdo","Central direito",
                     "Personalizada (arrastar)"},
                 new String[]{"0","1","2","3","4","5","6","7","8","-1"},"0");
-            toggleSetting(controls,"hud_gpu","Uso da GPU",true);
-            toggleSetting(controls,"hud_cpu","Uso da CPU (jogo)",true);
+            // The HUD style controls whether GPU/CPU are displayed; no duplicate toggles.
             toggleSetting(controls,"touch_visible","Controles na tela",true);
             choice(controls,"control_color","Cor dos controles",
                 new String[]{"Verde oliva","Âmbar","Branco","Vermelho","Azul"},
@@ -296,18 +295,7 @@ public final class MainActivity extends Activity {
     private File baseForUpdate() throws Exception {
         String configured=prefs.getString("game_path","");
         if(configured.isEmpty())throw new IOException("Selecione a pasta do jogo base antes de instalar a atualização.");
-        File base=new File(configured).getCanonicalFile();
-        if(InstallTools.prepared(base)){
-            File marker=new File(base,"device-ready.json");
-            if(!marker.isFile())throw new IOException("Não foi possível localizar o jogo base nesta pasta preparada.");
-            JSONObject info=new JSONObject(new String(Files.readAllBytes(marker.toPath()),
-                java.nio.charset.StandardCharsets.UTF_8));
-            base=new File(info.getString("game")).getCanonicalFile();
-        }
-        if(!new File(base,"eboot.bin").isFile() ||
-           !new File(base,"sce_sys/param.sfo").isFile())
-            throw new IOException("A pasta selecionada não contém o jogo base completo.");
-        return base;
+        return GameInstallState.base(new File(configured));
     }
 
     private File updateFolder(File folder) throws Exception {
@@ -378,14 +366,7 @@ public final class MainActivity extends Activity {
     }
 
     private File updateForGame(File game) throws Exception {
-        String updateGame=prefs.getString("update_game","");
-        String updatePath=prefs.getString("update_path","");
-        if(updatePath.isEmpty() || updateGame.isEmpty() ||
-           !new File(updateGame).getCanonicalFile().equals(game.getCanonicalFile()))return null;
-        File update=new File(updatePath).getCanonicalFile();
-        if(!new File(update,"sce_sys/param.sfo").isFile())
-            throw new IOException("Os arquivos da atualização foram movidos ou removidos. Selecione a pasta novamente.");
-        return update;
+        return GameInstallState.update(game,selected(),new File(getFilesDir(),"tlou-prepared"),prefs);
     }
 
     private void exportLogs() {
@@ -459,10 +440,19 @@ public final class MainActivity extends Activity {
             // captures its launch environment, without overriding user choice.
             try { BuiltinDrivers.ensureDefault(this); }
             catch(Exception e) { android.util.Log.w("TLOU", "Default Turnip unavailable", e); }
-            File folder=selected(); File prepared;
-            if(InstallTools.prepared(folder)){prepared=folder;tools.applyPatches(prepared,this::update);}
-            else prepared=tools.prepare(folder,updateForGame(folder),this::update);
-            prefs.edit().putString("prepared_path",prepared.getAbsolutePath()).apply();
+            // Always prepare from the original game plus the persisted update.
+            // A prepared directory is a cache, never a new base game: treating it
+            // as a base lost the 01.11 overlay after APK upgrades/migrations.
+            File base=GameInstallState.base(selected());
+            File updateFolder=updateForGame(base);
+            File prepared=tools.prepare(base,updateFolder,this::update);
+            SharedPreferences.Editor saved=prefs.edit()
+                .putString("game_path",base.getAbsolutePath())
+                .putString("prepared_path",prepared.getAbsolutePath());
+            if(updateFolder!=null)
+                saved.putString("update_game",base.getAbsolutePath())
+                     .putString("update_path",updateFolder.getAbsolutePath());
+            saved.apply();
             update("Pronto para jogar.");
             if(launch)runOnUiThread(()->{if(!isDestroyed()){try { RunLog.write(this,"Preparação verificada. Abrindo GameActivity: "+prepared); Intent i=new Intent(this,GameActivity.class);i.putExtra("prepared_path",prepared.getAbsolutePath());startActivity(i); } catch(Throwable error) { RunLog.failure(this,"Falha ao abrir GameActivity",error);alert("Inicialização",error.toString()); }}});
         });

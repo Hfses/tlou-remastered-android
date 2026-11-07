@@ -205,8 +205,7 @@ public final class GameActivity extends Activity {
                 String mode=p.getString("hud_mode","full");
                 double cpu=hudTelemetry==null?Double.NaN:hudTelemetry.cpuPercent();
                 double gpu=hudTelemetry==null?Double.NaN:hudTelemetry.gpuPercent();
-                status.setText(HudPresentation.text(mode,fps,gpu,cpu,
-                    p.getBoolean("hud_gpu",true),p.getBoolean("hud_cpu",true)));
+                status.setText(HudPresentation.text(mode,fps,gpu,cpu,true,true));
             } else {
                 fpsMeter.reset();
                 if(hudTelemetry!=null)hudTelemetry.reset();
