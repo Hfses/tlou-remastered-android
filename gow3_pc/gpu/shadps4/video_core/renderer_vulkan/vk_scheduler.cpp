@@ -748,7 +748,7 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
         vk::PipelineStageFlagBits::eAllCommands,
         vk::PipelineStageFlagBits::eAllCommands,
     };
-    static_assert(wait_stage_masks.size() == SubmitInfo{}.wait_semas.size());
+    static_assert(wait_stage_masks.size() == std::tuple_size_v<decltype(SubmitInfo::wait_semas)>);
     if (info.num_wait_semas > 2) {
         // Only the exceptional case that previously read past the stage-mask
         // table. Do not turn on per-submit logging in the normal draw path.
