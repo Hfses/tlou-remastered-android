@@ -358,7 +358,7 @@ public final class MainActivity extends Activity {
             if(!container.mkdir())throw new IOException("Não foi possível criar a pasta do update.");
             boolean installed=false;
             try {
-                File patch=tools.extract(pkg,container,this::update);
+                File patch=tools.extractUpdate(pkg,container,this::update);
                 File updated=tools.prepare(game,patch,this::update);
                 prefs.edit().putString("update_game",game.getAbsolutePath())
                     .putString("update_path",patch.getAbsolutePath())
