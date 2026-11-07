@@ -63,7 +63,7 @@ final class PortSettings {
         final String soc=Build.VERSION.SDK_INT>=31 && Build.SOC_MODEL!=null
             ?Build.SOC_MODEL.toUpperCase(Locale.ROOT):"";
         // Do not apply this device-specific workaround globally to all Adreno.
-        return soc.contains("SM7475") || soc.contains("SM8550") || model.equals("23049PCD8G") || model.contains("S918");
+        return soc.contains("SM7475") || model.equals("23049PCD8G");
     }
 
     static void environment(Context context,Map<String,String> env) {

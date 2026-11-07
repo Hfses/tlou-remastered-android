@@ -93,7 +93,7 @@ BASE_PATCHES_111 = {
         (0xC3CD70, "813a10ba1006", None),
     ],
     "deadlock-watchdog-disable": [
-        (0xC87C10, "554889e5", "c3909090"),
+        (0xC87E0B, "0f86bffeffff", "e9c0feffff90"),
     ],
 }
 # Original-byte guards checked independently in BOTH supplied 01.11 ELFs.
