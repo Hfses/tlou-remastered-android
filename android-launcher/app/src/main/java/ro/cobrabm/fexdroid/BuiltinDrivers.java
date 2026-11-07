@@ -77,10 +77,12 @@ final class BuiltinDrivers {
 
     static synchronized void ensureDefault(Context context) throws Exception {
         SharedPreferences p=PortSettings.prefs(context);
-        // Preserve explicit system/imported driver selections. Migrate only the
-        // previous bundled default, proven by its SHA-named installation folder
-        // and its exact built-in label; do not overwrite manually imported drivers.
-        if(p.contains("driver_path") && !isPreviousBundledDefault(context,p))return;
+        // Always stage the packaged driver so it appears in the selector,
+        // including when a user explicitly chose the system driver or imported
+        // an older OneUI driver. NEVER overwrite those explicit choices.
+        // Only migrate the previous version that we selected automatically.
+        final boolean selectDefault=!p.contains("driver_path") ||
+                                    isPreviousBundledDefault(context,p);
         final String gpu;
         try { gpu=renderer(); }
         catch(Throwable e) { return; } // unknown GPU: keep system default
@@ -93,20 +95,30 @@ final class BuiltinDrivers {
         String digest=a8?SHA_8XX:SHA;
         String display=a8?"Turnip Gen8 V39 Patched · Adreno 8xx":"Turnip v27.0.0-R2 · Adreno 6xx/7xx";
         File drivers=new File(context.getFilesDir(),"drivers");
-        try(InputStream archive=context.getAssets().open(asset)){
-            DriverArchive.Installed installed=DriverArchive.install(
-                drivers,archive,Build.VERSION.SDK_INT,file->{
-                    JSONObject meta=new JSONObject(new String(Files.readAllBytes(file.toPath()),
-                        java.nio.charset.StandardCharsets.UTF_8));
-                    return new DriverArchive.Metadata(
-                        meta.optString("name",display),
-                        meta.optString("libraryName","libvulkan_freedreno.so"),
-                        meta.optInt("minApi",26));
-                });
+        try {
+            DriverArchive.Installed installed;
+            File destination=new File(drivers,digest);
+            if(destination.isDirectory()) {
+                installed=DriverArchive.read(drivers,digest,Build.VERSION.SDK_INT);
+                DriverArchive.validateLibrary(installed.library);
+            } else {
+                try(InputStream archive=context.getAssets().open(asset)){
+                    installed=DriverArchive.install(drivers,archive,Build.VERSION.SDK_INT,file->{
+                        JSONObject meta=new JSONObject(new String(Files.readAllBytes(file.toPath()),
+                            java.nio.charset.StandardCharsets.UTF_8));
+                        return new DriverArchive.Metadata(
+                            meta.optString("name",display),
+                            meta.optString("libraryName","libvulkan_freedreno.so"),
+                            meta.optInt("minApi",26));
+                    });
+                }
+            }
             if(!digest.equals(installed.id))
                 throw new IllegalStateException("Bundled Turnip archive digest mismatch");
-            p.edit().putString("driver_path",installed.library.getAbsolutePath())
-                .putString("driver_name",display).apply();
+            if(selectDefault) {
+                p.edit().putString("driver_path",installed.library.getAbsolutePath())
+                    .putString("driver_name",display).apply();
+            }
         } catch(java.io.FileNotFoundException missingAsset) {
             // Developer checkout without staged APK assets: system driver, never
             // secretly pick an incompatible one.
