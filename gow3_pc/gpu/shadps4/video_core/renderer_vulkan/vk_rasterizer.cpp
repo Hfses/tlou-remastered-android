@@ -1808,6 +1808,16 @@ void Rasterizer::CollectRingBindings(const Shader::Info& stage, const PreparedDr
 void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_prepared,
                           bool is_indexed, u32 index_offset, const AmdGpu::ComputeProgram* cs,
                           const IndirectDraw* indirect, const void* pending) {
+    // This is the saturated command thread's most expensive sampled phase:
+    // 4-5us per dispatched compute packet in TLOU gameplay. Attribute the
+    // cost to register delta, constant-ring capture, packet encoding and
+    // final bookkeeping without timing every dispatch.
+    static thread_local Detail::CpuPhaseSampler<5> cpu_sampler{CpuPhaseSamplingEnabled()};
+    auto cpu_sample = cpu_sampler.Begin([](const auto& stats, u64 wall_ns) {
+        constexpr std::array<const char*, 5> names{
+            "reg-delta", "ring-collect", "packet-encode", "commit", "bookkeeping"};
+        ReportCpuPhases<5>("command-postdraw", names, stats, wall_ns);
+    });
     auto& dirty = liverpool->pipe_dirty;
     if (!pipe_synced) {
         // Stage B has not run yet: its register copy starts as this one.
@@ -1818,6 +1828,7 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
     std::array<u16, AmdGpu::RegDirty::NumBlocks> blocks;
     u32 num_blocks = 0;
     dirty.ForEach([&](u32 block) { blocks[num_blocks++] = static_cast<u16>(block); });
+    cpu_sample.Phase(1);
     const auto stages = pipeline  ? pipeline->GetStages()
                         : pending ? PipelineCache::PendingStages(pending)
                                   : std::span<const Shader::Info* const>{};
@@ -1857,6 +1868,7 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
         size += sizeof(AmdGpu::Regs);
     }
 
+    cpu_sample.Phase(2);
     u8* out = draw_pipe->Begin(size);
     u8* const start = out;
     auto& packet = *reinterpret_cast<DrawPacket*>(out);
@@ -1919,8 +1931,10 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
         std::memcpy(out, &liverpool->regs, sizeof(AmdGpu::Regs));
         out += sizeof(AmdGpu::Regs);
     }
+    cpu_sample.Phase(3);
     dirty.Clear();
     draw_pipe->Commit(static_cast<u32>(out - start));
+    cpu_sample.Phase(4);
     if (!uncommitted_indices.empty() || copy_uncommitted) {
         // GOW3_PIPE_WRITE_END: this packet's writes are done once stage B is past its end.
         const u64 end = draw_pipe->Head();
@@ -5691,7 +5705,11 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
                 }
                 buffer_infos.emplace_back(VK_NULL_HANDLE, 0, VK_WHOLE_SIZE);
             } else {
-                const u64 size = memory->ClampRangeSize(vsharp.base_address, vsharp.GetSize());
+                // This address and extent were already clamped for the invalid/garbage
+                // V# checks above. The guest mapping table has not been mutated by
+                // this path. Reusing the result removes one cached VMA lookup per
+                // live buffer, including the 300k dispatches/5s in TLOU gameplay.
+                const u64 size = mapped_size;
                 // gow3 diagnostics (GOW3_TRACE_BIND_RANGE=<lo>:<hi> hex): bindings that overlap
                 // the range, by shader and slot, 5 s statistics.
                 {
@@ -5743,12 +5761,23 @@ void Rasterizer::BindBuffers(const Shader::Info& stage, const PreparedStage* pre
 
                 const bool reads_new_cloth = ClothTrace(stage.pgm_hash, buffer_index, vsharp.base_address,
                                                         size, desc.is_written, compute_stage);
-                VideoCore::g_stream_stats_key = stage.pgm_hash << 8 | (buffer_index & 0xff);
-                VideoCore::g_stream_stats_used =
-                    desc.access_extent != 0 && desc.access_extent != ~0u && vsharp.stride != 0 &&
-                            vsharp.num_records != 0 && !vsharp.swizzle_enable
-                        ? u64(vsharp.num_records - 1) * vsharp.stride + desc.access_extent
-                        : 0;
+                // Stream binding breakdown is explicitly diagnostic, and is
+                // OFF in the Android release profile. On that hot path these
+                // thread-local stores, branches and extent multiplications
+                // were computed for every V#, even though no reader uses
+                // either value. Keep the exact old values when enabled.
+                static const bool stream_stats = [] {
+                    const char* env = std::getenv("GOW3_STREAM_STATS");
+                    return env && env[0] == '1';
+                }();
+                if (stream_stats) {
+                    VideoCore::g_stream_stats_key = stage.pgm_hash << 8 | (buffer_index & 0xff);
+                    VideoCore::g_stream_stats_used =
+                        desc.access_extent != 0 && desc.access_extent != ~0u && vsharp.stride != 0 &&
+                                vsharp.num_records != 0 && !vsharp.swizzle_enable
+                            ? u64(vsharp.num_records - 1) * vsharp.stride + desc.access_extent
+                            : 0;
+                }
                 const auto [buffer, offset] = buffer_cache.ObtainBuffer(
                     vsharp.base_address, size, desc.is_written, desc.is_formatted);
                 // gow3 26 Oct 2026 diagnostics (GOW3_BONE_TRACE=1): The Last of Us's skinning

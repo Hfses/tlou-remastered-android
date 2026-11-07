@@ -134,6 +134,41 @@ static __attribute__((noinline)) double run_copy(Copy fn,unsigned workload) {
 }
 /* CollectRingBindings clamps before CopySparseMemory: the clamp warms the same
  * thread's backing cache. Do not add independently cold clamp/copy savings. */
+/* Every valid shader buffer used to clamp twice: first to reject garbage
+ * descriptors and then to obtain the same extent for Vulkan binding.
+ * Model that exact hot path with the real runtime_memory_clamp, including
+ * cache-hot and rotating VMA layouts. Both versions must produce equal ranges.
+ */
+static __attribute__((noinline)) double run_shader_buffer_clamp(int repeated,unsigned workload) {
+    uint64_t sum=0; cold_cache();
+    const uint64_t begin=now_ns();
+    for(unsigned j=0;j<400000;++j) {
+        size_t i=workload==0?1:((j*17)%512);
+        uintptr_t address=vmas[i].start+64;
+        uint64_t requested=workload==2?PAGE*3:128;
+        uint64_t mapped=runtime_memory_clamp(address,requested);
+        /* Exactly the second clamp that BindBuffers removed. */
+        uint64_t bound=repeated?runtime_memory_clamp(address,requested):mapped;
+        assert(bound==mapped);
+        sum+=bound;
+    }
+    result_sink=sum;
+    return (double)(now_ns()-begin)/400000;
+}
+static void benchmark_shader_buffer_clamp(void) {
+    const char *names[]={"cache-hot-128B","rotating-512-128B","cross-regions-48KiB"};
+    for(unsigned w=0;w<3;++w) {
+        double old[9],next[9];
+        for(unsigned i=0;i<9;++i) {
+            if(i%2) { next[i]=run_shader_buffer_clamp(0,w); old[i]=run_shader_buffer_clamp(1,w); }
+            else    { old[i]=run_shader_buffer_clamp(1,w); next[i]=run_shader_buffer_clamp(0,w); }
+        }
+        qsort(old,9,sizeof(double),compare_double); qsort(next,9,sizeof(double),compare_double);
+        printf("shader-buffer-clamp %-22s two_ns=%.2f one_ns=%.2f saved_ns/bind=%.2f reduction=%.1f%%\n",
+               names[w],old[4],next[4],old[4]-next[4],
+               100*(old[4]-next[4])/old[4]);
+    }
+}
 static __attribute__((noinline)) double run_clamp_then_copy(Clamp clamp,Copy copy,unsigned workload) {
     unsigned char out[4*16384]; uint64_t sum=0; cold_cache();
     uint64_t begin=now_ns();
@@ -186,6 +221,9 @@ static void count_work(void) {
 int main(int argc,char **argv) {
     setup(); count_work(); correctness();
     tlou_memory_walk_once=0; correctness(); tlou_memory_walk_once=1;
-    if(argc<2 || strcmp(argv[1],"--correctness-only")) benchmark();
+    if(argc<2 || strcmp(argv[1],"--correctness-only")) {
+        benchmark();
+        benchmark_shader_buffer_clamp();
+    }
     free(vmas); free(backing_base); return 0;
 }

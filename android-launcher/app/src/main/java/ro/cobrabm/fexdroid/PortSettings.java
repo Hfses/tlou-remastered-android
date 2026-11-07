@@ -160,9 +160,10 @@ final class PortSettings {
         // profiles which can return character deformation.
         env.put("TLOU_AUTO_SMALL_CS_READBACK","2");
         env.put("GOW3_ASYNC_READBACK","1");
-        // Temporary bounded coverage audit for CUSA00552 01.00. This only logs
-        // at most 40 distinct candidate compute bindings; no shader dumps or waits.
-        env.put("TLOU_PHYSICS_COVERAGE","1");
+        // Coverage audit was completed in earlier device logs. Do not run
+        // its atomic identity tracking on the hot compute-binding path during
+        // normal gameplay; an explicit native diagnostic can still enable it.
+        env.remove("TLOU_PHYSICS_COVERAGE");
         env.put("GOW3_ASYNC_SHADERS","1");
         env.put("GOW3_FRAMES_AHEAD","0");
         env.put("TLOU_DESCRIPTOR_BULK","0");
