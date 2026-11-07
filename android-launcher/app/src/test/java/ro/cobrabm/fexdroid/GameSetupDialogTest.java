@@ -68,7 +68,11 @@ public class GameSetupDialogTest {
             // Eight bounded samples per second expose draw/dispatch CPU phase
             // costs without enabling verbose frame/GPU diagnostics.
             assertEquals("1",env.get("TLOU_CPU_PHASE_SAMPLES"));
-            assertEquals("0",env.get("GOW3_PREP_WORKERS"));
+            // The bounded native draw-preparation pipeline is enabled by default
+            // with normal-priority scanner/workers (not the old auto=4 mode).
+            assertEquals("2",env.get("GOW3_PREP_WORKERS"));
+            assertEquals("1",env.get("TLOU_PREP_NORMAL_PRIORITY"));
+            assertEquals("1",env.get("TLOU_PREP_HIT_STATS"));
             for(String name:new String[]{"GOW3_GPU_PROFILE","GOW3_FRAME_STATS","GOW3_PERF_DIAG"})
                 assertFalse(env.containsKey(name));
             assertEquals("1",env.get("TLOU_MEMORY_WALK_ONCE"));
