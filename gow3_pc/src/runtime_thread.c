@@ -389,8 +389,10 @@ static void *host_start(void *p) {
     // The guest TLS belongs to this completed thread and its key destructors
     // have already run. Do not retain a stale FEX TCB mapping per DCLoader.
     if (t->tls_block) {
-        size_t bytes = (size_t)((tls_offset() + 256 + 63) & ~(uint64_t)63);
-        munmap(t->tls_block, bytes);
+        const size_t used = (size_t)((tls_offset() + 256 + 63) & ~(uint64_t)63);
+        // runtime_low_map reserves PS4 16 KiB pages, even when TLS is tiny.
+        const size_t mapped = (used + 16383u) & ~(size_t)16383u;
+        munmap(t->tls_block, mapped);
         t->tls_block = NULL;
         t->tcb = NULL;
     }
