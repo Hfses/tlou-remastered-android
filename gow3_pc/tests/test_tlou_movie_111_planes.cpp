@@ -25,7 +25,7 @@ int main() {
         assert(LumaShape(1920,1080,width,size));
         assert(ChromaShape(960,540,width,size));
         assert(!LumaShape(width/2,size,width,size));
-        assert(!ChromaShape(width,size,width,size));
+        assert(!ChromaShape(width*2,size+42,width,size));
     }
     assert(MovieUvOffset(1280,720)-ShortUvOffset(1280,720)==61440);
 }
