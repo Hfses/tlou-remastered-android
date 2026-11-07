@@ -63,6 +63,26 @@ class TestTLOUBionic(unittest.TestCase):
                 self.assertEqual(profile["PORT_PROFILE"], "TLOU-VERIFIED-SELF-SHA256")
                 self.assertEqual(m.require_game(base, is_update=True)["TITLE_ID"], "CUSA00556")
 
+    def test_pc_016_regional_candidate_00554_is_not_unconditionally_trusted(self):
+        # The PC port v0.1.6 lists CUSA00554, but SFO metadata alone
+        # cannot validate a new SELF or Android-specific graphics patches.
+        self.assertTrue({"CUSA00552", "CUSA00554", "CUSA00556", "CUSA00557"}
+                        .issubset(m.REGIONAL_TITLES))
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            game=make_game(root/"CUSA00554", title="CUSA00554", ver="01.11")
+            update=make_game(root/"CUSA00554-patch", title="CUSA00554",
+                             ver="01.11", include_libc=False)
+            (update/"eboot.bin").unlink()
+            with self.assertRaisesRegex(m.PortError,"Wrong PS4 title"):
+                m.require_game(game)
+            # A matching update SFO may be recognized without an update
+            # eboot; game execution still depends on validated executable.
+            self.assertEqual(m.require_game(update,is_update=True)["TITLE_ID"],"CUSA00554")
+            with patch.object(m.hashlib, "sha256") as digest:
+                digest.return_value.hexdigest.return_value=next(iter(m.VERIFIED_SELF_111))
+                self.assertEqual(m.require_game(game)["PORT_PROFILE"],"TLOU-VERIFIED-SELF-SHA256")
+
     def test_verified_011_regions_and_early_content_integrity(self):
         with tempfile.TemporaryDirectory() as tmp:
             for title in sorted(m.REGIONAL_TITLES - {m.TITLE_ID}):
