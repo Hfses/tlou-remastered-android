@@ -64,16 +64,19 @@ def read_sfo(path: Path) -> dict[str, str]:
 
 def require_game(folder: Path, *, is_update: bool = False) -> dict[str, str]:
     for relative in _BOOT_FILES:
-        # A patch folder may omit the original libc; it inherits the base copy.
-        if is_update and relative.startswith("sce_module/"):
+        # Updates can inherit the base libc and, if resource-only, the eboot.
+        if is_update and (relative.startswith("sce_module/") or relative == "eboot.bin"):
             continue
         if not (folder / relative).is_file():
             raise PortError(f"Missing {relative}: {folder}")
     metadata = read_sfo(folder / "sce_sys/param.sfo")
     title = metadata.get("TITLE_ID")
-    if title != TITLE_ID:
+    if is_update:
+        if title not in REGIONAL_TITLES:
+            raise PortError(f"Wrong PS4 update title: {title!r}")
+    elif title != TITLE_ID:
         # Regional TITLE_ID alone does not prove compatible execution.
-        if (is_update or title not in REGIONAL_TITLES or
+        if (title not in REGIONAL_TITLES or
             hashlib.sha256((folder / "eboot.bin").read_bytes()).hexdigest() not in VERIFIED_TLOU_SELFS):
             raise PortError(f"Wrong PS4 title: {title!r}; expected verified TLOU region")
         metadata["PORT_PROFILE"] = "TLOU-VERIFIED-SELF-SHA256"
@@ -135,11 +138,10 @@ def _link_file(source: Path, dest: Path) -> None:
 
 
 def build_view(game: Path, update: Path | None, out: Path) -> Path:
-    """Boot overlay with explicit update precedence and no copying huge assets.
+    """Merge game/update as a read-only symlink view, never altering base data.
 
-    The base dvdroot_ps4 is a symlink. Content updates to dvdroot_ps4 must be
-    supported by the native app0 overlay before they can be enabled, so reject
-    them instead of silently launching with the wrong resources.
+    Huge unmodified directories remain one link; expand only directories
+    on paths that an update actually replaces.
     """
     view = out / "tlou-view"
     if view.exists() or view.is_symlink():
@@ -148,21 +150,43 @@ def build_view(game: Path, update: Path | None, out: Path) -> Path:
         else:
             shutil.rmtree(view)
     view.mkdir(parents=True)
-    # Keep non-boot resources in place; do not duplicate their potentially huge contents.
+
     for entry in game.iterdir():
-        if entry.name.lower() not in {"eboot.bin", "sce_sys", "sce_module"}:
-            target = view / entry.name
-            if entry.is_dir() or entry.is_file():
-                target.symlink_to(entry.resolve(), target_is_directory=entry.is_dir())
-    for layer in filter(None, (game, update)):
-        for name in ("eboot.bin", "sce_sys", "sce_module"):
-            entry = layer / name
-            if name == "eboot.bin" and entry.is_file():
-                _link_file(entry, view / name)
-            elif entry.is_dir():
-                for item in entry.rglob("*"):
-                    if item.is_file():
-                        _link_file(item, view / name / item.relative_to(entry))
+        if entry.name in {"sce_sys", "sce_module"} and entry.is_dir():
+            for file in entry.rglob("*"):
+                if file.is_file():
+                    _link_file(file, view / entry.name / file.relative_to(entry))
+        elif entry.is_file() or entry.is_dir():
+            _link_file(entry, view / entry.name)
+
+    def overlay(source: Path, target: Path):
+        if source.is_symlink():
+            raise PortError(f"Update contains a symbolic link: {source.name}")
+        if source.is_dir():
+            if target.is_symlink():
+                previous = target.resolve(strict=True)
+                if not previous.is_dir():
+                    raise PortError(f"Update directory conflicts with file: {target.name}")
+                target.unlink()
+                target.mkdir()
+                for item in previous.iterdir():
+                    _link_file(item, target / item.name)
+            elif target.exists() and not target.is_dir():
+                raise PortError(f"Update directory conflicts with file: {target.name}")
+            else:
+                target.mkdir(parents=True, exist_ok=True)
+            for item in source.iterdir():
+                overlay(item, target / item.name)
+        elif source.is_file():
+            if target.is_dir() and not target.is_symlink():
+                raise PortError(f"Update file conflicts with directory: {target.name}")
+            _link_file(source, target)
+        else:
+            raise PortError(f"Unsupported update item: {source.name}")
+
+    if update:
+        for entry in update.iterdir():
+            overlay(entry, view / entry.name)
     return view
 
 
@@ -186,9 +210,8 @@ def prepare(source: Path, game: Path, update: Path | None, out: Path,
     base = require_game(game)
     validate_game_assets(game)
     new = require_game(update, is_update=True) if update else None
-    # Do not claim that this layout supports update-provided game resources.
-    if update and (update / "dvdroot_ps4").exists():
-        raise PortError("Update has dvdroot_ps4 resources; native app0 overlay not ported yet")
+    if new and new["TITLE_ID"] != base["TITLE_ID"]:
+        raise PortError(f"Update CUSA {new['TITLE_ID']} does not match base {base['TITLE_ID']}")
     out.mkdir(parents=True, exist_ok=True)
     game_view = build_view(game, update, out)
     scripts = source / "gow3_pc/scripts"
