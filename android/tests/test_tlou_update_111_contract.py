@@ -21,6 +21,17 @@ class TlouUpdate111Contract(unittest.TestCase):
         assert 'final boolean proxy=' not in settings
         assert 'choice(video,"render_path"' not in main
 
+    def test_ingame_fullscreen_has_one_entry_and_unified_renderer_is_fixed(self):
+        menu=(JAVA/"PortMenu.java").read_text()
+        # Only the home menu controls the fit/fill selection. There must be
+        # no duplicate entry in Video e tela or Idioma e interface.
+        assert menu.count("screenMode();") == 1
+        assert 'screenMode(); // separate one-tap fit and fill actions in the main in-game menu' in menu
+        assert 'case "video":' in menu
+        assert 'case "settings":' in menu
+        assert 'choice("render_path"' not in menu
+        assert menu.count('Reinicie o jogo para aplicar o método de resolução.') == 0
+
     def test_update_pkg_extraction_needs_no_additional_folder_selection(self):
         main=(JAVA/"MainActivity.java").read_text()
         assert 'installGameUpdatePkg(local(uri,false));' in main
