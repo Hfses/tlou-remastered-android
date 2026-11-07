@@ -118,7 +118,10 @@ class TestTLOUBionic(unittest.TestCase):
             self.assertEqual((view/"dvdroot_ps4/resource.bin").read_bytes(), b"resource")
             self.assertEqual((base/"eboot.bin").read_bytes(), b"test game")
             self.assertTrue((view/"eboot.bin").is_symlink())
-            self.assertTrue((view/"dvdroot_ps4").is_symlink())
+            # This directory must become a virtual merge when the update
+            # supplies nested resources, while unchanged base files stay linked.
+            self.assertTrue((view/"dvdroot_ps4/resource.bin").is_symlink())
+            self.assertEqual((base/"dvdroot_ps4/resource.bin").read_bytes(), b"resource")
 
     def test_invalid_sfo_and_missing_libc(self):
         with tempfile.TemporaryDirectory() as tmp:
