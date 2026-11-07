@@ -123,7 +123,9 @@ final class PortSettings {
         // the more recent actual run had the three below OFF.
         env.put("TLOU_MEMORY_WALK_ONCE","1");
         env.put("TLOU_RING_BINDING_CURSOR","1");
-        env.put("TLOU_DRAW_COUNTER_TRIM","0");
+        // Disable per-packet ARM64 clock barriers and shared stats atomics in normal gameplay.
+        // CPU thread-load diagnostics use pthread clocks; full pipe stats remain opt-in.
+        env.put("TLOU_DRAW_COUNTER_TRIM","1");
         env.put("GOW3_TLOU_COMPUTE_MEMO","0");
         env.put("GOW3_TLOU_HOST_COPY_BATCH","0");
         env.put("TLOU_SRT_HOT_READBACKS","1");
