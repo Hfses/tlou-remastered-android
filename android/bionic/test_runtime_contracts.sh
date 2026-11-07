@@ -169,6 +169,12 @@ g++ -std=c++20 -O2 -Wall -Wextra -Werror \
   gow3_pc/tests/test_tlou_pending_write_index.cpp -o "$test_dir/pending-write-index"
 "$test_dir/pending-write-index"
 
+# Flush constant-ring snapshots by packet, preserving exact byte coverage.
+g++ -std=c++20 -O2 -Wall -Wextra -Werror \
+  -I gow3_pc/gpu/shadps4 \
+  gow3_pc/tests/test_tlou_ring_flush_batch.cpp -o "$test_dir/ring-flush-batch"
+"$test_dir/ring-flush-batch"
+
 g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread gow3_pc/tests/test_cpu_phase_sample.cpp -o "$test_dir/cpu-phase-sample"
 "$test_dir/cpu-phase-sample" --correctness-only
 

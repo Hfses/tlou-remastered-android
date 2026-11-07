@@ -1822,7 +1822,16 @@ void Rasterizer::CollectRingBindings(const Shader::Info& stage, const PreparedDr
         } else {
             memory->CopySparseMemory(address, dst, size);
         }
-        constant_ring->Flush(*offset, size);
+        // The batch path flushes all packet snapshots once, before the
+        // draw pipe publishes the packet to the Vulkan recording thread.
+        // A/B fallback preserves the original per-buffer flush behavior.
+        static const bool batch_flush = [] {
+            const char* env = std::getenv("GOW3_RING_BATCH_FLUSH");
+            return !(env && env[0] == '0');
+        }();
+        if (!batch_flush) {
+            constant_ring->Flush(*offset, size);
+        }
         if (LateConstantsEnabled()) {
             // gow3 21 Oct 2026: checked at the submission of this draw (its ring position).
             const u64 due = constant_ring->Position();
@@ -1912,6 +1921,7 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
                             Shader::MaxStageTypes>
         rings;
     u32 num_stages = 0;
+    const u64 ring_batch_start = constant_ring ? constant_ring->Position() : 0;
     u32 size = sizeof(DrawPacket) + AlignPacket(num_blocks * sizeof(u16)) +
                num_blocks * AmdGpu::RegDirty::BlockWords * sizeof(u32);
     for (const auto* stage : stages) {
@@ -1936,6 +1946,17 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
     }
     if (indirect) {
         size += AlignPacket(sizeof(IndirectDraw));
+    }
+    // Every ring snapshot was captured at its original point in guest
+    // command order. Flush non-coherent host memory once per packet before
+    // Stage B can observe any of its descriptor bindings; never defer the
+    // actual guest snapshot, only the host-to-device visibility barrier.
+    static const bool batch_ring_flush = [] {
+        const char* env = std::getenv("GOW3_RING_BATCH_FLUSH");
+        return !(env && env[0] == '0');
+    }();
+    if (constant_ring && batch_ring_flush) {
+        constant_ring->FlushPacket(ring_batch_start);
     }
     const u32 interval = VerifyInterval();
     const bool verify = interval && (draw_pipe->packets % interval) == 0;
