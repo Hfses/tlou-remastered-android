@@ -197,6 +197,7 @@ std::vector<Event> Workload(int reuse){
 // 512/1024 pending writes, with most read-only constant buffers not
 // touching in-flight writes: mirrors the expensive RingBindings false path.
 // Exact predicates (including fence retirement) are compared at each step.
+static volatile u64 sink;
 void BenchmarkLive(unsigned n){
     Model model;
     for(unsigned i=0;i<n;++i) {
@@ -236,7 +237,6 @@ void BenchmarkLive(unsigned n){
     std::printf("pending live-read %u ranges, 280000 queries: old=%.3fms indexed=%.3fms ratio=%.3f (host, not FPS)\n",
                 n,before[3],after[3],after[3]/before[3]);
 }
-static volatile u64 sink;
 double Run(const std::vector<Event>& events,bool indexed){
     Model state;
     const auto start=std::chrono::steady_clock::now();
