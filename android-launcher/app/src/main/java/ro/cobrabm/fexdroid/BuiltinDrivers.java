@@ -15,12 +15,12 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.util.Locale;
 
-/** Install the pinned official Turnip 27.0.0-R1 only on detected Adreno 6xx/7xx. */
+/** Install pinned, SHA-256-verified Turnip drivers for the detected Adreno generation. */
 final class BuiltinDrivers {
-    private static final String ASSET="drivers/turnip-v27-r1-a6xx-a7xx.zip";
-    private static final String SHA="07938ef843a73dd47ebb88ba9c2d3bca011667bd2b657e3b4a75d9ba8ed591a0";
-    private static final String ASSET_8XX="drivers/turnip-gen8-v38-patched-a8xx.zip";
-    private static final String SHA_8XX="2bbb279a3da7680503a54a51a3051c7a4302c8fb2a089f8b183b4b5d6ba9ac17";
+    private static final String ASSET="drivers/turnip-v27-r2-a6xx-a7xx.zip";
+    private static final String SHA="8d30be022582d0c03b1918c019540491d00439e14e9e5e1359fe0bb19004f781";
+    private static final String ASSET_8XX="drivers/turnip-gen8-v39-patched-a8xx.zip";
+    private static final String SHA_8XX="bd457b30f195cf93a334b5302c221b1b5cb59c79c485935decf95d560a38c8a2";
 
     private BuiltinDrivers() {}
 
@@ -62,10 +62,25 @@ final class BuiltinDrivers {
         }
     }
 
+    static boolean isPreviousBundledDefault(Context context, SharedPreferences p) {
+        final String display=p.getString("driver_name","");
+        final String oldId;
+        if("Turnip Gen8 V38 Patched · Adreno 8xx".equals(display))
+            oldId="2bbb279a3da7680503a54a51a3051c7a4302c8fb2a089f8b183b4b5d6ba9ac17";
+        else if("Turnip v27.0.0-R1 · Adreno 6xx/7xx".equals(display))
+            oldId="07938ef843a73dd47ebb88ba9c2d3bca011667bd2b657e3b4a75d9ba8ed591a0";
+        else return false;
+        File expected=new File(new File(new File(context.getFilesDir(),"drivers"),oldId),
+                               "libvulkan_freedreno.so");
+        return expected.getAbsolutePath().equals(p.getString("driver_path",""));
+    }
+
     static synchronized void ensureDefault(Context context) throws Exception {
         SharedPreferences p=PortSettings.prefs(context);
-        // Even an explicit "system driver" choice (empty path) must win.
-        if(p.contains("driver_path"))return;
+        // Preserve explicit system/imported driver selections. Migrate only the
+        // previous bundled default, proven by its SHA-named installation folder
+        // and its exact built-in label; do not overwrite manually imported drivers.
+        if(p.contains("driver_path") && !isPreviousBundledDefault(context,p))return;
         final String gpu;
         try { gpu=renderer(); }
         catch(Throwable e) { return; } // unknown GPU: keep system default
@@ -76,7 +91,7 @@ final class BuiltinDrivers {
         if(!a8 && !a67)return;
         String asset=a8?ASSET_8XX:ASSET;
         String digest=a8?SHA_8XX:SHA;
-        String display=a8?"Turnip Gen8 V38 Patched · Adreno 8xx":"Turnip v27.0.0-R1 · Adreno 6xx/7xx";
+        String display=a8?"Turnip Gen8 V39 Patched · Adreno 8xx":"Turnip v27.0.0-R2 · Adreno 6xx/7xx";
         File drivers=new File(context.getFilesDir(),"drivers");
         try(InputStream archive=context.getAssets().open(asset)){
             DriverArchive.Installed installed=DriverArchive.install(
@@ -89,7 +104,7 @@ final class BuiltinDrivers {
                         meta.optInt("minApi",26));
                 });
             if(!digest.equals(installed.id))
-                throw new IllegalStateException("Turnip R1 archive digest mismatch");
+                throw new IllegalStateException("Bundled Turnip archive digest mismatch");
             p.edit().putString("driver_path",installed.library.getAbsolutePath())
                 .putString("driver_name",display).apply();
         } catch(java.io.FileNotFoundException missingAsset) {
