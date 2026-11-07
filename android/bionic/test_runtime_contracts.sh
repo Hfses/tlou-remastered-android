@@ -23,6 +23,10 @@ for contract in tsc_clock fex_clock services; do
     "gow3_pc/tests/test_${contract}.c" -lm -o "$test_dir/$contract"
   "$test_dir/$contract"
 done
+cc -std=c11 -O2 -Wall -Wextra -Werror -pthread -I gow3_pc -I gow3_pc/src \
+  gow3_pc/tests/test_direct_memory.c -o "$test_dir/direct-memory"
+"$test_dir/direct-memory"
+
 g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I gow3_pc -I gow3_pc/src \
   gow3_pc/tests/test_fiber_bionic.cpp -o "$test_dir/fibers"
 "$test_dir/fibers"

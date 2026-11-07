@@ -121,6 +121,14 @@ final class PortSettings {
         // Exact flags observed in launch.log of TLOU-Android-Logs (32).zip.
         // Its preceding launch-previous.log used different v0.31 trial flags:
         // the more recent actual run had the three below OFF.
+        // The game compares sceKernelGetDirectMemorySize with a retail PS4's 4608 MiB. Any other
+        // value (the runtime default is 5056 MiB) makes it take the development-kit path and ask for
+        // a 768 MiB "Game Debug" direct allocation that cannot fit after its 4588 MiB of regular
+        // reservations: "direct allocation of 805306368 bytes in [0x0, 0x13c000000) failed".
+        // Same value tools/probe_tlou.py has always set for the Windows port.
+        env.put("GOW3_DMEM_REPORT_MB","4608");
+        // TEMPORARY diagnostics: log every direct allocation/release as [MEMORY DEBUG].
+        env.put("GOW3_MEMORY_DEBUG","1");
         env.put("TLOU_MEMORY_WALK_ONCE","1");
         env.put("TLOU_RING_BINDING_CURSOR","1");
         env.put("TLOU_DRAW_COUNTER_TRIM","0");

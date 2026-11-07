@@ -558,11 +558,74 @@ static ABI uint64_t direct_size(void) {
     uint64_t mb = env ? strtoull(env, NULL, 10) : 0;
     return mb && mb * 1024 * 1024 <= POOL_SIZE ? mb * 1024 * 1024 : POOL_SIZE;
 }
+
+/* gow3 6 Nov 2026: [MEMORY DEBUG] diagnostics for the direct-memory allocator. Failures are always
+ * reported in full (allocations, free intervals, largest/total free space, reason); successful
+ * allocations and releases only with GOW3_MEMORY_DEBUG=1, so a session stays readable. Callers
+ * hold the region lock: blocks[] is read here. Nothing in this section changes allocator state. */
+static int memory_debug(void) {
+    static int on=-1;
+    if (on<0) { const char *env=getenv("GOW3_MEMORY_DEBUG"); on = env && *env && *env!='0'; }
+    return on;
+}
+static int block_order(const void *a, const void *b) {
+    const Block *x=a, *y=b;
+    return x->start<y->start ? -1 : x->start>y->start;
+}
+static void dmem_debug_report(const char *api, uint64_t low, uint64_t high, uint64_t size,
+                              uint64_t alignment, int type, int64_t selected, int32_t rc, const char *reason) {
+    if (!rc && !memory_debug()) return;
+    uint64_t end = high<POOL_SIZE ? high : POOL_SIZE; /* the window direct_allocate really searches */
+    static Block sorted[LIMIT]; /* guarded by the region lock */
+    size_t n=0;
+    for (int i=0;i<LIMIT;++i) if (blocks[i].used) sorted[n++]=blocks[i];
+    qsort(sorted,n,sizeof(*sorted),block_order);
+    uint64_t total_free=0, largest=0, largest_at=0, at=low<end ? low : end, used_bytes=0;
+    enum { SHOWN=24 };
+    char intervals[SHOWN][48]; size_t shown=0, free_count=0;
+    for (size_t i=0;i<=n;++i) {
+        uint64_t gap_end = i<n ? (sorted[i].start<end ? sorted[i].start : end) : end;
+        if (gap_end>at) {
+            uint64_t length=gap_end-at;
+            total_free+=length; ++free_count;
+            if (length>largest) { largest=length; largest_at=at; }
+            if (shown<SHOWN) snprintf(intervals[shown++],sizeof(intervals[0]),"[0x%" PRIx64 ",0x%" PRIx64 ")",at,gap_end);
+        }
+        if (i<n) { used_bytes+=sorted[i].size; if (sorted[i].start+sorted[i].size>at) at=sorted[i].start+sorted[i].size; }
+    }
+    printf("[MEMORY DEBUG] API: %s\n",api);
+    printf("[MEMORY DEBUG] Requested size: %" PRIu64 " bytes (%.1f MiB)\n",size,size/1048576.0);
+    printf("[MEMORY DEBUG] Requested alignment: 0x%" PRIx64 "\n",alignment);
+    printf("[MEMORY DEBUG] Memory type: %d\n",type);
+    printf("[MEMORY DEBUG] Search range: [0x%" PRIx64 ", 0x%" PRIx64 ") (pool 0x%" PRIx64 ", game was told 0x%" PRIx64 ")\n",
+           low,high,(uint64_t)POOL_SIZE,direct_size());
+    if (rc) {
+        printf("[MEMORY DEBUG] Existing allocations: %zu, %.1f MiB in use\n",n,used_bytes/1048576.0);
+        for (size_t i=0;i<n && i<SHOWN;++i)
+            printf("[MEMORY DEBUG]   [0x%" PRIx64 ",0x%" PRIx64 ") %.1f MiB type=%d\n",sorted[i].start,
+                   sorted[i].start+sorted[i].size,sorted[i].size/1048576.0,sorted[i].type);
+        if (n>SHOWN) printf("[MEMORY DEBUG]   ... %zu more\n",n-SHOWN);
+        printf("[MEMORY DEBUG] Free intervals: %zu",free_count);
+        for (size_t i=0;i<shown;++i) printf(" %s",intervals[i]);
+        printf("%s\n",free_count>shown ? " ..." : "");
+    }
+    printf("[MEMORY DEBUG] Largest free interval: %.1f MiB at 0x%" PRIx64 "\n",largest/1048576.0,largest_at);
+    printf("[MEMORY DEBUG] Total free space: %.1f MiB\n",total_free/1048576.0);
+    if (selected>=0) printf("[MEMORY DEBUG] Selected offset: 0x%" PRIx64 "\n",(uint64_t)selected);
+    else printf("[MEMORY DEBUG] Selected offset: none\n");
+    printf("[MEMORY DEBUG] Return code: 0x%08x\n",(unsigned)rc);
+    if (rc) printf("[MEMORY DEBUG] Failure reason: %s\n",reason ? reason : "unspecified");
+}
 static ABI int32_t direct_allocate(int64_t low, int64_t high, uint64_t size,
                                   uint64_t alignment, int type, int64_t *out) {
     if (!alignment) alignment = PAGE;
-    if (!out || low < 0 || high < 0 || !size || size % PAGE || !valid_alignment(alignment) || type < 0 || type > 10)
+    if (!out || low < 0 || high < 0 || !size || size % PAGE || !valid_alignment(alignment) || type < 0 || type > 10) {
+        write_lock();
+        dmem_debug_report("sceKernelAllocateDirectMemory",(uint64_t)low,(uint64_t)high,size,alignment,type,-1,INVALID,
+                          "invalid argument (null out, negative range, zero/unaligned size, bad alignment or type)");
+        write_unlock();
         return INVALID;
+    }
     /* Games search up to the retail pool size (5056 MiB); a raised pool (GOW3_DMEM_MB, the
      * render resolution patch) extends that search. */
     if ((uint64_t)high >= UINT64_C(5056) * 1024 * 1024 && (uint64_t)high < POOL_SIZE) high = (int64_t)POOL_SIZE;
@@ -570,6 +633,10 @@ static ABI int32_t direct_allocate(int64_t low, int64_t high, uint64_t size,
     if ((uint64_t)low >= end || size > end - (uint64_t)low) {
         printf("Runtime: direct allocation of %" PRIu64 " bytes in [0x%" PRIx64 ", 0x%" PRIx64 ") failed: no space\n",
                size, (uint64_t)low, (uint64_t)high);
+        write_lock();
+        dmem_debug_report("sceKernelAllocateDirectMemory",(uint64_t)low,(uint64_t)high,size,alignment,type,-1,NO_SPACE,
+                          "search window smaller than the request");
+        write_unlock();
         return NO_SPACE;
     }
     write_lock();
@@ -579,6 +646,8 @@ static ABI int32_t direct_allocate(int64_t low, int64_t high, uint64_t size,
     for (int i=0; i<LIMIT; ++i) if (!blocks[i].used) { slot=i; break; }
     for (;;) {
         if (slot<0 || start > end || size > end-start) {
+            dmem_debug_report("sceKernelAllocateDirectMemory",(uint64_t)low,(uint64_t)high,size,alignment,type,-1,NO_SPACE,
+                              slot<0 ? "block table full (LIMIT)" : "no free range of the requested size and alignment in the search window");
             write_unlock();
             printf("Runtime: direct allocation of %" PRIu64 " bytes in [0x%" PRIx64 ", 0x%" PRIx64 ") failed: no free range\n",
                    size, (uint64_t)low, (uint64_t)high);
@@ -595,9 +664,15 @@ static ABI int32_t direct_allocate(int64_t low, int64_t high, uint64_t size,
     }
     /* Claimed before the commit: host_commit may drop the lock while the page file grows. */
     blocks[slot] = (Block){start, size, type, 1};
-    if (host_commit(start, size)) { blocks[slot].used = 0; write_unlock(); return NO_MEMORY; }
+    if (host_commit(start, size)) {
+        blocks[slot].used = 0;
+        dmem_debug_report("sceKernelAllocateDirectMemory",(uint64_t)low,(uint64_t)high,size,alignment,type,-1,NO_MEMORY,
+                          "host could not commit the backing pages");
+        write_unlock(); return NO_MEMORY;
+    }
     *out = (int64_t)start;
     ++allocations; live_bytes += size;
+    dmem_debug_report("sceKernelAllocateDirectMemory",(uint64_t)low,(uint64_t)high,size,alignment,type,(int64_t)start,0,NULL);
     write_unlock();
     printf("Runtime: direct allocation offset=0x%" PRIx64 ", size=%" PRIu64 " bytes, type=%d\n", start, size, type);
     return 0;
@@ -671,7 +746,11 @@ static ABI int32_t direct_release(uint64_t start, uint64_t size) {
     if (!size) return 0;
     const uint64_t release_start=mono_ns();
     write_lock();
-    if (!direct_range_allocated(start,size)) { write_unlock(); return INVALID; }
+    if (!direct_range_allocated(start,size)) {
+        if (memory_debug()) printf("[MEMORY DEBUG] API: sceKernelReleaseDirectMemory start=0x%" PRIx64 " size=%" PRIu64 " Return code: 0x%08x Failure reason: range not fully allocated\n",
+                                   start,size,(unsigned)INVALID);
+        write_unlock(); return INVALID;
+    }
     /* Mappings of released physical pages disappear with them. */
     for (size_t i=0; i<vma_count;) {
         Vma v=vmas[i];
@@ -696,6 +775,8 @@ static ABI int32_t direct_release(uint64_t start, uint64_t size) {
         live_bytes-=e-a;
     }
     host_discard(start,size); /* zero on reuse */
+    if (memory_debug()) printf("[MEMORY DEBUG] API: sceKernelReleaseDirectMemory start=0x%" PRIx64 " size=%" PRIu64 " (%.1f MiB) live=%.1f MiB Return code: 0x00000000\n",
+                               start,size,size/1048576.0,live_bytes/1048576.0);
     write_unlock();
     flush_hooks();
     __atomic_add_fetch(&mt_releases,1,__ATOMIC_RELAXED);
