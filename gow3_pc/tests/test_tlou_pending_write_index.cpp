@@ -65,13 +65,13 @@ struct Model {
             if(!optimized||!covered)Mark(lo,hi);
             if(pending)uncommitted.push_back(i);
         };
-        if(optimized&&Vulkan::Detail::PendingWriteHintOverlaps(writes,hint,lo,hi)) {
+        const u32 count=FilterHit(lo,hi)?u32(writes.size()):0;
+        if(optimized&&count&&Vulkan::Detail::PendingWriteHintOverlaps(writes,hint,lo,hi)) {
             ++hint_hits;update(hint);return;
         }
-        if(optimized&&index.CanQuery(writes.size())) {
+        if(optimized&&index.CanQuery(count)) {
             if(auto found=index.FirstOverlap(writes,hint,lo,hi)) {update(*found);return;}
         } else {
-            const u32 count=FilterHit(lo,hi)?u32(writes.size()):0;
             const u32 first=hint<count?hint:0;
             for(u32 step=0;step<count;++step) {
                 const u32 i=first+step<count?first+step:first+step-count;
@@ -117,8 +117,19 @@ void Verify(){
     assert(reference.Equals(optimized));
     assert(optimized.hint_hits>20000);
     assert(optimized.marks<reference.marks);
-    assert(optimized.checks<reference.checks);
-    // Inclusive boundary: two ranges touching exactly at a 64 KiB window.
+    assert(optimized.checks==reference.checks);
+    // The original bloom filter ignores adjacent ranges separated exactly
+    // at a 64 KiB boundary if it has not marked the next window. A spatial
+    // index must reproduce this decision even if its own inclusive index sees
+    // the neighboring interval.
+    Model edge_old,edge_new;
+    for(u32 i=0;i<70;++i){
+        const u64 at=0x30000000+u64(i)*65536;
+        edge_old.Note(at,65536,false,false);
+        edge_new.Note(at,65536,false,true);
+        assert(edge_old.Equals(edge_new));
+    }
+    // >2048 active entries, then a vector compaction/rebuild.
     Model a,b;
     for(u32 i=0;i<2400;++i){
         const u64 lo=0x10000000+u64(i)*0x20000;
@@ -136,8 +147,8 @@ void Verify(){
         if(i%29==0)assert(a.Equals(b));
     }
     assert(a.Equals(b));
-    std::printf("pending index correctness: 180000 randomized writes and 2400-range overflow, inclusive boundaries, retirement/reindex passed; skipped filter checks=%llu\n",
-                (unsigned long long)(reference.checks-optimized.checks));
+    std::printf("pending index correctness: 180000 randomized writes and 2400-range overflow, inclusive boundaries, retirement/reindex passed; skipped duplicate filter markings=%llu\n",
+                (unsigned long long)(reference.marks-optimized.marks));
 }
 std::vector<Event> Workload(int reuse){
     std::mt19937_64 rng(943u+reuse);

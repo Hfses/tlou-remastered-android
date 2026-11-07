@@ -1599,11 +1599,16 @@ void Rasterizer::NotePendingGpuWrite(VAddr address, u64 size) {
             uncommitted_indices.push_back(i);
         }
     };
-    if (indexed && Detail::PendingWriteHintOverlaps(pending_writes, pending_hint, address, end)) {
+    // The legacy 64 KiB bloom check is authoritative. It excludes some
+    // adjacent writes that touch exactly at a window boundary; bypassing it
+    // would merge intervals that the original code intentionally kept apart.
+    const u32 count = PendingFilterHit(address, end)
+                          ? static_cast<u32>(pending_writes.size()) : 0;
+    if (indexed && count &&
+        Detail::PendingWriteHintOverlaps(pending_writes, pending_hint, address, end)) {
         merge(pending_hint);
         return;
     }
-    const u32 count = static_cast<u32>(pending_writes.size());
     if (indexed && pending_write_index.CanQuery(count)) {
         if (const auto hit = pending_write_index.FirstOverlap(pending_writes, pending_hint,
                                                                address, end)) {
@@ -1613,7 +1618,7 @@ void Rasterizer::NotePendingGpuWrite(VAddr address, u64 size) {
         // With <=2048 entries every interval is in the index: no match means
         // the original full scan would find none. Hash collisions are harmless.
     } else {
-        const u32 candidates = PendingFilterHit(address, end) ? count : 0;
+        const u32 candidates = count;
         const u32 first = pending_hint < candidates ? pending_hint : 0;
         for (u32 step = 0; step < candidates; ++step) {
             const u32 i = first + step < candidates ? first + step
