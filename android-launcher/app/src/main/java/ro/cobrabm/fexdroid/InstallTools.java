@@ -81,6 +81,7 @@ final class InstallTools {
         }
         run(command,progress);
         if (!prepared(out)) throw new IOException("Preparação incompleta; consulte o log de instalação");
+        syncEffectivePatches(out,progress);
         return out;
     }
 
@@ -90,6 +91,22 @@ final class InstallTools {
             new File(root,"source/android/device_prepare.py").getAbsolutePath(),
             "--game",new File(prepared,"tlou-view").getAbsolutePath(),"--out",prepared.getAbsolutePath(),
             "--options",PortSettings.patchOptions(context).getAbsolutePath(),"--patch-only"),progress);
+        syncEffectivePatches(prepared,progress);
+    }
+
+    private void syncEffectivePatches(File prepared,Consumer<String> progress) throws Exception {
+        File report=new File(prepared,"patch-validation.json");
+        if(!report.isFile())return;
+        org.json.JSONObject profile=new org.json.JSONObject(new String(Files.readAllBytes(report.toPath()),
+            java.nio.charset.StandardCharsets.UTF_8));
+        if(!"01.11".equals(profile.optString("game_version")))return;
+        if(!"original".equals(profile.optString("resolution")))return;
+        android.content.SharedPreferences prefs=PortSettings.prefs(context);
+        if(!"original".equals(prefs.getString("resolution","original"))) {
+            prefs.edit().putString("resolution","original").apply();
+            if(progress!=null)progress.accept(
+                "Atualização 01.11: resolução Original aplicada; patches 720/540/360p ainda não validados.");
+        }
     }
 
     File extract(File pkg, File parent, Consumer<String> progress) throws Exception {
