@@ -132,8 +132,7 @@ class BaseExecutablePatches(unittest.TestCase):
                 self.assertTrue(address > 0 and len(before)%2 == 0)
                 if after: self.assertEqual(len(before),len(after))
         for r in ("720","540","360"):
-            with self.assertRaisesRegex(ValueError,"01.11 ainda não validado"):
-                profiles.selected_options({"resolution":r},"01.11")
+            self.assertEqual(profiles.selected_options({"resolution":r},"01.11"), {})
 
     def test_011_all_patch_groups_emit_only_verified_replacements(self):
         """Exercise the actual patch writer with an ELF carrying 01.11 guards.

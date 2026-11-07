@@ -86,6 +86,12 @@ BASE_PATCHES_111 = {
         (0xC87D96, "741b", "9090"),
         (0xC873E1, "742d", "9090"),
     ],
+    "particle-preupdate-magic": [
+        (0xC3C55D, "7438", "eb38"),
+        (0xC3CD76, "7433", "eb33"),
+        (0xC3C557, "813e10ba1006", None),
+        (0xC3CD70, "813a10ba1006", None),
+    ],
 }
 # Original-byte guards checked independently in BOTH supplied 01.11 ELFs.
 PERFORMANCE_EFFECTS_111 = {
