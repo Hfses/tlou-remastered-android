@@ -1739,6 +1739,20 @@ bool Rasterizer::PendingWriteOverlaps(VAddr address, u64 size) {
     if (!PendingFilterHit(address, end)) {
         return false;
     }
+    // For large sets, use the same spatial index maintained by
+    // NotePendingGpuWrite. It answers the strictly-overlapping, not-yet-
+    // recorded predicate without walking all pending writes on every
+    // read-only constant in the hot ring path. Below 128 entries the
+    // original linear scan is cheaper; above 2048 it is the fallback.
+    static const bool indexed = [] {
+        const char* env = std::getenv("GOW3_PENDING_WRITE_INDEX");
+        return !(env && env[0] == '0');
+    }();
+    if (indexed && pending_write_index.CanQueryLive(pending_writes.size())) {
+        return pending_write_index.AnyLiveOverlap(
+            pending_writes, address, end,
+            [this](const PendingWrite& write) { return !draw_pipe->Reached(write.position); });
+    }
     for (const auto& write : pending_writes) {
         if (address < write.end && write.begin < end && !draw_pipe->Reached(write.position)) {
             return true;
@@ -1837,7 +1851,21 @@ void Rasterizer::CollectRingBindings(const Shader::Info& stage, const PreparedDr
         if (address == 0 || vsharp.GetSize() == 0) {
             continue;
         }
-        const u64 size = memory->ClampRangeSize(address, vsharp.GetSize());
+        // Stage A only snapshots read-only V# ranges of at most 16KiB.
+        // For larger declarations, scanning guest VMAs beyond the first
+        // 16KiB+1 is wasted: a mapped prefix longer than the stream limit
+        // will not be copied, while any shorter contiguous prefix is
+        // identical to the original full-size clamp. Written bindings
+        // still require the EXACT full extent for pending-write tracking.
+        const u64 raw_size = vsharp.GetSize();
+        static const bool clamp_cap = [] {
+            const char* env = std::getenv("GOW3_RING_CLAMP_CAP");
+            return !(env && env[0] == '0');
+        }();
+        const u64 query_size = !desc.is_written && clamp_cap
+            ? std::min<u64>(raw_size, VideoCore::BufferCache::STREAM_THRESHOLD + 1)
+            : raw_size;
+        const u64 size = memory->ClampRangeSize(address, query_size);
         if (desc.is_written) {
             NotePendingGpuWrite(address, size);
             continue;
