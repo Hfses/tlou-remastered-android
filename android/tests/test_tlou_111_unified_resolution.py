@@ -13,14 +13,20 @@ KNOWN="3cfa475f88ca68485b6b9230e62b84e195cdbe19e6f7295c110b8dcf8f20884e"
 class Update111UnifiedResolution(unittest.TestCase):
     def test_only_uploaded_original_self_is_opted_in(self):
         self.assertIn(KNOWN,patches.RESOLUTION_111_SELF_SHA256)
-        self.assertEqual(len(patches.RESOLUTION_111_SELF_SHA256),1)
-        self.assertNotIn("31f3b0d120803878d10a7184d139c545de334394dd7dd6ca6058a7c995e484a7",
-                         patches.RESOLUTION_111_SELF_SHA256)
+        self.assertEqual(len(patches.RESOLUTION_111_SELF_SHA256),2)
+        self.assertIn("31f3b0d120803878d10a7184d139c545de334394dd7dd6ca6058a7c995e484a7",
+                      patches.RESOLUTION_111_SELF_SHA256)
         with self.assertRaisesRegex(ValueError,"01.11"):
             patches.selected_options({"resolution":"720"},"01.11")
+        # Different SHA, same verified 24 patch locations. Both original
+        # and pre-patched pointer-guard variant support unified resolutions.
+        other="31f3b0d120803878d10a7184d139c545de334394dd7dd6ca6058a7c995e484a7"
+        for mode in patches.LOW_RES_SCENE:
+            expected=patches.selected_options({"resolution":mode},"01.11",KNOWN)
+            actual=patches.selected_options({"resolution":mode},"01.11",other)
+            self.assertEqual(actual,expected)
         with self.assertRaisesRegex(ValueError,"01.11"):
-            patches.selected_options({"resolution":"720"},"01.11",
-                "31f3b0d120803878d10a7184d139c545de334394dd7dd6ca6058a7c995e484a7")
+            patches.selected_options({"resolution":"720"},"01.11","unknown-self-hash")
 
     def test_verified_full_hud_post_and_aim_sites_are_all_replaced(self):
         self.assertEqual(len(patches.RESOLUTION_111_GUARDS),8)

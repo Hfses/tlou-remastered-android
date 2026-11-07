@@ -261,8 +261,13 @@ LOW_RES_SCENE = {"720": (1280, 720), "540": (960, 540), "360": (640, 360)}
 # 0xAB0600, while its framebuffer creation sites moved to 0xAD47xx.
 # Every original span below has been checked against this exact SELF.
 # Other 01.11 variants deliberately retain Original until independently checked.
+# The owner's second 01.11 ELF differs by only 28 bytes in the
+# 0x6C74E9 -> 0xC2C860 pointer-guard trampoline, outside ALL 24 validated
+# 01.11 stability, effects, and unified-resolution patch spans.
+# Both SELF variants were independently checked (24/24 original byte guards).
 RESOLUTION_111_SELF_SHA256 = frozenset({
     "3cfa475f88ca68485b6b9230e62b84e195cdbe19e6f7295c110b8dcf8f20884e",
+    "31f3b0d120803878d10a7184d139c545de334394dd7dd6ca6058a7c995e484a7",
 })
 RESOLUTION_111_GUARDS = {
     0xAB05D6: "c7470880070000c7470c38040000",  # screen-info instance
