@@ -154,13 +154,14 @@ final class PortSettings {
         env.put("GOW3_CPU_TRIMS","1");
         env.put("GOW3_PREFETCH_PIPELINES","1");
         env.put("GOW3_PARALLEL_PIPELINES","1");
-        // Real, bounded pipeline parallelism. Auto=4 workers plus the SCHED_IDLE
-        // scanner previously regressed; use two workers and a scanner at normal
-        // scheduler priority, without changing FEX/critical-thread affinity.
-        // Prepared draw state is only consumed after Ready+checksum validation.
-        env.put("GOW3_PREP_WORKERS","2");
-        env.put("TLOU_PREP_NORMAL_PRIORITY","1");
-        env.put("TLOU_PREP_HIT_STATS","1");
+        // TLOU: previously tested draw-preparation workers increased CPU
+        // contention without raising FPS. Logs 19/20 still showed ~39 FPS
+        // despite 99.9% hits with two workers. Restore the proven zero-worker
+        // policy; do not keep the speculative normal-priority scanner or
+        // per-5-second hit instrumentation running in gameplay.
+        env.put("GOW3_PREP_WORKERS","0");
+        env.remove("TLOU_PREP_NORMAL_PRIORITY");
+        env.remove("TLOU_PREP_HIT_STATS");
         env.put("GOW3_DEFERRED_READBACK","0");
         env.put("GOW3_STALE_READBACK","0");
 
