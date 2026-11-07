@@ -149,6 +149,16 @@ final class PortSettings {
 
         env.put("GOW3_READBACKS","1"); // Precise=2 caused artifacts; never resurrect.
         env.put("GOW3_EOP_READBACK","1"); // Selective readbacks, not Precise/Readback 2.
+        // TLOU gameplay creates ~11k readback events per 5s (~55/frame at 40 FPS).
+        // Immediate per-EOP Flush() fragments Vulkan submissions and underfeeds
+        // the GPU. The native command idle loop flushes pending readbacks as soon
+        // as the guest waits on their fence; normal frame submits batch the rest.
+        // This changes submission timing only, NOT readback/physics contents.
+        // Rollback: set GOW3_RAYCAST_FLUSH to "immediate".
+        env.put("GOW3_RAYCAST_FLUSH","lazy");
+        // Candidate only: real vkQueueSubmit calls / frame and driver time.
+        // Delete this counter after the GPU-feeder improvement is measured.
+        env.put("GOW3_GPU_FEED_STATS","1");
         // Readback 1 stays on at all levels. Every exact physics EOP result
         // already calls DownloadRangesAsync(..., protect=true, yield_to_cpu=true),
         // which read-protects its own pages without a global switch.
