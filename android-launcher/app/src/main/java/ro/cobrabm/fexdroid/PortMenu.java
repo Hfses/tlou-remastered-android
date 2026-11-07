@@ -216,12 +216,12 @@ final class PortMenu {
             case "patches":
                 heading("PATCHES");
                 note("Patches validados para o eboot reconhecido. Reinicie para aplicar.");
-                toggle("ssao","Desativar SSAO",false);
-                toggle("motion_blur","Desativar desfoque de movimento",false);
-                toggle("depth_of_field","Desativar profundidade de campo",false);
-                toggle("bloom","Desativar bloom",false);
-                toggle("sunlight_shadows","Desativar sombras solares",false);
-                toggle("subsurface","Desativar subsurface",false);
+                toggle("ssao","Desativar SSAO",true);
+                toggle("motion_blur","Desativar desfoque de movimento",true);
+                toggle("depth_of_field","Desativar profundidade de campo",true);
+                toggle("bloom","Desativar bloom",true);
+                toggle("sunlight_shadows","Desativar sombras solares",true);
+                toggle("subsurface","Desativar subsurface",true);
                 row("Restaurar patches e resolução",()->{
                     SharedPreferences.Editor e=prefs.edit().putString("resolution","original");
                     for(String key:PortSettings.EFFECTS)e.putBoolean(key,false);

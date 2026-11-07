@@ -44,7 +44,7 @@ final class PortSettings {
         // targets. The user has tested the direct-performance method at 720p
         // and original 1080p, NOT the proxy fallback in this build.
         // Never silently change the saved resolution.
-        final String resolution=p.getString("resolution","original");
+        final String resolution=p.getString("resolution","720");
         final boolean proxy="proxy".equals(p.getString("render_path","guest"));
         options.put("resolution",proxy?"original":resolution);
         // Xiaomi 23049PCD8G reported a real HALT after 806 seconds. The
@@ -52,7 +52,7 @@ final class PortSettings {
         // SIGTERM on user exit; it is NOT evidence of a guest deadlock.
         // Preserve original wake predicates only for the confirmed Xiaomi SoC.
         options.put("job_sleep",!conservativeJobWorkers());
-        for(String key:EFFECTS) options.put(key,p.getBoolean(key,false));
+        for(String key:EFFECTS) options.put(key,p.getBoolean(key,true));
         File file=new File(context.getFilesDir(),"patch-options.json");
         Files.write(file.toPath(),options.toString().getBytes(StandardCharsets.UTF_8));
         return file;
@@ -128,7 +128,7 @@ final class PortSettings {
         // Same value tools/probe_tlou.py has always set for the Windows port.
         env.put("GOW3_DMEM_REPORT_MB","4608");
         // TEMPORARY diagnostics: log every direct allocation/release as [MEMORY DEBUG].
-        env.put("GOW3_MEMORY_DEBUG","1");
+        env.remove("GOW3_MEMORY_DEBUG");
         env.put("TLOU_MEMORY_WALK_ONCE","1");
         env.put("TLOU_RING_BINDING_CURSOR","1");
         env.put("TLOU_DRAW_COUNTER_TRIM","0");
@@ -149,7 +149,7 @@ final class PortSettings {
         // breakdown needed to avoid another speculative APK. This sampler
         // uses CPU-thread clocks only and remains disableable by an env override.
         // The native Android default is ON unless explicitly disabled.
-        env.put("TLOU_CPU_PHASE_SAMPLES","1");
+        env.remove("TLOU_CPU_PHASE_SAMPLES");
         // Leave profiling truly disabled. Some native switches check presence,
         // so setting "0" instead of removing is incorrect.
         for(String name:new String[]{"GOW3_GPU_PROFILE","GOW3_FRAME_STATS","GOW3_PERF_DIAG"})

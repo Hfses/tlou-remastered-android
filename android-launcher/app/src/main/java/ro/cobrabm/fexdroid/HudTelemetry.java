@@ -126,7 +126,7 @@ final class HudTelemetry {
     private void cpuSource(String state,String message){
         if(!state.equals(cpuSourceState)){cpuSourceState=state;RunLog.write(context,message);}
     }
-    private void sampleGpu() {
+        private void sampleGpu() {
         if(gpuPaths==null || (gpuPaths.length==0 && ++gpuRediscover>=5)) {
             gpuRediscover=0;
             gpuPaths=PerfHudMetrics.discoverGpuPaths(PerfHudMetrics.DEFAULT_GPU_PATHS,PerfHudMetrics.SCAN_ROOTS);
@@ -136,8 +136,13 @@ final class HudTelemetry {
             String line=PerfHudMetrics.readFirstLine(path);
             int n=path.endsWith("/gpubusy")?PerfHudMetrics.gpuBusyRatio(line):
                 path.endsWith("/mtk_mali/utilization")?PerfHudMetrics.mtkActive(line):PerfHudMetrics.parsePercent(line);
-            if(n>=0){gpuPercent=n;return;}
+            if(n>0){gpuPercent=n;return;}
         }
+        int clockLoad=PerfHudMetrics.gpuClockRatio(
+            PerfHudMetrics.readFirstLine("/sys/class/kgsl/kgsl-3d0/clock_mhz"),
+            PerfHudMetrics.readFirstLine("/sys/class/kgsl/kgsl-3d0/max_clock_mhz")
+        );
+        if(clockLoad>=0){gpuPercent=clockLoad;return;}
         if(++gpuRediscover>=5){gpuPaths=null;gpuRediscover=0;}
     }
     double gpuPercent(){return gpuPercent;}

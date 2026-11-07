@@ -250,6 +250,20 @@ final class PerfHudMetrics {
     }
 
     /**
+     * Qualcomm/Adreno GPU clock ratio fallback when kernel busy counter is unhooked.
+     * Ratio of cur_clock / max_clock scaled to 0..100%.
+     */
+    static int gpuClockRatio(String curClockText, String maxClockText) {
+        if (curClockText == null || maxClockText == null) return INVALID;
+        try {
+            long cur = Long.parseLong(curClockText.trim());
+            long max = Long.parseLong(maxClockText.trim());
+            if (max <= 0 || cur <= 0) return INVALID;
+            return (int)Math.max(0, Math.min(100, cur * 100 / max));
+        } catch (NumberFormatException ignored) { return INVALID; }
+    }
+
+    /**
      * 持久化位置校验（design D4 / spec「异常位置数据不致丢失 HUD」）：
      * 缺失（null）、NaN/Infinity 或完全出屏 → 回退默认位置（右上角）；
      * 其余按可视范围夹紧，保证 HUD 永远可见、可拖回。返回 {x, y}。
