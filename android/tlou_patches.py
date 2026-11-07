@@ -326,11 +326,13 @@ def selected_options(options, profile="01.00"):
         raise ValueError("Resolução não suportada")
     selected = {}
     if resolution != "original":
-        if profile != "01.00":
-            # 01.11 scene/UI/post-process/aim offsets are different. Guard
-            # against accidentally applying the verified 01.00 layout.
-            raise ValueError("Patch de resolução 01.11 ainda não validado; selecione Original")
-        selected["resolution-" + resolution] = scene_aim_resolution_patches(resolution)
+        if profile == "01.00":
+            selected["resolution-" + resolution] = scene_aim_resolution_patches(resolution)
+        else:
+            # 01.11 scene/UI/post-process/aim offsets are different. Do not
+            # crash preparation when the UI defaults to 720p; keep native
+            # resolution in eboot and apply all verified 01.11 effect patches.
+            print("Perfil 01.11: mantendo resolução nativa no executável; aplicando patches de estabilidade e efeitos.", flush=True)
     effects = PERFORMANCE_EFFECTS if profile == "01.00" else PERFORMANCE_EFFECTS_111
     for name, changes in effects.items():
         if type(options.get(name, False)) is not bool:
