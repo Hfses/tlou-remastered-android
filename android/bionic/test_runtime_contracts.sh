@@ -134,7 +134,16 @@ if grep -Fq 'EligibleBalanced(' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/v
     echo 'ERROR: discarded Balanced geometry synchronization was reintroduced' >&2
     exit 1
 fi
-grep -Fq 'env.put("GOW3_ASYNC_READBACK","1");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+# Global readback page protection was deliberately removed in the Android
+# profile: each physics/EOP result still has its own mandatory protection,
+# with Full geometry synchronization and Readback 1 unchanged.
+grep -Fq 'env.remove("GOW3_ASYNC_READBACK");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java
+if grep -Fq 'env.put("GOW3_ASYNC_READBACK","1");' android-launcher/app/src/main/java/ro/cobrabm/fexdroid/PortSettings.java; then
+    echo 'ERROR: global protection unexpectedly reenabled in Android profile' >&2
+    exit 1
+fi
+grep -Fq 'buffer_cache.DownloadRangesAsync(eop_readbacks, true, true);' gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_rasterizer.cpp
+grep -Fq 'if (!never_protect && (SafeReadbacks() || protect))' gow3_pc/gpu/shadps4/video_core/buffer_cache/buffer_cache.cpp
 
 # CUSA00552 01.00: do not regress to the PC-only hash/stride fallback or
 # accidentally enable Readback 2 to compensate for stale physics results.
