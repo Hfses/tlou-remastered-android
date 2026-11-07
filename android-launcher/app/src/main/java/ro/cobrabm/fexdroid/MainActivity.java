@@ -27,7 +27,7 @@ import java.util.concurrent.Executors;
 /** TLOU launcher: PKG or extracted game -> automatic on-device preparation. */
 public final class MainActivity extends Activity {
     private static final int PICK_GAME=501, PICK_DRIVER=502, PICK_PKG=503, PICK_DEST=504, SAVE_LOGS=505, IMPORT_SAVES=506, EXPORT_SAVES=507,
-        PICK_UPDATE_PKG=508, PICK_UPDATE_FOLDER=509, PICK_UPDATE_DEST=510;
+        PICK_UPDATE_PKG=508, PICK_UPDATE_FOLDER=509;
     private static final int BACKGROUND=0xff101613, PANEL=0xff1b2520, TEXT=0xffe7e9df, MUTED=0xffa6b0a4, ACCENT=0xffc2cf96;
     private SharedPreferences prefs;
     private TextView gameInfo, driverInfo, status, permission;
@@ -37,7 +37,7 @@ public final class MainActivity extends Activity {
     private boolean busy;
     private String currentTab="home";
     private Runnable afterPermission;
-    private Uri pendingPkg, pendingUpdatePkg;
+    private Uri pendingPkg;
     private InstallTools tools;
     private boolean directLaunchConsumed;
     private boolean firstRunDialogShown;
@@ -56,7 +56,6 @@ public final class MainActivity extends Activity {
         // Keep paths chosen in the first experimental APK.
         if (!prefs.contains("game_path")) prefs.edit().putString("game_path",getPreferences(0).getString("prepared_path","")).apply();
         if (saved!=null && saved.getString("pending_pkg")!=null) pendingPkg=Uri.parse(saved.getString("pending_pkg"));
-        if (saved!=null && saved.getString("pending_update_pkg")!=null) pendingUpdatePkg=Uri.parse(saved.getString("pending_update_pkg"));
         tools=new InstallTools(this);
         getWindow().setStatusBarColor(BACKGROUND);
         getWindow().setNavigationBarColor(BACKGROUND);
@@ -246,12 +245,7 @@ public final class MainActivity extends Activity {
                 new String[]{"30 FPS","60 FPS"},
                 new String[]{"30","60"},"60");
             toggleSetting(video,"vsync","VSync",true);
-            choice(video,"render_path","Método de resolução (requer reiniciar o jogo)",
-                new String[]{"Unificado: jogo, interface e mira na resolução escolhida",
-                             "Compatibilidade: interface 1080p (proxies Vulkan)"},
-                new String[]{"guest","proxy"},"guest");
-            video.addView(text("O modo Unificado mantém cena e interface na mesma resolução; a decodificação dos vídeos não muda. "
-                +"Compatibilidade mantém a composição da interface em 1080p.",12,MUTED));
+            video.addView(text("Modo Unificado padrão: jogo, interface e mira na mesma resolução. Vídeos mantêm a decodificação original.",12,MUTED));
             video.addView(text("Sincronização da geometria: Completo (único modo). "
                 +"Correção de deformações mantida sem opções que não melhoraram o FPS.",12,MUTED));
             LinearLayout drivers=card(root,"DRIVER VULKAN");
@@ -346,8 +340,20 @@ public final class MainActivity extends Activity {
         });
     }
 
-    private void installGameUpdatePkg(File pkg,File parent) {
+    private File automaticUpdateDestination(File game) throws IOException {
+        // Use the existing game library as the extraction parent: updating a
+        // game must never require a second folder-picker interaction.
+        File parent=game.getCanonicalFile().getParentFile();
+        if(parent != null && parent.isDirectory() && parent.canWrite())return parent;
+        File fallback=getExternalFilesDir("game-updates");
+        if(fallback==null || (!fallback.isDirectory()&&!fallback.mkdirs()) || !fallback.canWrite())
+            throw new IOException("Sem uma pasta gravável para extrair o PKG de atualização.");
+        return fallback.getCanonicalFile();
+    }
+
+    private void installGameUpdatePkg(File pkg) {
         task("Extraindo e aplicando atualização…",()->{
+            File parent=automaticUpdateDestination(baseForUpdate());
             File game=baseForUpdate();
             File destination=parent.getCanonicalFile();
             File prepared=new File(getFilesDir(),"tlou-prepared").getCanonicalFile();
@@ -541,12 +547,10 @@ public final class MainActivity extends Activity {
         else if(access()&&!prefs.getBoolean("onboarding_seen",false)&&!firstRunDialogShown)showFirstRunSetup();}
     @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);
         if(pendingPkg!=null)state.putString("pending_pkg",pendingPkg.toString());
-        if(pendingUpdatePkg!=null)state.putString("pending_update_pkg",pendingUpdatePkg.toString());
     }
     @Override protected void onActivityResult(int code,int result,Intent data){
         super.onActivityResult(code,result,data);if(result!=RESULT_OK||data==null||data.getData()==null){
             if(code==PICK_DEST)pendingPkg=null;
-            if(code==PICK_UPDATE_DEST)pendingUpdatePkg=null;
             return;
         }Uri uri=data.getData();
         try{getContentResolver().takePersistableUriPermission(uri,data.getFlags()&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION));}catch(Exception ignored){}
@@ -572,15 +576,8 @@ public final class MainActivity extends Activity {
             else if(code==PICK_DEST&&pendingPkg!=null){Uri pkg=pendingPkg;pendingPkg=null;installPkg(local(pkg,false),local(uri,true));}
             else if(code==PICK_UPDATE_FOLDER){baseForUpdate();applyGameUpdate(local(uri,true));}
             else if(code==PICK_UPDATE_PKG){
-                baseForUpdate();pendingUpdatePkg=uri;
-                new AlertDialog.Builder(this).setTitle("Destino da atualização")
-                    .setMessage("Escolha onde extrair o PKG, fora da pasta do jogo base. A atualização será montada sem apagar arquivos ou saves.")
-                    .setPositiveButton("Escolher destino",(d,w)->pickFolder(PICK_UPDATE_DEST))
-                    .setNegativeButton(TlouLanguage.t(this,"Cancelar"),(d,w)->pendingUpdatePkg=null).show();
-            }
-            else if(code==PICK_UPDATE_DEST&&pendingUpdatePkg!=null){
-                Uri pkg=pendingUpdatePkg;pendingUpdatePkg=null;
-                installGameUpdatePkg(local(pkg,false),local(uri,true));
+                baseForUpdate();
+                installGameUpdatePkg(local(uri,false));
             }
         }catch(Exception e){alert("Seleção",e.getMessage());}
     }

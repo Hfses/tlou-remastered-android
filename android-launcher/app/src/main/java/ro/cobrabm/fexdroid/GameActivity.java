@@ -302,6 +302,22 @@ public final class GameActivity extends Activity {
             env.put("GOW3_FSR1","0");
             env.put("GOW3_RCAS","0");
             PortSettings.environment(this,env);
+            // TLOU 01.11 interprets the reported 5056 MiB retail+debug pool
+            // as a devkit and reserves an EXTRA 768 MiB (the supplied device
+            // log fails here). Present the verified retail 4608 MiB size while
+            // preserving the full host backing pool and map layout.
+            File ready=new File(base,"device-ready.json");
+            if(ready.isFile()) {
+                org.json.JSONObject profile=new org.json.JSONObject(new String(
+                    Files.readAllBytes(ready.toPath()),StandardCharsets.UTF_8));
+                String gameVersion=profile.optString("update_version","");
+                if(gameVersion.isEmpty()||"null".equals(gameVersion))
+                    gameVersion=profile.optString("version","");
+                if("01.11".equals(gameVersion)){
+                    env.put("GOW3_DMEM_REPORT_MB","4608");
+                    RunLog.write(this,"TLOU 01.11: retail direct memory reported=4608 MiB (pool capacity unchanged)");
+                }
+            }
             RunLog.write(this,PortSettings.experimentReport(this,env));
             String driver=getSharedPreferences("tlou",MODE_PRIVATE).getString("driver_path", "");
             if(!driver.isEmpty()) {

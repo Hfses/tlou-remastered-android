@@ -30,6 +30,8 @@ final class PortSettings {
             "compute_wait_fast","relaxed_skinning_fp"}) edit.remove(key);
         String limit=prefs(context).getString("fps_limit","60");
         if(!"30".equals(limit) && !"60".equals(limit))edit.putString("fps_limit","60");
+        // The proxy/compatibility renderer was retired. Ignore old saved choices.
+        edit.remove("render_path");
         edit.apply();
     }
 
@@ -45,8 +47,7 @@ final class PortSettings {
         // and original 1080p, NOT the proxy fallback in this build.
         // Never silently change the saved resolution.
         final String resolution=p.getString("resolution","original");
-        final boolean proxy="proxy".equals(p.getString("render_path","guest"));
-        options.put("resolution",proxy?"original":resolution);
+        options.put("resolution",resolution);
         // Xiaomi 23049PCD8G reported a real HALT after 806 seconds. The
         // OnePlus CPH2691 reported only a "long job" warning and a later
         // SIGTERM on user exit; it is NOT evidence of a guest deadlock.
@@ -69,53 +70,28 @@ final class PortSettings {
     static void environment(Context context,Map<String,String> env) {
         SharedPreferences p=prefs(context);
         String resolution=p.getString("resolution","original");
-        // Direct game mode: scene, gameplay HUD, crosshair and depth all
-        // use the selected resolution. The game's full/half post targets
-        // also follow this resolution, while the source movie decoding stays
-        // untouched. No extra Vulkan 720p->1080p HUD composition is inserted.
-        // "proxy" remains a separate optional compatibility method.
+        // The proven unified path is mandatory: no legacy proxy/composite mode.
+        // Keep the original movie decoder, scale scene/HUD/aim as one domain.
         final String scaledPreset=resolution.equals("720")?"1":
             resolution.equals("540")?"3":resolution.equals("360")?"4":null;
-        final String renderPath=p.getString("render_path","guest");
-        final boolean proxy="proxy".equals(renderPath);
         env.put("TLOU_EXPECT_SCENE_SIZE","1920x1080");
         env.put("GOW3_UPSCALER","off");
         env.put("GOW3_OUTPUT_RES","1920x1080");
+        env.remove("GOW3_RENDER_RES");
+        env.remove("GOW3_UPSCALE_PRESET");
+        env.remove("TLOU_SPATIAL_SCENE");
+        env.remove("TLOU_HOST_SCENE_MODE");
         if(scaledPreset!=null) {
             final String actualSize=resolution.equals("720")?"1280x720":
                 resolution.equals("540")?"960x540":"640x360";
+            env.put("TLOU_UNIFIED_GUEST_UI","1");
+            env.put("TLOU_EXPECT_SCENE_SIZE",actualSize);
             env.put("TLOU_EXPECT_HOST_SCENE",actualSize);
-            if(proxy) {
-                env.remove("GOW3_RENDER_RES");
-                env.remove("TLOU_UNIFIED_GUEST_UI");
-                env.remove("GOW3_MOVIE_SIZE");
-                env.put("GOW3_UPSCALE_PRESET",scaledPreset);
-                env.put("TLOU_SPATIAL_SCENE","1");
-                env.put("TLOU_HOST_SCENE_MODE","1");
-            } else {
-                // Scene/HUD/aim are patched to the same actualSize in eboot.
-                // Deliberately do not request any guest upscaler: that was
-                // forcing a second 1920x1080 HUD attachment and mixing it
-                // with 720p scene depth even with FSR temporal switched off.
-                env.remove("GOW3_RENDER_RES");
-                env.remove("GOW3_UPSCALE_PRESET");
-                env.remove("TLOU_SPATIAL_SCENE");
-                env.remove("TLOU_HOST_SCENE_MODE");
-                env.put("TLOU_UNIFIED_GUEST_UI","1");
-                env.put("TLOU_EXPECT_SCENE_SIZE",actualSize);
-                // Video-only NV12 adaptation: decoder stays native 1080p,
-                // while the movie's Y+UV sampling planes use the display's
-                // 720p layout. This flag is ignored by every gameplay shader.
-                env.put("GOW3_MOVIE_SIZE",actualSize);
-            }
+            env.put("GOW3_MOVIE_SIZE",actualSize);
         } else {
-            env.remove("GOW3_RENDER_RES");
             env.remove("TLOU_UNIFIED_GUEST_UI");
             env.remove("GOW3_MOVIE_SIZE");
-            env.remove("TLOU_SPATIAL_SCENE");
-            env.remove("TLOU_HOST_SCENE_MODE");
             env.remove("TLOU_EXPECT_HOST_SCENE");
-            env.remove("GOW3_UPSCALE_PRESET");
         }
 
         // Exact flags observed in launch.log of TLOU-Android-Logs (32).zip.
