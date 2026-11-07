@@ -749,6 +749,15 @@ void Scheduler::SubmitExecution(SubmitInfo& info) {
         vk::PipelineStageFlagBits::eAllCommands,
     };
     static_assert(wait_stage_masks.size() == SubmitInfo{}.wait_semas.size());
+    if (info.num_wait_semas > 2) {
+        // Only the exceptional case that previously read past the stage-mask
+        // table. Do not turn on per-submit logging in the normal draw path.
+        static std::atomic<u32> unusual_waits_reported{0};
+        if (unusual_waits_reported.fetch_add(1, std::memory_order_relaxed) < 8) {
+            std::printf("GPU submit: %u wait semaphores (four-mask safety path)\n",
+                        info.num_wait_semas);
+        }
+    }
 
     const vk::TimelineSemaphoreSubmitInfo timeline_si = {
         .waitSemaphoreValueCount = info.num_wait_semas,
