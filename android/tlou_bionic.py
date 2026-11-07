@@ -26,7 +26,11 @@ VERIFIED_SELF_111 = {
     "31f3b0d120803878d10a7184d139c545de334394dd7dd6ca6058a7c995e484a7",
 }
 VERIFIED_TLOU_SELFS = frozenset({VERIFIED_SELF_SHA256} | VERIFIED_SELF_111)
-REGIONAL_TITLES = {"CUSA00552", "CUSA00556", "CUSA00557", "CUSA00559"}
+# PC port v0.1.6 (2026-11-04) explicitly added the Japanese CUSA00554
+# alongside 00556 and 00557. This is only a metadata ALLOWLIST: other
+# regional executables still require an exact approved SELF SHA-256 and
+# byte-by-byte patch validation before they can be launched.
+REGIONAL_TITLES = {"CUSA00552", "CUSA00554", "CUSA00556", "CUSA00557", "CUSA00559"}
 _BOOT_FILES = ("eboot.bin", "sce_sys/param.sfo", "sce_module/libc.prx")
 
 
