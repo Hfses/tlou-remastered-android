@@ -178,7 +178,13 @@ final class PortSettings {
         env.put("GOW3_CPU_TRIMS","1");
         env.put("GOW3_PREFETCH_PIPELINES","1");
         env.put("GOW3_PARALLEL_PIPELINES","1");
-        env.put("GOW3_PREP_WORKERS","0");
+        // Real, bounded pipeline parallelism. Auto=4 workers plus the SCHED_IDLE
+        // scanner previously regressed; use two workers and a scanner at normal
+        // scheduler priority, without changing FEX/critical-thread affinity.
+        // Prepared draw state is only consumed after Ready+checksum validation.
+        env.put("GOW3_PREP_WORKERS","2");
+        env.put("TLOU_PREP_NORMAL_PRIORITY","1");
+        env.put("TLOU_PREP_HIT_STATS","1");
         env.put("GOW3_DEFERRED_READBACK","0");
         env.put("GOW3_STALE_READBACK","0");
 
