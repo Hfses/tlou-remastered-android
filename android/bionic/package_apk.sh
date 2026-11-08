@@ -81,7 +81,7 @@ gradle -p "$root/android-launcher" :app:assembleRelease --no-daemon --max-worker
 unsigned="$root/android-launcher/app/build/outputs/apk/release/app-release-unsigned.apk"
 [[ -s "$unsigned" ]] || { echo "Gradle did not produce an unsigned APK" >&2; exit 2; }
 aligned="$out/tlou-release-aligned.apk"
-apk="$root/out/release/TheLastOfUsRemastered-Android-v0.1-arm64.apk"
+apk="$root/out/release/TheLastOfUsRemastered-Android-v0.1.1-arm64.apk"
 "$android_tools/zipalign" -f -p 4 "$unsigned" "$aligned"
 key="$out/experimental-development.jks"
 # A different key would make updates impossible. Never regenerate a release key.
