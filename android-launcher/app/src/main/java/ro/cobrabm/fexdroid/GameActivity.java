@@ -415,7 +415,7 @@ public final class GameActivity extends Activity {
         if(playerMenu!=null && playerMenu.isShowing())return;
         touch.release();pad.reset(); // release held inputs; keep the controller/provider connected
         playerMenu=new PortMenu(this,true,new PortMenu.Actions(){
-            public void logs(){showLog();}public void exportLogs(){}public void chooseGame(){}public void installPkg(){}
+            public void logs(){showLog();}public void exportLogs(){GameActivity.this.exportLogs();}public void chooseGame(){}public void installPkg(){}
             public void importDriver(){}public void selectDriver(){}
             public void editControls(){editingControls=true;touch.setVisibility(View.VISIBLE);touch.setAlpha(.9f);touch.edit(()->{editingControls=false;applyLiveSettings();});}
             public void resetControls(){touch.resetLayout();applyLiveSettings();}
@@ -442,10 +442,26 @@ public final class GameActivity extends Activity {
 
     private String tailLog() { return RunLog.tail(RunLog.runtime(this),12000); }
 
+    private static final int EXPORT_LOGS_REQUEST=811;
     private void showLog() {
-        android.widget.ScrollView scroll=new android.widget.ScrollView(this);
-        TextView text=new TextView(this);text.setText(RunLog.summary(this));text.setTextIsSelectable(true);text.setTextSize(12);text.setPadding(24,16,24,16);scroll.addView(text);
-        new AlertDialog.Builder(this).setTitle(TlouLanguage.t(this,"TLOU — logs")).setView(scroll).setPositiveButton(TlouLanguage.t(this,"Fechar"),null).show();
+        TlouDialogs.showLogs(this,RunLog.summary(this),this::exportLogs);
+    }
+    private void exportLogs() {
+        android.content.Intent save=new android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT);
+        save.setType("application/zip");
+        save.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        save.putExtra(android.content.Intent.EXTRA_TITLE,"TLOU-Android-Logs.zip");
+        startActivityForResult(save,EXPORT_LOGS_REQUEST);
+    }
+    @Override protected void onActivityResult(int code,int resultCode,android.content.Intent data) {
+        super.onActivityResult(code,resultCode,data);
+        if(code!=EXPORT_LOGS_REQUEST || resultCode!=RESULT_OK || data==null || data.getData()==null)return;
+        try(java.io.OutputStream output=getContentResolver().openOutputStream(data.getData())) {
+            if(output==null)throw new IOException("Destino indisponível");
+            RunLog.export(this,output);
+        } catch(Exception error) {
+            android.widget.Toast.makeText(this,"Falha ao exportar logs: "+error.getMessage(),android.widget.Toast.LENGTH_LONG).show();
+        }
     }
 
     private void stopAndExit() { stopAndExit(false); }
