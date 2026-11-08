@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression: recover the proven 01.11 two-worker prep mode; preserve 01.00."""
+"""Release contract: all game versions use the zero-worker preparation policy."""
 import pathlib
 import unittest
 
@@ -10,16 +10,15 @@ DRAW = ROOT / "gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_draw_prep.cpp"
 RASTER = ROOT / "gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_rasterizer.cpp"
 
 class VersionedPreparationRegressions(unittest.TestCase):
-    def test_old_working_111_policy_is_scoped_to_exact_prepared_game_version(self):
+    def test_update_111_preserves_global_zero_worker_default(self):
         game=GAME.read_text(encoding="utf-8")
         settings=SETTINGS.read_text(encoding="utf-8")
         guarded=game.index('if("01.11".equals(gameVersion)){')
         end=game.index('env.put("GOW3_DMEM_REPORT_MB","4608");',guarded)
         body=game[guarded:end]
-        self.assertEqual(game.count('env.put("GOW3_PREP_WORKERS","2");'),1)
-        self.assertEqual(game.count('env.put("TLOU_PREP_NORMAL_PRIORITY","1");'),1)
-        self.assertIn('env.put("GOW3_PREP_WORKERS","2");',body)
-        self.assertIn('env.put("TLOU_PREP_NORMAL_PRIORITY","1");',body)
+        self.assertNotIn('GOW3_PREP_WORKERS', body)
+        self.assertNotIn('TLOU_PREP_NORMAL_PRIORITY', body)
+        self.assertNotIn('env.put("GOW3_PREP_WORKERS","2");',game)
         self.assertIn('env.put("GOW3_PREP_WORKERS","0");',settings)
         self.assertIn('env.remove("TLOU_PREP_NORMAL_PRIORITY");',settings)
         self.assertIn('env.remove("TLOU_PREP_HIT_STATS");',settings)
@@ -27,12 +26,9 @@ class VersionedPreparationRegressions(unittest.TestCase):
         self.assertIn('env.put("GOW3_EOP_READBACK","1");',settings)
         self.assertIn('env.put("TLOU_AUTO_SMALL_CS_READBACK","2");',settings)
         self.assertIn('env.put("GOW3_PREP_POOL","1");',settings)
-        # The working comparison has no frame-in-flight override: isolate
-        # this one measured configuration difference from new experiments.
         self.assertNotIn('env.put("GOW3_FRAMES_IN_FLIGHT"',game)
-        self.assertNotIn('env.put("GOW3_FRAMES_IN_FLIGHT"',settings)
 
-    def test_preparation_is_bounded_checksums_and_normal_priority(self):
+    def test_preparation_stays_ordered_and_checksum_guarded(self):
         draw=DRAW.read_text(encoding="utf-8")
         raster=RASTER.read_text(encoding="utf-8")
         self.assertIn('std::getenv("GOW3_PREP_WORKERS")',draw)

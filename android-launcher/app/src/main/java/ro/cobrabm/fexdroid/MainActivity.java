@@ -177,21 +177,32 @@ public final class MainActivity extends Activity {
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);
         TextView brand=text("DAEDALUS  /  ANDROID",12,ACCENT);brand.setLetterSpacing(.14f);
         header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
-        TextView version=text("v0.1",13,ACCENT);
+        TextView version=text("v"+TlouDialogs.version(this),13,ACCENT);
         version.setGravity(Gravity.RIGHT);header.addView(version,new LinearLayout.LayoutParams(dp(60),-2));
         root.addView(header);
         if(currentTab.equals("home")) {
             // The hero is bundled with the APK: shown immediately and offline,
             // like the other Daedalus game launchers.
+            // Keep the original hero image but cover its legacy "v0.1" mark with
+            // the actual installed APK version (prevents mismatches on upgrades).
+            FrameLayout artFrame=new FrameLayout(this);
+            artFrame.setBackground(background(PANEL));
+            artFrame.setClipToOutline(true);
             ImageView hero=new ImageView(this);
             hero.setImageResource(R.drawable.tlou_hero);
             hero.setContentDescription("The Last of Us Remastered");
             hero.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            hero.setBackground(background(PANEL));
-            hero.setClipToOutline(true);
+            artFrame.addView(hero,new FrameLayout.LayoutParams(-1,-1));
+            TextView artVersion=text("v"+TlouDialogs.version(this),11,TEXT);
+            artVersion.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
+            artVersion.setBackgroundColor(0xff101613);
+            artVersion.setPadding(dp(9),dp(2),dp(9),dp(4));
+            FrameLayout.LayoutParams artBadge=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.RIGHT);
+            artBadge.setMargins(0,dp(4),dp(5),0);
+            artFrame.addView(artVersion,artBadge);
             LinearLayout.LayoutParams art=new LinearLayout.LayoutParams(-1,dp(210));
             art.topMargin=dp(8);art.bottomMargin=dp(13);
-            root.addView(hero,art);
+            root.addView(artFrame,art);
         } else {
             TextView title=text("THE LAST OF US",34,TEXT);
             title.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));root.addView(title);
