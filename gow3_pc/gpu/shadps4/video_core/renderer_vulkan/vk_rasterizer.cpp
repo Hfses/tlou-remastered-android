@@ -1568,34 +1568,75 @@ void Rasterizer::NotePendingGpuWrite(VAddr address, u64 size) {
             pending_copy_writes.push_back({address, end, copy_position});
         }
     }
-    // gow3 31 Oct 2026: 9% of the GPU command thread in a heavy area was this walk. A range no
-    // pending write can touch skips it (one that only touches an entry across a granule stays a
-    // new entry, which is harmless), and the walk starts at the entry found last.
-    const u32 count = PendingFilterHit(address, end)
-                          ? static_cast<u32>(pending_writes.size())
-                          : 0;
-    const u32 first = pending_hint < count ? pending_hint : 0;
-    for (u32 step = 0; step < count; ++step) {
-        const u32 i = first + step < count ? first + step : first + step - count;
+    // A pending output range is often repeated by successive compute dispatches.
+    // Reusing a previously found interval avoids the 64 KiB bloom walk and the
+    // search through the pending vector. For multiple overlapping intervals the
+    // indexed lookup must select the SAME cyclic-first candidate as the old scan.
+    // GOW3_PENDING_WRITE_INDEX=0 restores the original algorithm for A/B tests.
+    static const bool indexed = [] {
+        const char* env = std::getenv("GOW3_PENDING_WRITE_INDEX");
+        return !(env && env[0] == '0');
+    }();
+    const auto merge = [&](u32 i) {
         auto& write = pending_writes[i];
-        if (address <= write.end && write.begin <= end) {
-            pending_hint = i;
-            write.begin = std::min(write.begin, address);
-            write.end = std::max(write.end, end);
-            write.position = position;
-            pending_min = std::min(pending_min, address);
-            pending_max = std::max(pending_max, end);
+        const bool covered = Detail::PendingWriteAlreadyCovered(write, address, end);
+        pending_hint = i;
+        write.begin = std::min(write.begin, address);
+        write.end = std::max(write.end, end);
+        write.position = position;
+        pending_min = std::min(pending_min, address);
+        pending_max = std::max(pending_max, end);
+        // If the old range already covered the new one, all its filter bits
+        // are already set (including after a pruning rebuild). Otherwise
+        // publish the expanded spatial membership and filter bits.
+        if (indexed && !covered) {
+            pending_write_index.Set(i, write);
+        }
+        if (!indexed || !covered) {
             FilterPendingRange(address, end);
-            if (uncommitted) {
-                uncommitted_indices.push_back(i);
-            }
+        }
+        if (uncommitted) {
+            uncommitted_indices.push_back(i);
+        }
+    };
+    // The legacy 64 KiB bloom check is authoritative. It excludes some
+    // adjacent writes that touch exactly at a window boundary; bypassing it
+    // would merge intervals that the original code intentionally kept apart.
+    const u32 count = PendingFilterHit(address, end)
+                          ? static_cast<u32>(pending_writes.size()) : 0;
+    if (indexed && count &&
+        Detail::PendingWriteHintOverlaps(pending_writes, pending_hint, address, end)) {
+        merge(pending_hint);
+        return;
+    }
+    if (indexed && pending_write_index.CanQuery(count)) {
+        if (const auto hit = pending_write_index.FirstOverlap(pending_writes, pending_hint,
+                                                               address, end)) {
+            merge(*hit);
             return;
+        }
+        // With <=2048 entries every interval is in the index: no match means
+        // the original full scan would find none. Hash collisions are harmless.
+    } else {
+        const u32 candidates = count;
+        const u32 first = pending_hint < candidates ? pending_hint : 0;
+        for (u32 step = 0; step < candidates; ++step) {
+            const u32 i = first + step < candidates ? first + step
+                                                    : first + step - candidates;
+            auto& write = pending_writes[i];
+            if (address <= write.end && write.begin <= end) {
+                merge(i);
+                return;
+            }
         }
     }
     if (uncommitted) {
         uncommitted_indices.push_back(static_cast<u32>(pending_writes.size()));
     }
     pending_writes.push_back({address, end, position});
+    if (indexed) {
+        pending_write_index.Set(pending_writes.size() - 1, pending_writes.back());
+    }
     pending_min = std::min(pending_min, address);
     pending_max = std::max(pending_max, end);
     FilterPendingRange(address, end);
@@ -1674,9 +1715,15 @@ bool Rasterizer::PendingWriteOverlaps(VAddr address, u64 size) {
     // Now and then drop entries whose writes the recording thread has done: the bounds shrink.
     // (Not while PostDraw notes a packet: uncommitted_indices point into the vector.)
     if ((++pending_checks & 63) == 0 && uncommitted_indices.empty()) {
+        const size_t before_erase = pending_writes.size();
         std::erase_if(pending_writes, [&](const PendingWrite& write) {
             return draw_pipe->Reached(write.position);
         });
+        // Erasing shifts vector indices. Rebuild only when at least one
+        // interval was removed; a no-op pruning pass must remain cheap.
+        if (before_erase != pending_writes.size()) {
+            pending_write_index.Rebuild(pending_writes);
+        }
         pending_min = ~VAddr{0};
         pending_max = 0;
         pending_filter.fill(0);
@@ -1691,6 +1738,20 @@ bool Rasterizer::PendingWriteOverlaps(VAddr address, u64 size) {
     // command thread in The Last of Us, a check per read-only constant buffer).
     if (!PendingFilterHit(address, end)) {
         return false;
+    }
+    // For large sets, use the same spatial index maintained by
+    // NotePendingGpuWrite. It answers the strictly-overlapping, not-yet-
+    // recorded predicate without walking all pending writes on every
+    // read-only constant in the hot ring path. Below 128 entries the
+    // original linear scan is cheaper; above 2048 it is the fallback.
+    static const bool indexed = [] {
+        const char* env = std::getenv("GOW3_PENDING_WRITE_INDEX");
+        return !(env && env[0] == '0');
+    }();
+    if (indexed && pending_write_index.CanQueryLive(pending_writes.size())) {
+        return pending_write_index.AnyLiveOverlap(
+            pending_writes, address, end,
+            [this](const PendingWrite& write) { return !draw_pipe->Reached(write.position); });
     }
     for (const auto& write : pending_writes) {
         if (address < write.end && write.begin < end && !draw_pipe->Reached(write.position)) {
@@ -1761,7 +1822,16 @@ void Rasterizer::CollectRingBindings(const Shader::Info& stage, const PreparedDr
         } else {
             memory->CopySparseMemory(address, dst, size);
         }
-        constant_ring->Flush(*offset, size);
+        // The batch path flushes all packet snapshots once, before the
+        // draw pipe publishes the packet to the Vulkan recording thread.
+        // A/B fallback preserves the original per-buffer flush behavior.
+        static const bool batch_flush = [] {
+            const char* env = std::getenv("GOW3_RING_BATCH_FLUSH");
+            return !(env && env[0] == '0');
+        }();
+        if (!batch_flush) {
+            constant_ring->Flush(*offset, size);
+        }
         if (LateConstantsEnabled()) {
             // gow3 21 Oct 2026: checked at the submission of this draw (its ring position).
             const u64 due = constant_ring->Position();
@@ -1790,7 +1860,21 @@ void Rasterizer::CollectRingBindings(const Shader::Info& stage, const PreparedDr
         if (address == 0 || vsharp.GetSize() == 0) {
             continue;
         }
-        const u64 size = memory->ClampRangeSize(address, vsharp.GetSize());
+        // Stage A only snapshots read-only V# ranges of at most 16KiB.
+        // For larger declarations, scanning guest VMAs beyond the first
+        // 16KiB+1 is wasted: a mapped prefix longer than the stream limit
+        // will not be copied, while any shorter contiguous prefix is
+        // identical to the original full-size clamp. Written bindings
+        // still require the EXACT full extent for pending-write tracking.
+        const u64 raw_size = vsharp.GetSize();
+        static const bool clamp_cap = [] {
+            const char* env = std::getenv("GOW3_RING_CLAMP_CAP");
+            return !(env && env[0] == '0');
+        }();
+        const u64 query_size = !desc.is_written && clamp_cap
+            ? std::min<u64>(raw_size, VideoCore::BufferCache::STREAM_THRESHOLD + 1)
+            : raw_size;
+        const u64 size = memory->ClampRangeSize(address, query_size);
         if (desc.is_written) {
             NotePendingGpuWrite(address, size);
             continue;
@@ -1837,6 +1921,7 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
                             Shader::MaxStageTypes>
         rings;
     u32 num_stages = 0;
+    const u64 ring_batch_start = constant_ring ? constant_ring->Position() : 0;
     u32 size = sizeof(DrawPacket) + AlignPacket(num_blocks * sizeof(u16)) +
                num_blocks * AmdGpu::RegDirty::BlockWords * sizeof(u32);
     for (const auto* stage : stages) {
@@ -1861,6 +1946,17 @@ void Rasterizer::PostDraw(const Pipeline* pipeline, const PreparedDraw* used_pre
     }
     if (indirect) {
         size += AlignPacket(sizeof(IndirectDraw));
+    }
+    // Every ring snapshot was captured at its original point in guest
+    // command order. Flush non-coherent host memory once per packet before
+    // Stage B can observe any of its descriptor bindings; never defer the
+    // actual guest snapshot, only the host-to-device visibility barrier.
+    static const bool batch_ring_flush = [] {
+        const char* env = std::getenv("GOW3_RING_BATCH_FLUSH");
+        return !(env && env[0] == '0');
+    }();
+    if (constant_ring && batch_ring_flush) {
+        constant_ring->FlushPacket(ring_batch_start);
     }
     const u32 interval = VerifyInterval();
     const bool verify = interval && (draw_pipe->packets % interval) == 0;
