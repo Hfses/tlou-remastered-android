@@ -29,6 +29,7 @@
 #include "imgui/renderer/texture_manager.h"
 #include "video_core/renderer_vulkan/vk_instance.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
+#include "video_core/renderer_vulkan/tlou_deferred_signal_wait.h"
 #include "gow3_threads.h"
 
 namespace Vulkan {
@@ -205,6 +206,8 @@ void Scheduler::SignalAfterHostCopies(std::function<void()> signal) {
         Gow3Copy::AfterCopies([signal = std::move(signal), done = std::move(done)] {
             signal();
             done->fetch_add(1, std::memory_order_release);
+            // Wake target-sequence waiters without draining unrelated new copies.
+            done->notify_all();
         });
     });
     KickRecording(true);
@@ -277,11 +280,14 @@ void Scheduler::WaitDeferredSignals() {
     Gow3Stats::WaitTimer timer{Gow3Stats::host_copies_wait_ns};
     const auto start = std::chrono::steady_clock::now();
     KickRecording(true);
-    while (deferred_signals_done->load(std::memory_order_acquire) < issued) {
-        // Helps the copy threads the signals wait for.
-        Gow3Copy::WaitAsync();
-        std::this_thread::yield();
-    }
+    // The former WaitAsync() inside this loop waited for global pool IDLE,
+    // including host uploads queued *after* the requested fence. This was an
+    // unnecessary serial barrier in the 01.11 scenes that fell to 10-30 FPS.
+    // Wait only for the captured signal sequence. Workers execute copies
+    // independently; when workers are disabled we still help their queue.
+    Detail::WaitForDeferredSignal(*deferred_signals_done, issued,
+                                  Gow3Copy::Enabled(),
+                                  [] { Gow3Copy::WaitAsync(); });
     if (OrderWaitStatsEnabled()) {
         NoteOrderWait(0, start);
     }

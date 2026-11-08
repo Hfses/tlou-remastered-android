@@ -211,6 +211,16 @@ if grep -Fq '"2 · Preciso' android-launcher/app/src/main/java/ro/cobrabm/fexdro
     exit 1
 fi
 
+# Fence-order regression: waiting for an earlier signal cannot drain newer copy
+# epochs. The same helper must make progress with the copy worker pool disabled.
+g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread \
+  gow3_pc/tests/test_tlou_deferred_signal_wait.cpp -o "$test_dir/tlou-deferred-signal-wait"
+"$test_dir/tlou-deferred-signal-wait"
+grep -Fq 'Detail::WaitForDeferredSignal(*deferred_signals_done, issued,' \
+  gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_scheduler.cpp
+grep -Fq 'done->notify_all();' \
+  gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_scheduler.cpp
+
 # v0.31 opt-in paths: exact memory bytes, packet-local bindings and copy completion.
 cc -std=c11 -O2 -Wall -Wextra -Werror -pthread \
   gow3_pc/tests/test_memory_walk_cost.c -o "$test_dir/memory-walk"
