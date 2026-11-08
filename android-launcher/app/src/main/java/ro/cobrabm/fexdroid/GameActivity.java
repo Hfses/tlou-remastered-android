@@ -313,13 +313,18 @@ public final class GameActivity extends Activity {
                 if(gameVersion.isEmpty()||"null".equals(gameVersion))
                     gameVersion=profile.optString("version","");
                 if("01.11".equals(gameVersion)){
-                    // The desktop TLOU port runs one decoded frame in flight.
-                    // Android previously left this unset (native default 0),
-                    // synchronously idling the guest between submissions.
-                    // Keep 01.00 unchanged; the native retirement queue waits
-                    // for ordered draw/copy/fence completion and has bounded
-                    // 50/500ms deadlock fallback for guest-written waits.
-                    env.put("GOW3_FRAMES_IN_FLIGHT","1");
+                    // Regression A/B using the player's same CUSA00552 01.11
+                    // scene: the older 830v1 build with two normal-priority
+                    // draw-preparation workers/scanner held 59-60 FPS; the newer
+                    // Adreno 840 build with zero workers dropped to 38 FPS and
+                    // spent 1434 ms/5 s in host-copy waits (vs 130-171 ms).
+                    // Restore ONLY that known working 01.11 draw-prep policy.
+                    // Never enable it for 01.00, whose separate 2-worker tests
+                    // showed CPU contention and no FPS improvement.
+                    env.put("GOW3_PREP_WORKERS","2");
+                    env.put("TLOU_PREP_NORMAL_PRIORITY","1");
+                    // Do not mix in the unverified one-frame-in-flight change;
+                    // leave the guest submit scheduling at its original default.
                     // Movie-plane compatibility applies only to 01.11 with resized NV12.
                     if(env.containsKey("GOW3_MOVIE_SIZE"))
                         env.put("TLOU_MOVIE_111_LAYOUT","1");
