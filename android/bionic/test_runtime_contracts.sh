@@ -221,6 +221,10 @@ grep -Fq 'Detail::WaitForDeferredSignal(*deferred_signals_done, issued,' \
 grep -Fq 'done->notify_all();' \
   gow3_pc/gpu/shadps4/video_core/renderer_vulkan/vk_scheduler.cpp
 
+# Frame pipelining restored only for independently verified 01.11 updates.
+# The original 01.00 path and readback/FEX correctness remain unchanged.
+python3 android/tests/test_tlou_111_frame_in_flight.py
+
 # v0.31 opt-in paths: exact memory bytes, packet-local bindings and copy completion.
 cc -std=c11 -O2 -Wall -Wextra -Werror -pthread \
   gow3_pc/tests/test_memory_walk_cost.c -o "$test_dir/memory-walk"

@@ -313,6 +313,13 @@ public final class GameActivity extends Activity {
                 if(gameVersion.isEmpty()||"null".equals(gameVersion))
                     gameVersion=profile.optString("version","");
                 if("01.11".equals(gameVersion)){
+                    // The desktop TLOU port runs one decoded frame in flight.
+                    // Android previously left this unset (native default 0),
+                    // synchronously idling the guest between submissions.
+                    // Keep 01.00 unchanged; the native retirement queue waits
+                    // for ordered draw/copy/fence completion and has bounded
+                    // 50/500ms deadlock fallback for guest-written waits.
+                    env.put("GOW3_FRAMES_IN_FLIGHT","1");
                     // Movie-plane compatibility applies only to 01.11 with resized NV12.
                     if(env.containsKey("GOW3_MOVIE_SIZE"))
                         env.put("TLOU_MOVIE_111_LAYOUT","1");

@@ -188,6 +188,7 @@ final class PortSettings {
               .append(env.containsKey("TLOU_UNIFIED_GUEST_UI")?"unified-direct-no-ui-blit":
                       env.containsKey("TLOU_SPATIAL_SCENE")?"proxy-spatial-compat":"native");
         result.append("; temporal-fsr=off");
+        result.append("; frames-in-flight=").append(env.getOrDefault("GOW3_FRAMES_IN_FLIGHT","0"));
         result.append("; geometry-sync=full");
         result.append("; async-global-protect=").append(env.containsKey("GOW3_ASYNC_READBACK")?"on":"off");
         result.append("; geometry-sync policy=2 full only");
