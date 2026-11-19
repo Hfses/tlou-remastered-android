@@ -96,12 +96,21 @@ public final class MainActivity extends Activity {
         currentTab=tab;buildHome();
     }
     private void addTab(LinearLayout tabs,String title,String tab) {
-        TextView label=text(title,12,currentTab.equals(tab)?0xffe9efd9:MUTED);
-        label.setGravity(Gravity.CENTER);label.setTypeface(null,
-            currentTab.equals(tab)?Typeface.BOLD:Typeface.NORMAL);
-        GradientDrawable shape=new GradientDrawable();
-        shape.setColor(currentTab.equals(tab)?0xff3e4e36:0xff1b2520);
-        shape.setCornerRadius(dp(8));label.setBackground(shape);
+        boolean on=currentTab.equals(tab);
+        TextView label=text(title,12,on?ACCENT:MUTED);
+        label.setAllCaps(true);
+        label.setGravity(Gravity.CENTER);
+        label.setLetterSpacing(.12f);
+        label.setTypeface(Typeface.create("sans-serif-condensed",on?Typeface.BOLD:Typeface.NORMAL));
+        GradientDrawable fill=new GradientDrawable();
+        fill.setColor(on?0x1fc2cf96:0x00000000);
+        GradientDrawable line=new GradientDrawable();
+        line.setColor(on?ACCENT:0x22ffffff);
+        android.graphics.drawable.LayerDrawable shape=new android.graphics.drawable.LayerDrawable(
+            new android.graphics.drawable.Drawable[]{fill,line});
+        shape.setLayerGravity(1,Gravity.BOTTOM);
+        shape.setLayerHeight(1,dp(on?3:1));
+        label.setBackground(shape);
         label.setOnClickListener(v->selectTab(tab));
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(45),1);
         lp.setMargins(dp(2),0,dp(2),0);tabs.addView(label,lp);
@@ -180,6 +189,14 @@ public final class MainActivity extends Activity {
         TextView version=text("v"+TlouDialogs.version(this),13,ACCENT);
         version.setGravity(Gravity.RIGHT);header.addView(version,new LinearLayout.LayoutParams(dp(60),-2));
         root.addView(header);
+        // Keep navigation above the artwork, with PLAY immediately below the hero.
+        LinearLayout tabs=new LinearLayout(this);
+        tabs.setOrientation(LinearLayout.HORIZONTAL);
+        addTab(tabs,"Início","home");addTab(tabs,"Patches","patches");
+        addTab(tabs,"Ajustes","settings");addTab(tabs,"Sobre","about");
+        LinearLayout.LayoutParams tabLP=new LinearLayout.LayoutParams(-1,dp(45));
+        tabLP.bottomMargin=dp(12);root.addView(tabs,tabLP);
+
         if(currentTab.equals("home")) {
             // The hero is bundled with the APK: shown immediately and offline,
             // like the other Daedalus game launchers.
@@ -193,6 +210,11 @@ public final class MainActivity extends Activity {
             hero.setContentDescription("The Last of Us Remastered");
             hero.setScaleType(ImageView.ScaleType.CENTER_CROP);
             artFrame.addView(hero,new FrameLayout.LayoutParams(-1,-1));
+            // Fade artwork into the dark launcher background without obscuring the title.
+            View fade=new View(this);
+            fade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x00101613,0x00101613,0xcc101613,0xff101613}));
+            artFrame.addView(fade,new FrameLayout.LayoutParams(-1,-1));
             TextView artVersion=text("v"+TlouDialogs.version(this),11,TEXT);
             artVersion.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
             artVersion.setBackgroundColor(0xff101613);
@@ -200,9 +222,14 @@ public final class MainActivity extends Activity {
             FrameLayout.LayoutParams artBadge=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.RIGHT);
             artBadge.setMargins(0,dp(4),dp(5),0);
             artFrame.addView(artVersion,artBadge);
-            LinearLayout.LayoutParams art=new LinearLayout.LayoutParams(-1,dp(210));
-            art.topMargin=dp(8);art.bottomMargin=dp(13);
+            // Use the taller banner when space permits; preserve PLAY visibility on short screens.
+            int screenHeightDp=Math.round(getResources().getDisplayMetrics().heightPixels/
+                getResources().getDisplayMetrics().density);
+            int heroHeightDp=Math.min(260,Math.max(170,screenHeightDp/4));
+            LinearLayout.LayoutParams art=new LinearLayout.LayoutParams(-1,dp(heroHeightDp));
+            art.topMargin=dp(6);art.bottomMargin=dp(4);
             root.addView(artFrame,art);
+            playButton(root,()->withAccess(()->prepareSelected(true)));
         } else {
             TextView title=text("THE LAST OF US",34,TEXT);
             title.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));root.addView(title);
@@ -210,17 +237,9 @@ public final class MainActivity extends Activity {
             subtitle.setPadding(0,0,0,dp(14));root.addView(subtitle);
         }
 
-        LinearLayout tabs=new LinearLayout(this);
-        tabs.setOrientation(LinearLayout.HORIZONTAL);
-        addTab(tabs,"Início","home");addTab(tabs,"Patches","patches");
-        addTab(tabs,"Ajustes","settings");addTab(tabs,"Sobre","about");
-        LinearLayout.LayoutParams tabLP=new LinearLayout.LayoutParams(-1,dp(45));
-        tabLP.bottomMargin=dp(18);root.addView(tabs,tabLP);
-
         if(currentTab.equals("home")) {
             LinearLayout game=card(root,"SEU JOGO");
             gameInfo=text("",13,TEXT);gameInfo.setMaxLines(3);game.addView(gameInfo);
-            add(game,"JOGAR",true,()->withAccess(()->prepareSelected(true)));
             game.addView(text("PKG ou pasta extraída. Preparação automática no celular.",12,MUTED));
             add(game,"Escolher pasta do jogo",false,()->withAccess(()->pickFolder(PICK_GAME)));
             add(game,"Instalar por PKG",false,()->withAccess(()->pickFile(PICK_PKG)));
@@ -398,7 +417,19 @@ public final class MainActivity extends Activity {
     private TextView text(String message,int size,int color) {
         TextView t=new TextView(this); t.setText(TlouLanguage.t(this,message)); t.setTextSize(size); t.setTextColor(color); t.setPadding(0,dp(5),0,dp(7)); return t;
     }
-    private GradientDrawable background(int color) { GradientDrawable d=new GradientDrawable(); d.setColor(color); d.setCornerRadius(dp(12)); return d; }
+    private GradientDrawable background(int color) { GradientDrawable d=new GradientDrawable(); d.setColor(color); d.setCornerRadius(dp(12)); d.setStroke(dp(1),0x1fffffff); return d; }
+    /** Prominent launcher PLAY action directly below the home artwork. */
+    private void playButton(LinearLayout parent,Runnable action) {
+        Button b=new Button(this);b.setText(TlouLanguage.t(this,"JOGAR"));b.setAllCaps(true);
+        b.setTextSize(22);b.setLetterSpacing(.24f);b.setTextColor(BACKGROUND);
+        b.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
+        GradientDrawable shape=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{0xffd7e3a8,ACCENT,0xffa9b97c});
+        shape.setCornerRadius(dp(10));b.setBackground(shape);b.setStateListAnimator(null);
+        b.setOnClickListener(v->{if(!busy)action.run();});
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(64));
+        p.topMargin=dp(6);p.bottomMargin=dp(16);parent.addView(b,p);buttons.add(b);
+    }
     private LinearLayout card(LinearLayout root,String title) {
         LinearLayout c=column(); c.setPadding(dp(16),dp(12),dp(16),dp(12)); c.setBackground(background(PANEL));
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2); lp.bottomMargin=dp(14); root.addView(c,lp);
