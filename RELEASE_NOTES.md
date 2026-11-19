@@ -1,3 +1,18 @@
+# The Last of Us Remastered — Daedalus Android v0.1.2 (UI R41)
+
+## Novidades do launcher
+
+- Tela inicial com título grande sobre a arte do jogo e degradê escuro.
+- Botão **▶ JOGAR** destacado logo abaixo do banner e navegação reorganizada.
+- Identificador **TLOU UI R41** visível na tela inicial e no assistente de primeira execução.
+- Versão Android **0.1.2**, código de instalação 41, e teste do DEX para impedir APK com layout antigo.
+- As configurações de jogo, drivers, controle e as verificações de integridade permanecem.
+- Build experimental: quando não houver a chave original, o GitHub gera outra assinatura temporária.
+
+**Importante:** APK com assinatura temporária não atualiza uma instalação anterior com certificado diferente. Faça backup dos saves/dados antes de desinstalar a versão antiga.
+
+---
+
 # The Last of Us Remastered — Daedalus Android v0.1.1
 
 ## Português (Brasil)
