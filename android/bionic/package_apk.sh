@@ -81,7 +81,7 @@ gradle -p "$root/android-launcher" :app:assembleRelease --no-daemon --max-worker
 unsigned="$root/android-launcher/app/build/outputs/apk/release/app-release-unsigned.apk"
 [[ -s "$unsigned" ]] || { echo "Gradle did not produce an unsigned APK" >&2; exit 2; }
 aligned="$out/tlou-release-aligned.apk"
-apk="$root/out/release/TheLastOfUsRemastered-Android-v0.1.1-arm64.apk"
+apk="$root/out/release/TheLastOfUsRemastered-Android-v0.1.2-arm64.apk"
 "$android_tools/zipalign" -f -p 4 "$unsigned" "$aligned"
 key="$out/experimental-development.jks"
 # The workflow explicitly chooses original or temporary signing beforehand.
@@ -94,7 +94,7 @@ fi
   --ks-pass pass:TLOU-Bionic-development --key-pass pass:TLOU-Bionic-development \
   --out "$apk" "$aligned"
 "$android_tools/apksigner" verify --verbose "$apk"
-require_command_regex "package: name='com[.]daedalus[.]tlou[.]remastered'" "$android_tools/aapt" dump badging "$apk"
+require_command_regex "package: name='com[.]daedalus[.]tlou[.]remastered'.*versionCode='41'.*versionName='0[.]1[.]2'" "$android_tools/aapt" dump badging "$apk"
 require_command_regex 'lib/arm64-v8a/libgow3gpu[.]so' unzip -Z -1 "$apk"
 require_command_regex 'lib/arm64-v8a/libgow3cpu[.]so' unzip -Z -1 "$apk"
 require_command_regex 'lib/arm64-v8a/libgow3present[.]so' unzip -Z -1 "$apk"

@@ -15,6 +15,13 @@ final class GameSetupDialog {
         LinearLayout body=new LinearLayout(activity);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(pad,pad,pad,pad);
+        TextView uiMark=new TextView(activity);
+        uiMark.setText("TLOU UI R41  /  v"+TlouDialogs.version(activity));
+        uiMark.setTextSize(12);
+        uiMark.setLetterSpacing(.12f);
+        uiMark.setTextColor(0xffc2cf96);
+        uiMark.setPadding(0,0,0,pad/2);
+        body.addView(uiMark);
         TextView message=new TextView(activity);
         message.setText(TlouLanguage.t(activity,"Selecione como deseja adicionar seu jogo. A instalação e a preparação são feitas automaticamente."));
         message.setPadding(0,0,0,pad);

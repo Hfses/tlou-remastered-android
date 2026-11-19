@@ -184,18 +184,22 @@ public final class MainActivity extends Activity {
         LinearLayout root=column();root.setPadding(dp(18),dp(18),dp(18),dp(22));
         scroll.addView(root);
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView brand=text("DAEDALUS  /  ANDROID",12,ACCENT);brand.setLetterSpacing(.14f);
+        TextView brand=text("DAEDALUS  /  THE LAST OF US",11,ACCENT);
+        brand.setLetterSpacing(.08f);
+        brand.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
         header.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
-        TextView version=text("v"+TlouDialogs.version(this),13,ACCENT);
-        version.setGravity(Gravity.RIGHT);header.addView(version,new LinearLayout.LayoutParams(dp(60),-2));
+        TextView version=text("UI R41  •  v"+TlouDialogs.version(this),11,ACCENT);
+        version.setGravity(Gravity.RIGHT);
+        header.addView(version,new LinearLayout.LayoutParams(dp(137),-2));
         root.addView(header);
-        // Keep navigation above the artwork, with PLAY immediately below the hero.
+        // Navigation follows the hero and primary action on the home screen.
         LinearLayout tabs=new LinearLayout(this);
         tabs.setOrientation(LinearLayout.HORIZONTAL);
         addTab(tabs,"Início","home");addTab(tabs,"Patches","patches");
         addTab(tabs,"Ajustes","settings");addTab(tabs,"Sobre","about");
         LinearLayout.LayoutParams tabLP=new LinearLayout.LayoutParams(-1,dp(45));
-        tabLP.bottomMargin=dp(12);root.addView(tabs,tabLP);
+        tabLP.topMargin=dp(3);
+        tabLP.bottomMargin=dp(18);
 
         if(currentTab.equals("home")) {
             // The hero is bundled with the APK: shown immediately and offline,
@@ -215,6 +219,22 @@ public final class MainActivity extends Activity {
             fade.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{0x00101613,0x00101613,0xcc101613,0xff101613}));
             artFrame.addView(fade,new FrameLayout.LayoutParams(-1,-1));
+            // The game title now belongs to the artwork, not the old list-style header.
+            LinearLayout heroTitle=column();
+            heroTitle.setPadding(dp(18),dp(9),dp(18),dp(14));
+            TextView edition=text("TLOU UI R41  /  ANDROID ARM64",10,ACCENT);
+            edition.setLetterSpacing(.14f);
+            edition.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
+            heroTitle.addView(edition);
+            TextView gameTitle=text("THE LAST OF US",31,0xffffffff);
+            gameTitle.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
+            gameTitle.setPadding(0,0,0,0);
+            heroTitle.addView(gameTitle);
+            TextView remastered=text("R E M A S T E R E D",12,ACCENT);
+            remastered.setLetterSpacing(.14f);
+            remastered.setPadding(0,0,0,0);
+            heroTitle.addView(remastered);
+            artFrame.addView(heroTitle,new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM));
             TextView artVersion=text("v"+TlouDialogs.version(this),11,TEXT);
             artVersion.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
             artVersion.setBackgroundColor(0xff101613);
@@ -225,9 +245,9 @@ public final class MainActivity extends Activity {
             // Use the taller banner when space permits; preserve PLAY visibility on short screens.
             int screenHeightDp=Math.round(getResources().getDisplayMetrics().heightPixels/
                 getResources().getDisplayMetrics().density);
-            int heroHeightDp=Math.min(260,Math.max(170,screenHeightDp/4));
+            int heroHeightDp=Math.min(310,Math.max(210,screenHeightDp/3));
             LinearLayout.LayoutParams art=new LinearLayout.LayoutParams(-1,dp(heroHeightDp));
-            art.topMargin=dp(6);art.bottomMargin=dp(4);
+            art.topMargin=dp(12);art.bottomMargin=dp(3);
             root.addView(artFrame,art);
             playButton(root,()->withAccess(()->prepareSelected(true)));
         } else {
@@ -236,6 +256,9 @@ public final class MainActivity extends Activity {
             TextView subtitle=text("R E M A S T E R E D",12,ACCENT);
             subtitle.setPadding(0,0,0,dp(14));root.addView(subtitle);
         }
+        // This placement is intentional: HOME shows HERO → PLAY → navigation.
+        // It must be verified in the actual APK, not only in the Java source.
+        root.addView(tabs,tabLP);
 
         if(currentTab.equals("home")) {
             LinearLayout game=card(root,"SEU JOGO");
@@ -420,15 +443,19 @@ public final class MainActivity extends Activity {
     private GradientDrawable background(int color) { GradientDrawable d=new GradientDrawable(); d.setColor(color); d.setCornerRadius(dp(12)); d.setStroke(dp(1),0x1fffffff); return d; }
     /** Prominent launcher PLAY action directly below the home artwork. */
     private void playButton(LinearLayout parent,Runnable action) {
-        Button b=new Button(this);b.setText(TlouLanguage.t(this,"JOGAR"));b.setAllCaps(true);
-        b.setTextSize(22);b.setLetterSpacing(.24f);b.setTextColor(BACKGROUND);
+        Button b=new Button(this);
+        b.setText("▶   "+TlouLanguage.t(this,"JOGAR"));
+        b.setAllCaps(true);
+        b.setTextSize(24);b.setLetterSpacing(.16f);b.setTextColor(BACKGROUND);
         b.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
         GradientDrawable shape=new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-            new int[]{0xffd7e3a8,ACCENT,0xffa9b97c});
-        shape.setCornerRadius(dp(10));b.setBackground(shape);b.setStateListAnimator(null);
+            new int[]{0xffecf5c4,0xffc2cf96,0xffa6bb78});
+        shape.setCornerRadius(dp(12));shape.setStroke(dp(2),0xffdce9b4);
+        b.setBackground(shape);b.setStateListAnimator(null);
+        b.setElevation(dp(5));
         b.setOnClickListener(v->{if(!busy)action.run();});
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(64));
-        p.topMargin=dp(6);p.bottomMargin=dp(16);parent.addView(b,p);buttons.add(b);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(72));
+        p.topMargin=dp(7);p.bottomMargin=dp(7);parent.addView(b,p);buttons.add(b);
     }
     private LinearLayout card(LinearLayout root,String title) {
         LinearLayout c=column(); c.setPadding(dp(16),dp(12),dp(16),dp(12)); c.setBackground(background(PANEL));

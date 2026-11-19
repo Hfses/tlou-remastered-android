@@ -58,6 +58,10 @@ with zipfile.ZipFile(sys.argv[1]) as apk:
         data = apk.read(name)
         if hashlib.sha256(data).hexdigest() != expected:
             raise ValueError(f'Incorrect driver digest: {name}')
+    # The final APK must contain the redesigned home screen, not stale DEX.
+    ui_dex = b''.join(apk.read(name) for name in apk.namelist() if name.endswith('.dex'))
+    if b'TLOU UI R41' not in ui_dex or b'playButton' not in ui_dex:
+        raise ValueError('APK is missing redesigned TLOU UI R41 launcher classes')
     ui_rows = apk.read('assets/ui-translations.tsv').decode('utf-8').splitlines()
     ui_rows = [line for line in ui_rows if line and not line.startswith('#')]
     if not ui_rows or any(len(line.split(chr(9))) != 10 for line in ui_rows):
