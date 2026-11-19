@@ -80,6 +80,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Restore and verify original TLOU APK signing identity
+        env:
+          TLOU_SIGNING_JKS_BASE64: ${{ secrets.TLOU_SIGNING_JKS_BASE64 }}
+        run: bash android/bionic/restore_signing.sh
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14.3'
@@ -171,12 +175,6 @@ jobs:
       - name: Verify FPS sampling and resume behavior
         if: ${{ !contains(github.event.head_commit.message, '[native-only]') }}
         run: bash android/bionic/test_fps.sh
-      - name: Restore signing identity used by existing installations
-        if: ${{ !contains(github.event.head_commit.message, '[native-only]') }}
-        uses: actions/cache@v4
-        with:
-          path: out/android-bionic/experimental-development.jks
-          key: tlou-development-signing-v2
       - name: Assemble and sign actual TLOU Bionic APK
         if: ${{ !contains(github.event.head_commit.message, '[native-only]') }}
         shell: bash -el {0}
@@ -233,6 +231,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Restore and verify original TLOU APK signing identity
+        env:
+          TLOU_SIGNING_JKS_BASE64: ${{ secrets.TLOU_SIGNING_JKS_BASE64 }}
+        run: bash android/bionic/restore_signing.sh
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
@@ -257,12 +259,6 @@ jobs:
           run-id: 42136621594
       - name: Validate source compatibility and extract native payload
         run: python3 android/bionic/reuse_apk.py out/source-apk/TheLastOfUsRemastered-Android-v0.1-arm64.apk
-      - name: Restore existing signing identity; never create a replacement key
-        uses: actions/cache/restore@v4
-        with:
-          path: out/android-bionic/experimental-development.jks
-          key: tlou-development-signing-v2
-          fail-on-cache-miss: true
       - name: Assemble updated launcher and sign compatible update
         run: |
           set -euo pipefail
