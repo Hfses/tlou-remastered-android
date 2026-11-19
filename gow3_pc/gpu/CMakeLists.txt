@@ -56,6 +56,20 @@ elseif (GOW3_PGO STREQUAL "use")
                         -fprofile-correction -Wno-missing-profile -Wno-coverage-mismatch)
 endif()
 
+# Android's manually switched fiber stacks must not be visible to PGO/LTO.
+# Exclude them for both profile collection and profile-use builds.
+if (ANDROID AND CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND
+    (GOW3_PGO STREQUAL "generate" OR GOW3_PGO STREQUAL "use"))
+    set(FIBER_PGO_OPTS -fno-lto)
+    if (GOW3_PGO STREQUAL "generate")
+        list(APPEND FIBER_PGO_OPTS -fno-profile-generate)
+    else()
+        list(APPEND FIBER_PGO_OPTS -fno-profile-use)
+    endif()
+    set_source_files_properties(shim/gow3_fiber.cpp shim/gow3_fiber_context.cpp shim/gow3_fiber_bionic.cpp
+                                PROPERTIES COMPILE_OPTIONS "${FIBER_PGO_OPTS}")
+endif()
+
 if(ANDROID)
     # The Vulkan loader is supplied by the Android driver-chooser at runtime.
     find_package(VulkanHeaders CONFIG REQUIRED)

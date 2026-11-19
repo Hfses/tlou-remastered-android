@@ -26,13 +26,24 @@ done
 # TLOU PC gains ~10% from trained PGO+LTO; an x86 profile cannot train ARM64.
 # Reuse its LTO setup for the Android GPU only. Can disable at build time with
 # TLOU_ANDROID_LTO=OFF; this is a binary setting, not a launcher experiment.
+# PGO mode: auto (profile if present), generate (instrumented), use (required), off.
+# See android/PGO_ANDROID.md.
+pgo=${TLOU_ANDROID_PGO:-auto}
+pgo_dir=${TLOU_ANDROID_PGO_DIR:-$root/android/pgo}
+case $pgo in
+    auto) if [[ -f $pgo_dir/tlou.profdata ]]; then pgo=use; else pgo=off; fi ;;
+    off|generate) ;;
+    use) [[ -f $pgo_dir/tlou.profdata ]] || { echo "Missing PGO profile: $pgo_dir/tlou.profdata" >&2; exit 1; } ;;
+    *) echo "TLOU_ANDROID_PGO must be auto, generate, use or off (got: $pgo)" >&2; exit 1 ;;
+esac
+echo "TLOU Android GPU PGO mode: $pgo"
 # Let CMake discover include/vma as well as include; discard the old forced cache path.
 mkdir -p "$build/.cmake/api/v1/query"
 touch "$build/.cmake/api/v1/query/codemodel-v2"
 cmake -S gow3_pc/gpu -B "$build" -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake" \
   -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM="android-$api" -DANDROID_STL=c++_shared \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo -DGOW3_PGO=off -DGOW3_LTO="${TLOU_ANDROID_LTO:-ON}" \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo -DGOW3_PGO="$pgo" -DGOW3_PGO_DIR="$pgo_dir" -DGOW3_LTO="${TLOU_ANDROID_LTO:-ON}" \
     -DCMAKE_FIND_ROOT_PATH="$prefix" -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH \
     -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -Dpkgcfg_lib_FFMPEG_atomic:FILEPATH="$atomic" \
     -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH "-DCMAKE_PREFIX_PATH=$prefix;$headers" \

@@ -292,6 +292,11 @@ public final class GameActivity extends Activity {
             env.put("GOW3_DISPLAY_HZ",String.valueOf(Math.round(getWindowManager().getDefaultDisplay().getRefreshRate())));
             env.put("GOW3_GPU_USER_DIR",state.getAbsolutePath());
             env.put("TLOU_FRAME_SUMMARY","1");
+            // Only an instrumented native build writes profiles. Users must explicitly
+            // create this folder; ordinary release APKs have no profiling counters.
+            File pgoFolder=new File(android.os.Environment.getExternalStorageDirectory(),"TLOU-PGO");
+            if(pgoFolder.isDirectory())
+                env.put("LLVM_PROFILE_FILE",new File(pgoFolder,"tlou-%m.profraw").getAbsolutePath());
             env.put("GOW3_VSYNC","1");
             // Desktop temporal injections target updated game shaders. Keep the
             // original render path until those hashes are validated on Android.
