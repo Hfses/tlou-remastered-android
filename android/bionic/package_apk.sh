@@ -84,9 +84,10 @@ aligned="$out/tlou-release-aligned.apk"
 apk="$root/out/release/TheLastOfUsRemastered-Android-v0.1.1-arm64.apk"
 "$android_tools/zipalign" -f -p 4 "$unsigned" "$aligned"
 key="$out/experimental-development.jks"
-# A different key would make updates impossible. Never regenerate a release key.
+# The workflow explicitly chooses original or temporary signing beforehand.
+# Never silently generate another key here.
 if [[ ! -s "$key" ]]; then
-  echo "ERROR: existing TLOU signing identity missing; refusing a differently signed APK" >&2
+  echo "ERROR: signing key not prepared; run android/bionic/restore_signing.sh first" >&2
   exit 8
 fi
 "$android_tools/apksigner" sign --ks "$key" --ks-key-alias tlou-bionic \
@@ -101,4 +102,10 @@ require_command_regex 'assets/runtime/gow3-probe' unzip -Z -1 "$apk"
 require_command_regex 'assets/tools[.]zip' unzip -Z -1 "$apk"
 require_command_regex 'lib/arm64-v8a/libpython3[.]13[.]so' unzip -Z -1 "$apk"
 sha256sum "$apk" > "$apk.sha256"
+if [[ -f "$out/temporary-signing.flag" ]]; then
+  printf '%s\n' "TEMPORARY APK SIGNATURE - cannot update existing installations or future fresh-key builds. Back up application data and uninstall the old app before installing." > "$apk.signing.txt"
+  echo "::warning::APK signed with a temporary key. It is installable, but NOT an update for the previously signed app."
+else
+  printf '%s\n' "ORIGINAL APK SIGNATURE - compatible with existing installations signed using the verified original TLOU certificate." > "$apk.signing.txt"
+fi
 echo "Experimental TLOU APK signed and validated: $apk"

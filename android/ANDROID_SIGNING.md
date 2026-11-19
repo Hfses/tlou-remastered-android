@@ -1,32 +1,48 @@
-# Restore the original TLOU Android APK signing key
+# Android APK signing (TLOU experimental builds)
 
-The existing Android app is signed with a private keystore named `experimental-development.jks`.
-**A different key cannot update the installed app with the same application ID.**
+Android requires a digital signature for installation. You **do not** need to provide a key
+to build an APK: the GitHub workflow can create a new *temporary signing key* automatically.
 
-The original build on 2026-11-08 (GitHub Actions run `42482239121`) successfully restored
-`tlou-development-signing-v2` from Actions cache. On 2026-11-19 the cache restore was a miss.
-GitHub Actions caches are not durable backups for private signing keys. The APK artifact has
-the public certificate but **not** the private signing key; no code can reconstruct it.
+## Default: build and install without an existing key
 
-## One-time recovery (requires the actual original JKS file)
+On pushes or manual builds, the workflow uses `signing=auto`:
 
-1. Search your own PC or secure backup for `experimental-development.jks`. Never commit the
-   keystore to this public repository, and never paste its base64 into a chat or issue.
-2. On Windows PowerShell, substitute the actual local file path:
+- If GitHub Actions secret `TLOU_SIGNING_JKS_BASE64` contains the **original** keystore,
+  its certificate is checked against the signed v0.1.1 APK published in run `42482239121`.
+- Otherwise, a fresh temporary PKCS12 keystore is generated inside the GitHub runner
+  with `keytool`, and the APK is signed and verified. The private key is **not** committed,
+  uploaded as an artifact, or cached.
 
-   ```powershell
-   [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\caminho\experimental-development.jks")) | Set-Clipboard
-   ```
+**WARNING: a temporarily signed APK cannot update the existing app** whose certificate
+is different. Back up the current app's files/saves before uninstalling it. You must
+uninstall the old app with the same application ID before installing the new APK.
+Uninstalling generally deletes the app's local data unless separately backed up.
 
-3. Open this repository on GitHub → **Settings → Secrets and variables → Actions → New repository secret**.
-4. Set the name to `TLOU_SIGNING_JKS_BASE64` and paste the base64 copied to the clipboard.
-5. Run **TLOU Bionic Full Native and APK** again from the Actions tab, on the desired branch.
+**Each independently generated temporary key is different.** Consequently, later temporary
+APKs also cannot update this temporary build, unless you adopt a persistent signing key.
+The APK artifact contains a `.apk.signing.txt` file describing which signature was used.
 
-The workflow decodes the key inside the temporary runner and verifies the signing certificate
-against SHA-256 `c0cd3fdceedafc4d3d2d4c24d78e8c1a81a06ef7ebd37e2824f423decbca7ffc`,
-obtained from the verified 2026-11-08 v0.1.1 APK. Mismatched keys are rejected. The key is
-never uploaded as a build artifact or saved to a GitHub Actions cache.
+## Optional: preserve compatible updates with the original key
 
-If no original keystore exists anywhere, a new signing identity would require an incompatible
-new install (or changing application ID for a side-by-side version). It cannot silently
-upgrade the currently installed package, and app data may be lost on uninstall.
+If you find the original `experimental-development.jks`, preserve it outside the public
+repository and set a GitHub Actions repository secret named `TLOU_SIGNING_JKS_BASE64`.
+
+On Windows PowerShell, with the actual file path:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\caminho\experimental-development.jks")) | Set-Clipboard
+```
+
+In GitHub go to **Settings → Secrets and variables → Actions → New repository secret**.
+Create `TLOU_SIGNING_JKS_BASE64`, paste the value, and run the workflow again.
+
+Select manual `signing=original` to require an original-key update: this mode fails instead of
+generating a temporary key. The original certificate's SHA-256 is pinned to
+`c0cd3fdceedafc4d3d2d4c24d78e8c1a81a06ef7ebd37e2824f423decbca7ffc` (verified
+in the v2/v3 signing block of the 2026-11-08 APK).
+The original signing key was previously stored only in GitHub Actions cache
+`tlou-development-signing-v2`, which is no longer accessible.
+
+A signed APK contains the **public** certificate, not its private key. Without a backup,
+the original keystore cannot be recreated. A stable replacement key must be stored
+securely outside the repository and configured in Actions for future updates.
