@@ -51,19 +51,25 @@ android.testOptions.unitTests.includeAndroidResources = true
 // The report from run 44520060985 explicitly required Android 15 (API 35), while
 // the source tests also declare SDK 30 (Android 11). These are test-only artifacts;
 // neither is packaged into the app APK.
+// Separate resolvable configurations are mandatory: if both SDKs are put into
+// one configuration, Gradle's version conflict resolution keeps only one jar.
 configurations {
-    robolectricSdkJars {
+    robolectricSdk11 {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+    robolectricSdk15 {
         canBeConsumed = false
         canBeResolved = true
     }
 }
 dependencies {
-    robolectricSdkJars 'org.robolectric:android-all-instrumented:11-robolectric-6757853-i7'
-    robolectricSdkJars 'org.robolectric:android-all-instrumented:15-robolectric-12650502-i7'
+    robolectricSdk11 'org.robolectric:android-all-instrumented:11-robolectric-6757853-i7'
+    robolectricSdk15 'org.robolectric:android-all-instrumented:15-robolectric-12650502-i7'
 }
 def robolectricRuntimeDir = layout.buildDirectory.dir('robolectric/preinstrumented')
 def prepareRobolectricSdkJars = tasks.register('prepareRobolectricSdkJars', Copy) {
-    from(configurations.robolectricSdkJars)
+    from(configurations.robolectricSdk11, configurations.robolectricSdk15)
     into(robolectricRuntimeDir)
     doLast {
         for (String jar : ['android-all-instrumented-11-robolectric-6757853-i7.jar',
