@@ -45,25 +45,37 @@ dependencies {
 }
 android.testOptions.unitTests.includeAndroidResources = true
 
-// Robolectric's runtime downloader used repo1.maven.org and failed to fetch the
-// Android 11 .pom.sha512 in GitHub Actions. Resolve that exact SDK using Gradle's
-// configured Maven Central repository, then let Robolectric read the local JAR.
-// The app APK does not include this test-only artifact.
+// Robolectric sometimes attempts to fetch platform JARs itself from repo1.maven.org,
+// which failed in GitHub Actions. Pre-resolve all SDKs used by the test runtime via
+// Gradle's configured Maven Central repository and keep them in its local JAR folder.
+// The report from run 44520060985 explicitly required Android 15 (API 35), while
+// the source tests also declare SDK 30 (Android 11). These are test-only artifacts;
+// neither is packaged into the app APK.
 configurations {
-    robolectricSdk30 {
+    robolectricSdkJars {
         canBeConsumed = false
         canBeResolved = true
     }
 }
 dependencies {
-    robolectricSdk30 'org.robolectric:android-all-instrumented:11-robolectric-6757853-i7'
+    robolectricSdkJars 'org.robolectric:android-all-instrumented:11-robolectric-6757853-i7'
+    robolectricSdkJars 'org.robolectric:android-all-instrumented:15-robolectric-12650502-i7'
 }
 def robolectricRuntimeDir = layout.buildDirectory.dir('robolectric/preinstrumented')
-def prepareRobolectricSdk30 = tasks.register('prepareRobolectricSdk30', Copy) {
-    from(configurations.robolectricSdk30)
+def prepareRobolectricSdkJars = tasks.register('prepareRobolectricSdkJars', Copy) {
+    from(configurations.robolectricSdkJars)
     into(robolectricRuntimeDir)
+    doLast {
+        for (String jar : ['android-all-instrumented-11-robolectric-6757853-i7.jar',
+                           'android-all-instrumented-15-robolectric-12650502-i7.jar']) {
+            def file = new File(robolectricRuntimeDir.get().asFile, jar)
+            if (!file.isFile() || file.length() == 0L)
+                throw new GradleException("Missing Robolectric platform JAR: " + file)
+            logger.lifecycle("Robolectric SDK staged: {}", file.name)
+        }
+    }
 }
 tasks.withType(org.gradle.api.tasks.testing.Test).configureEach {
-    dependsOn(prepareRobolectricSdk30)
+    dependsOn(prepareRobolectricSdkJars)
     systemProperty 'robolectric.dependency.dir', robolectricRuntimeDir.get().asFile.absolutePath
 }
