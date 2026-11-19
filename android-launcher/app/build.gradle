@@ -44,3 +44,26 @@ dependencies {
     testImplementation 'org.robolectric:robolectric:4.14.1'
 }
 android.testOptions.unitTests.includeAndroidResources = true
+
+// Robolectric's runtime downloader used repo1.maven.org and failed to fetch the
+// Android 11 .pom.sha512 in GitHub Actions. Resolve that exact SDK using Gradle's
+// configured Maven Central repository, then let Robolectric read the local JAR.
+// The app APK does not include this test-only artifact.
+configurations {
+    robolectricSdk30 {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+}
+dependencies {
+    robolectricSdk30 'org.robolectric:android-all-instrumented:11-robolectric-6757853-i7'
+}
+def robolectricRuntimeDir = layout.buildDirectory.dir('robolectric/preinstrumented')
+def prepareRobolectricSdk30 = tasks.register('prepareRobolectricSdk30', Copy) {
+    from(configurations.robolectricSdk30)
+    into(robolectricRuntimeDir)
+}
+tasks.withType(org.gradle.api.tasks.testing.Test).configureEach {
+    dependsOn(prepareRobolectricSdk30)
+    systemProperty 'robolectric.dependency.dir', robolectricRuntimeDir.get().asFile.absolutePath
+}
